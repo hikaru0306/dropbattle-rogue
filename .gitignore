@@ -3,3 +3,4 @@ v*.png
 *_check.png
 gen_new_enemies.log
 __pycache__/
+patch_v*.py
