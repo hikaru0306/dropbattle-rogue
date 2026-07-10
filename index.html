@@ -96,9 +96,10 @@ button:active{filter:brightness(1.12)}
 .boom-fx{position:fixed;width:76px;height:76px;border-radius:50%;z-index:89;pointer-events:none;background:radial-gradient(circle, rgba(255,235,180,.95) 8%, rgba(255,150,60,.75) 34%, rgba(200,60,20,.35) 58%, transparent 72%);border:3px solid rgba(255,190,110,.8);animation:boomFx .45s ease-out forwards}
 .scene-h{height:176px}
 .act-h{height:62px}
-@media (max-height:800px){.scene-h{height:150px}}
-@media (max-height:700px){.scene-h{height:112px}.act-h{height:54px}}
-@media (max-height:680px){.scene-h{height:100px}button[data-idx]{aspect-ratio:1/.86 !important}}
+.scene-actor{transform-origin:50% 100%}
+@media (max-height:800px){.scene-h{height:152px}.scene-actor{transform:scale(.9)}}
+@media (max-height:700px){.scene-h{height:134px}.act-h{height:54px}.scene-actor{transform:scale(.78)}}
+@media (max-height:680px){.scene-h{height:128px}button[data-idx]{aspect-ratio:1/.86 !important}.scene-actor{transform:scale(.74)}}
 .pop-in{animation:popIn .28s cubic-bezier(.3,1.4,.6,1)}
 .fade-in{animation:fadeIn .3s ease}
 </style>
@@ -1777,9 +1778,9 @@ function DropBattle() {
     h("span", { className:"text-[9px]", style:{ opacity:0.55, marginLeft:2 } }, "タップで使用（最大", itemCap(), "個）"));
 
   const header = h("div", { className:"flex items-center justify-between mb-1 rounded-xl px-3 py-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450" } },
-    h("h1", { className:"tracking-widest font-bold", style:{ fontSize:"1.1rem", color:"#f2e6c8", textShadow:"0 2px 0 rgba(0,0,0,.55)" } },
-      "ドロップバトル ",
-      h("span", { style:{ fontSize:"0.74rem", color:"#ffcf5d" } }, "第", act + 1, "章 ", progRow, "/", ROWS)),
+    h("h1", { className:"font-bold", style:{ fontSize:"0.98rem", color:"#f2e6c8", whiteSpace:"nowrap", textShadow:"0 2px 0 rgba(0,0,0,.55)" } },
+      "第", act + 1, "章 ",
+      h("span", { style:{ color:"#ffcf5d" } }, progRow, "/", ROWS, "層")),
     h("div", { className:"flex items-center gap-2" },
       h("span", { className:"rounded-xl px-2 py-1.5 text-sm font-bold", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c", color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, "💰", coins),
       h("button", { onClick: toggleBgm, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", fontSize:"0.9rem", opacity: bgmOnView ? 1 : 0.45 } }, "🎵"),
@@ -2085,7 +2086,7 @@ function DropBattle() {
         h("img", { src:BATTLE_BGS[act] || BATTLE_BGS[0], alt:"", draggable:false, className:"absolute pointer-events-none", style:{ left:0, top:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center bottom", opacity:.92 } }),
         h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"linear-gradient(180deg, rgba(15,11,22,.5) 0%, rgba(15,11,22,.08) 45%, rgba(15,11,22,.42) 100%)" } }),
         // ヒーロー
-        h("div", { className:"absolute flex flex-col items-center", style:{ left:12, bottom:8, width:88, zIndex:1 } },
+        h("div", { className:"absolute flex flex-col items-center scene-actor", style:{ left:10, bottom:8, width:88, zIndex:1 } },
           h("div", { style:{ position:"relative" } },
             pops.hero && h("span", { key:pops.hero.seq, className:"dmg-pop", style:{ color:pops.hero.color } }, pops.hero.text),
             h(SpriteBox, { kind:"hero", size:74, idle:"a", anim:heroAnim }),
@@ -2100,7 +2101,7 @@ function DropBattle() {
           h("div", { className:"w-full mt-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:8 })),
           h("span", { className:"text-[10px] font-bold mt-1", style:{ color: hit === "player" ? "#ff9a9a" : hit === "heal" ? "#7cffb0" : "#cfe9d8", fontVariantNumeric:"tabular-nums", transition:"color .3s" } }, pHP, "/", pMax)),
         // 敵
-        h("div", { className:"absolute flex items-end", style:{ right:8, bottom:8, gap:4, zIndex:1 } },
+        h("div", { className:"absolute flex items-end scene-actor", style:{ right:30, bottom:8, gap:4, zIndex:1 } },
           enemies.map(en => {
             const k = KINDS[en.kind];
             const sz = en.boss ? 112 : enemies.length >= 3 ? Math.min(k.size, 58) : k.size;
