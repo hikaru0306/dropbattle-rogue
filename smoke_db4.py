@@ -21,7 +21,7 @@ with sync_playwright() as pw:
     page.click("text=冒険に出る")
     time.sleep(0.6)
     s = st(page)
-    assert s["items"] == ["potion"], f"initial item: {s['items']}"
+    assert s["items"] == ["potion", "potion"], f"initial items: {s['items']}"
     assert s["coins"] == 0
     print("C1 initial state OK (potion x1, 0 coins)")
 
@@ -34,18 +34,19 @@ with sync_playwright() as pw:
     for _ in range(3):
         resolve(page)
         hp0 = st(page)["php"]
-        if hp0 < 250: break
-    assert hp0 < 250
+        if hp0 < 300: break
+    assert hp0 < 300
     page.evaluate("window.__test.useItem(0)")
     time.sleep(0.5)
     s = st(page)
-    assert s["php"] == min(250, hp0 + 80), f"potion heal: {hp0} -> {s['php']}"
-    assert s["items"] == [], "potion not consumed"
+    assert s["php"] == min(300, hp0 + 80), f"potion heal: {hp0} -> {s['php']}"
+    assert s["items"] == ["potion"], "potion not consumed"
     print("C3 potion OK:", hp0, "->", s["php"])
 
     # 剛力の薬: 攻撃2倍
     page.evaluate("window.__test.giveItem('might')")
-    page.evaluate("window.__test.useItem(0)")
+    midx = st(page)["items"].index("might")
+    page.evaluate(f"window.__test.useItem({midx})")
     time.sleep(0.3)
     assert st(page)["tv"]["atkBoost"] is True
     page.evaluate("window.__test.commit(0)")
@@ -61,7 +62,8 @@ with sync_playwright() as pw:
     s = st(page)
     assert s["junk"] >= 3
     page.evaluate("window.__test.giveItem('purify')")
-    page.evaluate("window.__test.useItem(0)")
+    pidx = st(page)["items"].index("purify")
+    page.evaluate(f"window.__test.useItem({pidx})")
     time.sleep(0.4)
     assert st(page)["junk"] == 0, "purify failed"
     print("C5 purify OK")

@@ -28,12 +28,13 @@ with sync_playwright() as pw:
     page.evaluate("window.__test.spawn(['slime'])")
     time.sleep(0.3)
     page.evaluate("window.__test.giveItem('stun')")
-    page.evaluate("window.__test.useItem(1)")  # [potion, stun]
+    idx = st(page)["items"].index("stun")
+    page.evaluate(f"window.__test.useItem({idx})")
     time.sleep(0.3)
     assert st(page)["tv"]["stun"] is True
     resolve(page)
     s = st(page)
-    assert s["php"] == 250, f"stun failed php={s['php']}"
+    assert s["php"] == 300, f"stun failed php={s['php']}"
     assert s["enemies"][0]["pi"] == 0, f"stun should freeze pattern pi={s['enemies'][0]['pi']}"
     print("N1 stun OK (no damage, pattern frozen)")
 
@@ -42,7 +43,8 @@ with sync_playwright() as pw:
     time.sleep(0.3)
     a0 = st(page)["enemyAtks"][0]
     page.evaluate("window.__test.giveItem('venom')")
-    page.evaluate("window.__test.useItem(1)")
+    idx = st(page)["items"].index("venom")
+    page.evaluate(f"window.__test.useItem({idx})")
     time.sleep(0.3)
     a1 = st(page)["enemyAtks"][0]
     assert a1 == max(1, int(a0 * 0.75 + 0.5)), f"venom: {a0} -> {a1}"
@@ -51,7 +53,8 @@ with sync_playwright() as pw:
     # 3) 星降りの粉: 特殊ドロップ+3
     s0 = st(page)["specials"]
     page.evaluate("window.__test.giveItem('gemrain')")
-    page.evaluate("window.__test.useItem(1)")
+    idx = st(page)["items"].index("gemrain")
+    page.evaluate(f"window.__test.useItem({idx})")
     time.sleep(0.4)
     s1 = st(page)["specials"]
     assert s1 == s0 + 3, f"gemrain: {s0} -> {s1}"
@@ -61,13 +64,15 @@ with sync_playwright() as pw:
     page.evaluate("window.__test.spawn(['slime','slime'])")
     time.sleep(0.3)
     page.evaluate("window.__test.giveItem('bomb')")
-    page.evaluate("window.__test.useItem(1)")
+    idx = st(page)["items"].index("bomb")
+    page.evaluate(f"window.__test.useItem({idx})")
     time.sleep(0.5)
     s = st(page)
     assert all(e["hp"] == 50 for e in s["enemies"]), f"bomb dmg: {s['enemies']}"
     print("N4 bomb 80dmg OK")
     page.evaluate("window.__test.giveItem('bomb')")
-    page.evaluate("window.__test.useItem(1)")
+    idx = st(page)["items"].index("bomb")
+    page.evaluate(f"window.__test.useItem({idx})")
     time.sleep(4.2)
     s = st(page)
     assert s["status"] == "reward", f"bomb kill-all should win: {s['status']}"
@@ -88,11 +93,11 @@ with sync_playwright() as pw:
         s = st(page)
         if s["status"] == "lose":
             break
-        if "phoenix" not in s["items"] and s["php"] == 100:
+        if "phoenix" not in s["items"] and s["php"] == 120:
             revived = True
             break
     assert revived, f"phoenix revive failed: {s['status']} php={s['php']} items={s['items']}"
-    print("N6 phoenix revive OK (php=100)")
+    print("N6 phoenix revive OK (php=120)")
 
     # 6) 焚き火: 特殊ドロップ削除
     page.evaluate("window.__test.restart()")

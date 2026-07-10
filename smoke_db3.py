@@ -33,7 +33,7 @@ with sync_playwright() as pw:
     resolve(page)
     s = st(page)
     assert s["junk"] >= 3, f"jam failed junk={s['junk']}"
-    assert s["php"] == 250, f"jam should not damage php={s['php']}"
+    assert s["php"] == 300, f"jam should not damage php={s['php']}"
     print("P1 shade jam OK junk:", s["junk"])
     hp0 = s["php"]
     resolve(page)

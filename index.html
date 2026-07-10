@@ -8,6 +8,11 @@
 <meta property="og:title" content="ドロップバトル" />
 <meta property="og:description" content="ルートを選んで進むドロップ消しローグライク。魔王を倒せ！" />
 <meta property="og:type" content="website" />
+<meta property="og:image" content="https://hikaru0306.github.io/dropbattle-rogue/assets/bg_title2.jpg" />
+<meta name="theme-color" content="#131019" />
+<link rel="icon" type="image/png" href="assets/favicon.png" />
+<link rel="apple-touch-icon" href="assets/touch-icon.png" />
+<link rel="manifest" href="manifest.json" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800;900&display=swap" rel="stylesheet">
@@ -121,10 +126,10 @@ button:active{filter:brightness(1.12)}
 // ===== 基本設定 =====
 const SIZE = 6;
 const TOTAL = SIZE * SIZE;
-const P_MAX = 250;
+const P_MAX = 300;
 const NUM_SPECIAL = 5;
 const STAR_THRESHOLD = 6;
-const ATK_PER = 10, DEF_PER = 10, HEAL_PER = 2;
+const ATK_PER = 12, DEF_PER = 12, HEAL_PER = 4;
 const ROWS = 8;
 const ACTS = 3;
 const ACT_NAMES = ["翠緑の森", "毒霧の沼窟", "灼熱の魔城"];
@@ -358,6 +363,7 @@ const NODE_META = {
 
 let UID = 1;
 const TEST_MODE = location.search.indexOf("test=1") >= 0;
+const FAST = location.search.indexOf("fast=1") >= 0;
 const pick = arr => arr[Math.floor(Math.random()*arr.length)];
 const shuffle = arr => { for (let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; };
 const makeDrop = (special=false) => ({ id:UID++, type:Math.floor(Math.random()*4), special, up:false });
@@ -398,28 +404,28 @@ const genMap = () => {
 // ===== エンカウント生成（場所で敵の数・強さが変わる）=====
 const encounterFor = (node, act) => {
   const r = node.row;
-  const D = act * 5 + r; // 章をまたいで難度が伸びる
-  const hpS = 1 + D * 0.26, atkS = 1 + D * 0.13;
+  const D = act * 4 + r; // 章をまたいで難度が伸びる
+  const hpS = 1 + D * 0.24, atkS = 1 + D * 0.08;
   const pool = ACT_POOLS[act] || ACT_POOLS[0];
   let list;
   if (node.type === "boss") {
     list = [{ kind: pick(BOSS_BY_ACT[act] || ["demon"]), hpM:1, atkM:1, boss:true, noScale:true }];
-    const minions = 1 + (Math.random() < 0.5 ? 1 : 0);
+    const minions = 1 + (act >= 1 && Math.random() < 0.5 ? 1 : 0);
     for (let m = 0; m < minions; m++) list.push({ kind: pick(pool.light), hpM:0.55, atkM:0.7 });
   }
-  else if (node.type === "elite") list = [{ kind:pick(pool.heavy), hpM:2.2, atkM:1.45, elite:true }];
+  else if (node.type === "elite") list = [{ kind:pick(pool.heavy), hpM:2.2, atkM:1.25, elite:true }];
   else if (node.type === "horde") {
-    list = [0,1].map(() => ({ kind:pick(pool.light), hpM:0.62, atkM:0.72 }));
-    list.push({ kind: Math.random() < 0.45 ? "spore" : pick(pool.light), hpM:0.62, atkM:0.72 });
+    list = [0,1].map(() => ({ kind:pick(pool.light), hpM:0.62, atkM:0.62 }));
+    list.push({ kind: Math.random() < 0.45 ? "spore" : pick(pool.light), hpM:0.62, atkM:0.62 });
   }
   else {
     if (r <= 1) list = [{ kind:pick(pool.light), hpM:1, atkM:1 }];
     else if (r <= 3) list = Math.random() < 0.5
       ? [{ kind:pick(pool.heavy), hpM:1, atkM:1 }]
-      : [0,1].map(() => ({ kind:pick(pool.light), hpM:0.85, atkM:0.85 }));
+      : [0,1].map(() => ({ kind:pick(pool.light), hpM:0.85, atkM:0.72 }));
     else list = [
-      { kind:pick(pool.mid), hpM:0.9, atkM:0.9 },
-      { kind:pick(pool.heavy), hpM:0.9, atkM:0.9 }
+      { kind:pick(pool.mid), hpM:0.9, atkM:0.78 },
+      { kind:pick(pool.heavy), hpM:0.9, atkM:0.78 }
     ];
   }
   return list.map((e,i) => {
@@ -431,7 +437,7 @@ const encounterFor = (node, act) => {
     return { id:"e"+(UID++), kind:e.kind, name:k.name, hp, max:hp,
       atk: Math.max(1, Math.round(k.atk * as * e.atkM)), alive:true, pi:0,
       pat: pick(k.pats), rollMul: rollDmg(),
-      enr: 0, enrEvery: TEST_MODE ? 0 : 2 + Math.floor(Math.random() * 3),
+      enr: 0, enrEvery: TEST_MODE ? 0 : 3 + Math.floor(Math.random() * 3),
       shd, shdMax: si ? si.sh : 0, shdC: si ? si.c : 0,
       elite:!!e.elite, boss:!!e.boss, idx:i };
   });
@@ -815,8 +821,8 @@ function DropBattle() {
   const [coins, setCoins] = useState(0);
   const coinsRef = useRef(0);
   const setCoinsBoth = v => { coinsRef.current = v; setCoins(v); };
-  const [items, setItems] = useState(["potion"]); // 初期アイテム
-  const itemsRef = useRef(["potion"]);
+  const [items, setItems] = useState(["potion", "potion"]); // 初期アイテム
+  const itemsRef = useRef(["potion", "potion"]);
   const setItemsBoth = a => { itemsRef.current = a; setItems(a); };
   const [armed, setArmed] = useState(null); // アイテム確認中スロット
   const armedTimer = useRef(null);
@@ -923,14 +929,14 @@ function DropBattle() {
     let i = 0;
     const step = () => {
       if (i >= items.length) {
-        fxTimer.current = setTimeout(() => { setFx([]); after && after(); }, 640);
+        fxTimer.current = setTimeout(() => { setFx([]); after && after(); }, FAST ? 60 : 640);
         return;
       }
       const item = items[i];
       if (item.text) setFx(prev => [...prev.slice(-2), item]);
       if (item.run) item.run();
       i++;
-      fxTimer.current = setTimeout(step, item.wait || 680);
+      fxTimer.current = setTimeout(step, FAST ? 40 : (item.wait || 680));
     };
     step();
   };
@@ -1210,7 +1216,7 @@ function DropBattle() {
         en.rollMul = rollDmg(); // 次の行動のダメージを振り直す
         if (!TEST_MODE && en.enrEvery && tn % en.enrEvery === 0) {
           en.enr = (en.enr || 0) + 1;
-          en.atk = Math.round(en.atk * 1.15);
+          en.atk = Math.round(en.atk * 1.12);
           regenLogs.push(`🔥 ${en.name}が激昂！攻撃力上昇${en.enr === 3 ? "・2回行動に！" : `（${en.enr}）`}`);
           const eid = en.id, twice = en.enr === 3;
           setTimeout(() => { addPop(eid, twice ? "💪×2行動!" : "💪UP!", "#ff8a5a"); setAnim(eid, "heal"); }, 250);
@@ -1267,6 +1273,7 @@ function DropBattle() {
     if (hasR("scale")) gain = Math.round(gain * 1.5);
     setCoinsBoth(coinsRef.current + gain);
     addLog([`💰 コイン +${gain}`]);
+    setPHP(Math.min(pMaxRef.current, pRef.current + Math.round(pMaxRef.current * 0.12))); // 勝利時の小休止回復(12%)
     if (hasR("bento")) setPHP(Math.min(pMaxRef.current, pRef.current + 8));
     let relicDrop = null;
     if (node && node.type === "elite") { relicDrop = pickRelics(1)[0] || null; if (relicDrop) addRelic(relicDrop); }
@@ -1274,7 +1281,7 @@ function DropBattle() {
     let healed = 0;
     if (node && node.type === "elite" && !picks.some(k => k === "atkx" || k === "defx")) picks[0] = pick(["atkx","defx"]);
     if (node && node.type === "horde") {
-      healed = Math.min(pMaxRef.current - pRef.current, 20);
+      healed = Math.min(pMaxRef.current - pRef.current, 30);
       if (healed > 0) setPHP(pRef.current + healed);
     }
     playFx([
@@ -1353,7 +1360,7 @@ function DropBattle() {
 
   // ===== 焚き火（休む / 特殊ドロップ削除） =====
   const restHeal = () => {
-    const healAmt = Math.min(pMaxRef.current - pRef.current, Math.round(pMaxRef.current * (hasR("blanket") ? 0.6 : 0.4)));
+    const healAmt = Math.min(pMaxRef.current - pRef.current, Math.round(pMaxRef.current * (hasR("blanket") ? 0.7 : 0.5)));
     setPHP(pRef.current + healAmt);
     addLog([`🔥 焚き火で休んだ（+${healAmt}）`]);
     setRestMsg(`🔥 焚き火で休んだ　HP +${healAmt}`);
@@ -1598,13 +1605,13 @@ function DropBattle() {
       setClearing(new Set());
       syncBag();
       if (newUsed.size >= 3) {
-        setTimeout(() => resolveTurn(), 350);
+        setTimeout(() => resolveTurn(), FAST ? 60 : 350);
       } else {
         const nextAct = ORDER.find(a => !newUsed.has(a));
         setAction(nextAct); actionRef.current = nextAct;
         setLocked(false); lockedRef.current = false;
       }
-    }, 240);
+    }, FAST ? 40 : 240);
   }, [resolveTurn]);
   commitRef.current = commit;
 
@@ -1734,7 +1741,7 @@ function DropBattle() {
     setLocked(false); lockedRef.current = false;
     setTurn(1);
     setRewards(null); setRestMsg(null); setAnims({});
-    setCoinsBoth(0); setItemsBoth(["potion"]); setShop(null); setCampfire(null);
+    setCoinsBoth(0); setItemsBoth(["potion", "potion"]); setShop(null); setCampfire(null);
     ownedUpRef.current = initZero(); bagUpRef.current = initZero();
     setAct(0); setPMax(P_MAX); setActClear(null);
     relicsRef.current = []; RELICSET = new Set(); setRelicsView([]);
@@ -1768,6 +1775,9 @@ function DropBattle() {
         junk: boardRef.current.filter(c => c.type === JUNK).length,
         bagLeft: ITEM_KEYS.reduce((t, k) => t + bagRef.current[k], 0),
         colors: new Set(boardRef.current.filter(c => c.type < 4).map(c => c.type)).size,
+        board: boardRef.current.map(c => ({ t: c.type, sp: c.special || null })),
+        used: [...usedRef.current],
+        locked: lockedRef.current,
         coins: coinsRef.current, items: itemsRef.current.slice(),
         shop: shopRef.current ? shopRef.current.offers.slice() : null,
         campfire: campfireRef.current,
@@ -1795,6 +1805,8 @@ function DropBattle() {
       setCellSpecial: (i, k, up) => { const b = boardRef.current.slice(); b[i] = { ...b[i], special: k, up: !!up }; commitBoard(b); },
       addAtk: v => { turnRef.current.atk += v; syncTurn(); },
       setPierce: v => { turnRef.current.pierce = !!v; syncTurn(); },
+      setAct: a => { if (!usedRef.current.has(a)) { setAction(a); actionRef.current = a; } },
+      setTargetIdx: i => { const en = enemiesRef.current[i]; if (en && en.alive) { setTargetId(en.id); targetRef.current = en.id; } },
       addCoins: v => setCoinsBoth(coinsRef.current + v),
       giveItem: k => setItemsBoth([...itemsRef.current, k].slice(0, itemCap())),
       useItem: i => useItem(i),

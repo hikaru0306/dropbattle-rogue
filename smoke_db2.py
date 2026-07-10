@@ -79,9 +79,9 @@ with sync_playwright() as p:
     for _i in range(3):
         page.evaluate("window.__test.resolve()")
         time.sleep(3)
-        if st(page)["php"] < 250: break
+        if st(page)["php"] < 300: break
     hp1=st(page)["php"]
-    assert hp1<250, "elite attack failed"
+    assert hp1<300, "elite attack failed"
     print("E1 elite hit OK php:", hp1)
     page.evaluate("window.__test.weaken()")
     for i in range(3):
@@ -123,7 +123,7 @@ with sync_playwright() as p:
     # 敗北→もう一度
     page.click("text=もう一度")
     s=wait_status(page,"map")
-    assert s["php"]==250
+    assert s["php"]==300
     print("L2 restart OK")
     b.close()
 
