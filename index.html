@@ -803,6 +803,8 @@ function DropBattle() {
   const [items, setItems] = useState(["potion"]); // 初期アイテム
   const itemsRef = useRef(["potion"]);
   const setItemsBoth = a => { itemsRef.current = a; setItems(a); };
+  const [armed, setArmed] = useState(null); // アイテム確認中スロット
+  const armedTimer = useRef(null);
   const [shop, setShop] = useState(null); // {offers:[...], relic}
   const shopRef = useRef(null); shopRef.current = shop;
   const rewardsRef = useRef(null); rewardsRef.current = rewards;
@@ -1462,6 +1464,7 @@ function DropBattle() {
     commitBoard(bd0);
     syncBag(); // 盤面生成で袋から引いた分を表示に反映
     setPops({}); // 前バトルのダメージポップを掃除
+    setArmed(null);
     setAction("atk"); actionRef.current = "atk";
     setUsed(new Set()); usedRef.current = new Set();
     setPreview(null); setClearing(new Set());
@@ -1783,14 +1786,29 @@ function DropBattle() {
       onClick: () => { setRestMsg(`${RELICS[k].icon} ${RELICS[k].name}：${RELICS[k].desc}`); setTimeout(() => setRestMsg(null), 2200); },
       className:"rounded-lg", style:{ width:26, height:26, fontSize:"0.85rem", background:"rgba(30,24,42,.92)", border:"1px solid #6e5a3c", lineHeight:"24px" } }, RELICS[k].icon)));
 
+  const tapItem = i => {
+    const k = itemsRef.current[i];
+    if (!k) return;
+    if (armedTimer.current) clearTimeout(armedTimer.current);
+    if (armed === i) {
+      setArmed(null);
+      useItem(i);
+    } else {
+      setArmed(i);
+      SFX.tap();
+      armedTimer.current = setTimeout(() => setArmed(null), 3500);
+    }
+  };
   const itemSlots = sz => Array.from({ length: itemCap() }).map((_, i) => {
     const k = items[i];
     const c = k ? CONSUM[k] : null;
-    return h("button", { key:i, onClick: () => useItem(i), disabled: !k,
+    const isArmed = armed === i && !!k;
+    return h("button", { key:i, onClick: () => tapItem(i), disabled: !k,
       title: c ? `${c.name}：${c.desc}` : "空きスロット",
       className:"rounded-xl flex items-center justify-center",
-      style:{ width:sz, height:sz, background: k ? "rgba(30,24,42,.92)" : "rgba(20,16,28,.7)",
-        border: `2px solid ${k ? "#8a6f3c" : "#2c2740"}`, fontSize: sz > 40 ? 18 : 15, lineHeight:1,
+      style:{ width:sz, height:sz, background: isArmed ? "rgba(232,192,106,.22)" : k ? "rgba(30,24,42,.92)" : "rgba(20,16,28,.7)",
+        border: `2px solid ${isArmed ? "#e8c06a" : k ? "#8a6f3c" : "#2c2740"}`, fontSize: sz > 40 ? 18 : 15, lineHeight:1,
+        transform: isArmed ? "scale(1.1)" : "none", transition:"transform .15s ease, border-color .15s ease",
         opacity: k ? 1 : 0.45, cursor: k ? "pointer" : "default" } },
       c ? c.icon : "");
   });
@@ -1883,6 +1901,14 @@ function DropBattle() {
           className:"w-full rounded-xl py-2.5 font-bold",
           style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } },
           tut >= TUT.length - 1 ? "はじめる！" : "次へ ▶"))));
+  }
+  if (armed !== null && items[armed]) {
+    const c = CONSUM[items[armed]];
+    overlays.push(h("div", { key:"armed", className:"fixed pop-in", style:{ top:12, left:"50%", transform:"translateX(-50%)", zIndex:75,
+      background:"rgba(30,24,42,.97)", border:"2px solid #8a6f3c", borderRadius:12, padding:"8px 16px", maxWidth:"88%", textAlign:"center", pointerEvents:"none" } },
+      h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, c.icon, " ", c.name),
+      h("span", { className:"block text-[11px]", style:{ opacity:0.85, marginTop:1 } }, c.desc),
+      h("span", { className:"block text-[10px] font-bold", style:{ color:"#8ce8b0", marginTop:3 } }, "もう一度タップで使用")));
   }
   if (campfire) {
     const ownedTotalCamp = ITEM_KEYS.reduce((t, k) => t + ownedView[k], 0);
