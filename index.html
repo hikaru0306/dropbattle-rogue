@@ -658,8 +658,25 @@ const softTone = (f0, dur, type, vol, delay, f1) => {
     o.start(t); o.stop(t + dur + 0.03);
   } catch (e) {}
 };
+const ringTone = (f0, dur, vol, delay) => {
+  const c = ac(); if (!c || !sfxEnabled) return;
+  try {
+    const t = c.currentTime + (delay || 0);
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = "sine"; o.frequency.setValueAtTime(f0, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(t); o.stop(t + dur + 0.03);
+  } catch (e) {}
+};
 const SFX = {
   tap:  () => { noise(0.05, 2600, 0.05); softTone(660, 0.07, "sine", 0.04); },
+  // アクション別: 攻撃「ドン」/ 防御「キーン」/ 回復「キュアキュアー」
+  don:  () => { softTone(130, 0.3, "sine", 0.24, 0, 42); noise(0.16, 200, 0.16, 0, 0.6, "lowpass"); noise(0.05, 1300, 0.09, 0, 1); },
+  kiin: () => { ringTone(1980, 0.55, 0.09); ringTone(3060, 0.45, 0.05, 0.004); ringTone(5170, 0.3, 0.03, 0.008); noise(0.04, 6500, 0.05, 0, 2); },
+  cure: () => { softTone(620, 0.16, "sine", 0.1, 0, 1350); softTone(760, 0.2, "sine", 0.1, 0.15, 1680); softTone(930, 0.3, "sine", 0.08, 0.32, 2050); noise(0.35, 6800, 0.025, 0.12, 2); },
   clear:() => { softTone(784, 0.16, "sine", 0.07); softTone(1175, 0.2, "sine", 0.05, 0.03); noise(0.12, 5200, 0.03, 0.02, 1.4); },
   atk:  () => { noise(0.12, 900, 0.12, 0, 0.6); softTone(150, 0.16, "sine", 0.14, 0.01, 55); },
   hurt: () => { softTone(110, 0.22, "sine", 0.16, 0, 45); noise(0.18, 350, 0.1, 0, 0.7, "lowpass"); },
@@ -1072,7 +1089,7 @@ function DropBattle() {
                 setAnim("hero","hit"); SFX.hurt(); flash("player");
                 addPop("hero", "-" + through, "#ff9ad0");
                 if (healed > 0) setTimeout(() => { setAnim(en.id, "heal"); setEnemiesBoth(snap); SFX.heal(); addPop(en.id, "+" + healed, "#8ce8b0"); }, 300);
-              } else { SFX.tap(); addPop("hero", "ガード", "#9db8e8"); }
+              } else { SFX.kiin(); addPop("hero", "ガード", "#9db8e8"); }
             }, 200);
           }
         });
@@ -1107,7 +1124,7 @@ function DropBattle() {
                 setAnim("hero","hit"); SFX.hurt(); flash("player");
                 addPop("hero", "-" + through, big ? "#ff5c5c" : "#ffb08a");
                 if (big) { setShakeSeq(q => q + 1); setFlashSeq(q => q + 1); }
-              } else { SFX.tap(); addPop("hero", "ガード", "#9db8e8"); }
+              } else { SFX.kiin(); addPop("hero", "ガード", "#9db8e8"); }
             }, 200);
           }
         });
@@ -1476,7 +1493,10 @@ function DropBattle() {
     if (eff.healBonus) turnRef.current.heal += eff.healBonus;
     if (info.sp.pierce > 0) turnRef.current.pierce = true;
     syncTurn();
-    SFX.clear();
+    if (info.junk) SFX.tap();
+    else if (act === "atk") SFX.don();
+    else if (act === "def") SFX.kiin();
+    else SFX.cure();
     const ll = [];
     if (info.sp.bombx || info.sp.bombd) ll.push(`💥 爆発！計${info.count}個を消した`);
     if (info.starOn) ll.push(`★ ${info.base}個消し ${info.mult}倍`);
