@@ -99,9 +99,11 @@ button:active{filter:brightness(1.12)}
 .scene-h{height:176px}
 .act-h{height:62px}
 .scene-actor{transform-origin:50% 100%}
-@media (max-height:800px){.scene-h{height:152px}.scene-actor{transform:scale(.9)}}
-@media (max-height:700px){.scene-h{height:134px}.act-h{height:54px}.scene-actor{transform:scale(.78)}}
-@media (max-height:680px){.scene-h{height:128px}button[data-idx]{aspect-ratio:1/.86 !important}.scene-actor{transform:scale(.74)}}
+@media (max-height:800px){.scene-h{height:150px}.scene-actor{transform:scale(.9)}}
+@media (max-height:770px){button[data-idx]{aspect-ratio:1/.88 !important}}
+@media (max-height:700px){.scene-h{height:126px}.scene-actor{transform:scale(.74)}button[data-idx]{aspect-ratio:1/.92 !important}}
+@media (max-height:680px){.scene-h{height:112px}button[data-idx]{aspect-ratio:1/.8 !important}.scene-actor{transform:scale(.7)}}
+@media (max-height:600px){.scene-h{height:96px}button[data-idx]{aspect-ratio:1/.72 !important}.scene-actor{transform:scale(.58)}}
 .pop-in{animation:popIn .28s cubic-bezier(.3,1.4,.6,1)}
 .fade-in{animation:fadeIn .3s ease}
 </style>
@@ -976,7 +978,7 @@ function DropBattle() {
           text: txt, color: dealtH > 0 ? "#ff6b6b" : "#9db8e8", act: "atk",
           run: () => {
             if (isFirst) setAnim("hero", "attack");
-            SFX.atk();
+            SFX.don();
             setTimeout(() => {
               setAnim(en.id, dead ? "die" : "hit");
               addPop(en.id, dealtH > 0 ? "-" + dealtH : "BLOCK", dealtH > 0 ? "#ffe2de" : "#9db8e8");
@@ -997,7 +999,7 @@ function DropBattle() {
         const np = Math.min(pMaxRef.current, before + heal);
         if (np - before > 0) {
           seq.push({ text: `${np - before} 回復！`, color: "#5bd98a", act: "heal",
-            run: () => { setPHP(np); setAnim("hero","heal"); SFX.heal(); flash("heal"); addPop("hero", "+" + (np - before), "#8ce8b0"); } });
+            run: () => { setPHP(np); setAnim("hero","heal"); SFX.cure(); flash("heal"); addPop("hero", "+" + (np - before), "#8ce8b0"); } });
           logs.push(`✚ ${np - before} 回復`);
         }
       }
@@ -1142,7 +1144,7 @@ function DropBattle() {
       if (np - php > 0) {
         const healed = np - php;
         seq.push({ text: `${healed} 回復！`, color: "#5bd98a", act: "heal",
-          run: () => { setPHP(np); setAnim("hero","heal"); SFX.heal(); flash("heal"); addPop("hero", "+" + healed, "#8ce8b0"); } });
+          run: () => { setPHP(np); setAnim("hero","heal"); SFX.cure(); flash("heal"); addPop("hero", "+" + healed, "#8ce8b0"); } });
         logs.push(`✚ ${healed} 回復`);
       }
       php = np;
@@ -1494,9 +1496,7 @@ function DropBattle() {
     if (info.sp.pierce > 0) turnRef.current.pierce = true;
     syncTurn();
     if (info.junk) SFX.tap();
-    else if (act === "atk") SFX.don();
-    else if (act === "def") SFX.kiin();
-    else SFX.cure();
+    else SFX.clear();
     const ll = [];
     if (info.sp.bombx || info.sp.bombd) ll.push(`💥 爆発！計${info.count}個を消した`);
     if (info.starOn) ll.push(`★ ${info.base}個消し ${info.mult}倍`);
