@@ -94,6 +94,11 @@ button:active{filter:brightness(1.12)}
 @keyframes angerPulse{0%,100%{transform:scale(1) rotate(-4deg)}50%{transform:scale(1.3) rotate(6deg)}}
 @keyframes boomFx{0%{transform:translate(-50%,-50%) scale(.25);opacity:.95}60%{opacity:.7}100%{transform:translate(-50%,-50%) scale(1.15);opacity:0}}
 .boom-fx{position:fixed;width:76px;height:76px;border-radius:50%;z-index:89;pointer-events:none;background:radial-gradient(circle, rgba(255,235,180,.95) 8%, rgba(255,150,60,.75) 34%, rgba(200,60,20,.35) 58%, transparent 72%);border:3px solid rgba(255,190,110,.8);animation:boomFx .45s ease-out forwards}
+.scene-h{height:176px}
+.act-h{height:62px}
+@media (max-height:800px){.scene-h{height:150px}}
+@media (max-height:700px){.scene-h{height:112px}.act-h{height:54px}}
+@media (max-height:680px){.scene-h{height:100px}button[data-idx]{aspect-ratio:1/.86 !important}}
 .pop-in{animation:popIn .28s cubic-bezier(.3,1.4,.6,1)}
 .fade-in{animation:fadeIn .3s ease}
 </style>
@@ -1753,24 +1758,25 @@ function DropBattle() {
   const relicBarEl = relicsView.length > 0 && h("div", { className:"flex items-center gap-1 mb-1", style:{ flexWrap:"wrap" } },
     relicsView.map(k => h("button", { key:k, title:`${RELICS[k].name}: ${RELICS[k].desc}`,
       onClick: () => { setRestMsg(`${RELICS[k].icon} ${RELICS[k].name}：${RELICS[k].desc}`); setTimeout(() => setRestMsg(null), 2200); },
-      className:"rounded-lg", style:{ width:30, height:30, fontSize:"1rem", background:"rgba(30,24,42,.92)", border:"1px solid #6e5a3c", lineHeight:"28px" } }, RELICS[k].icon)));
+      className:"rounded-lg", style:{ width:26, height:26, fontSize:"0.85rem", background:"rgba(30,24,42,.92)", border:"1px solid #6e5a3c", lineHeight:"24px" } }, RELICS[k].icon)));
 
+  const itemSlots = sz => Array.from({ length: itemCap() }).map((_, i) => {
+    const k = items[i];
+    const c = k ? CONSUM[k] : null;
+    return h("button", { key:i, onClick: () => useItem(i), disabled: !k,
+      title: c ? `${c.name}：${c.desc}` : "空きスロット",
+      className:"rounded-xl flex items-center justify-center",
+      style:{ width:sz, height:sz, background: k ? "rgba(30,24,42,.92)" : "rgba(20,16,28,.7)",
+        border: `2px solid ${k ? "#8a6f3c" : "#2c2740"}`, fontSize: sz > 40 ? "1.25rem" : "1.05rem",
+        opacity: k ? 1 : 0.45, cursor: k ? "pointer" : "default" } },
+      c ? c.icon : "");
+  });
   const itemBarEl = h("div", { className:"flex items-center gap-2 mb-1" },
     h("span", { className:"text-[10px] font-bold", style:{ color:"#c9bfe0", width:44 } }, "アイテム"),
-    Array.from({ length: itemCap() }).map((_, i) => {
-      const k = items[i];
-      const c = k ? CONSUM[k] : null;
-      return h("button", { key:i, onClick: () => useItem(i), disabled: !k,
-        title: c ? `${c.name}：${c.desc}` : "空きスロット",
-        className:"rounded-xl flex items-center justify-center",
-        style:{ width:44, height:44, background: k ? "rgba(30,24,42,.92)" : "rgba(20,16,28,.7)",
-          border: `2px solid ${k ? "#8a6f3c" : "#2c2740"}`, fontSize:"1.25rem",
-          opacity: k ? 1 : 0.45, cursor: k ? "pointer" : "default" } },
-        c ? c.icon : "");
-    }),
+    itemSlots(44),
     h("span", { className:"text-[9px]", style:{ opacity:0.55, marginLeft:2 } }, "タップで使用（最大", itemCap(), "個）"));
 
-  const header = h("div", { className:"flex items-center justify-between mb-2 rounded-xl px-3 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450" } },
+  const header = h("div", { className:"flex items-center justify-between mb-1 rounded-xl px-3 py-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450" } },
     h("h1", { className:"tracking-widest font-bold", style:{ fontSize:"1.1rem", color:"#f2e6c8", textShadow:"0 2px 0 rgba(0,0,0,.55)" } },
       "ドロップバトル ",
       h("span", { style:{ fontSize:"0.74rem", color:"#ffcf5d" } }, "第", act + 1, "章 ", progRow, "/", ROWS)),
@@ -2074,7 +2080,7 @@ function DropBattle() {
       header,
       relicBarEl,
       // 戦闘シーン
-      h("div", { key:"scn" + shakeSeq, className:"relative w-full mb-1" + (shakeSeq > 0 ? " scene-shake" : ""), style:{ height:192, borderRadius:16, overflow:"hidden", border:"2px solid #453b5c", background:"#191424" } },
+      h("div", { key:"scn" + shakeSeq, className:"relative w-full mb-1 scene-h" + (shakeSeq > 0 ? " scene-shake" : ""), style:{ borderRadius:16, overflow:"hidden", border:"2px solid #453b5c", background:"#191424" } },
         flashSeq > 0 && h("div", { key:"fl" + flashSeq, className:"absolute inset-0 pointer-events-none impact-flash" }),
         h("img", { src:BATTLE_BGS[act] || BATTLE_BGS[0], alt:"", draggable:false, className:"absolute pointer-events-none", style:{ left:0, top:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center bottom", opacity:.92 } }),
         h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"linear-gradient(180deg, rgba(15,11,22,.5) 0%, rgba(15,11,22,.08) 45%, rgba(15,11,22,.42) 100%)" } }),
@@ -2153,12 +2159,13 @@ function DropBattle() {
             h("img", { src:"assets/icon_def.png", alt:"防", draggable:false, style:{ width:13, height:13, objectFit:"contain" } }), dispTv.def),
           h("span", { className:"flex items-center", style:{ color:"#8ce8b0", ...numCell, gap:2, justifyContent:"flex-end" } },
             h("img", { src:"assets/icon_heal.png", alt:"回", draggable:false, style:{ width:13, height:13, objectFit:"contain" } }), dispTv.heal))),
-      itemBarEl,
-      h("div", { className:"flex items-center justify-end mb-1", style:{ fontSize:11, gap:4 } },
-        h("span", { style:{ opacity:0.75 } }, "次の被ダメ予測"),
-        h("b", { style:{ color: incomingPreview > 0 ? "#ff8a80" : "#7cffb0", fontSize:15, fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000" } }, incomingPreview),
-        tv.def > 0 && h("span", { className:"flex items-center", style:{ gap:2, fontSize:10, color:"#9db8e8" } },
-          "（", h("img", { src:"assets/icon_def.png", alt:"", draggable:false, style:{ width:11, height:11, objectFit:"contain" } }), tv.def, " で軽減後）")),
+      h("div", { className:"flex items-center justify-between mb-1" },
+        h("div", { className:"flex items-center gap-1.5" }, itemSlots(38)),
+        h("div", { className:"flex items-center", style:{ fontSize:11, gap:4 } },
+          h("span", { style:{ opacity:0.75 } }, "被ダメ予測"),
+          h("b", { style:{ color: incomingPreview > 0 ? "#ff8a80" : "#7cffb0", fontSize:15, fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000" } }, incomingPreview),
+          tv.def > 0 && h("span", { className:"flex items-center", style:{ gap:2, fontSize:10, color:"#9db8e8" } },
+            "（", h("img", { src:"assets/icon_def.png", alt:"", draggable:false, style:{ width:11, height:11, objectFit:"contain" } }), tv.def, "）"))),
       // アクション
       h("div", { className:"grid grid-cols-3 gap-2 mb-1" }, ORDER.map(key => {
         const a = ACTIONS[key];
@@ -2182,8 +2189,8 @@ function DropBattle() {
         } else valEl = String(dispTv[key]);
         const lit = fx.length > 0 && fx[fx.length-1].act === key;
         return h("button", { key, onClick: () => { if (!isUsed && !locked) { setAction(key); SFX.tap(); } }, disabled:isUsed,
-          className:"relative rounded-xl flex flex-col items-center justify-center",
-          style:{ height:72,
+          className:"act-h relative rounded-xl flex flex-col items-center justify-center",
+          style:{ 
             background: isUsed ? (lit ? a.bg : "rgba(14,11,20,.85)") : isSel ? a.bg : "rgba(30,24,42,.92)",
             border: `2px solid ${isUsed ? (lit ? a.color : "#2c2740") : isSel ? a.color : "#3c3450"}`,
             boxShadow: lit ? `0 0 0 3px ${a.color}` : "none",
@@ -2191,7 +2198,7 @@ function DropBattle() {
             opacity: isUsed ? (lit ? 1 : 0.4) : 1,
             transition:"background .25s ease, border-color .25s ease, box-shadow .25s ease, opacity .25s ease" } },
           h("span", { style:{ position:"absolute", top:0, left:"14%", right:"14%", height:3, borderRadius:"0 0 4px 4px", background:a.color, opacity: isUsed && !lit ? 0.25 : 0.9, pointerEvents:"none" } }),
-          h("img", { src:a.img, alt:a.label, draggable:false, style:{ height:26, width:26, objectFit:"contain", opacity: isUsed && !lit ? 0.35 : 1, filter:"drop-shadow(0 2px 1px rgba(0,0,0,.45))" } }),
+          h("img", { src:a.img, alt:a.label, draggable:false, style:{ height:22, width:22, objectFit:"contain", opacity: isUsed && !lit ? 0.35 : 1, filter:"drop-shadow(0 2px 1px rgba(0,0,0,.45))" } }),
           h("span", { style:{ fontSize:11, height:16, lineHeight:"16px", color: isUsed ? (lit ? "#e7e0ef" : "#777") : "#e7e0ef" } }, a.label,
             h("span", { style:{ fontSize:8, opacity:0.5, marginLeft:2 } }, "×", a.per)),
           h("span", { id:"actval-" + key, key:"v" + key + "_" + tv[key], className: tv[key] > 0 ? "val-pulse" : "",
@@ -2200,7 +2207,7 @@ function DropBattle() {
             textShadow: isSel && selEff && tv[key] === 0 && info && info.mult > 1 ? "0 0 8px #ffd54a" : "none" } }, valEl));
       })),
       // 盤面
-      h("div", { className:"relative rounded-2xl", style:{ padding:6, background:"rgba(19,14,28,.8)", border:"2px solid #3c3450", marginBottom:6 } },
+      h("div", { className:"relative rounded-2xl", style:{ padding:5, background:"rgba(19,14,28,.8)", border:"2px solid #3c3450", marginBottom:4 } },
         h("div", { className:"grid grid-cols-6 gap-1.5", style:{ touchAction:"none" }, onContextMenu: e => e.preventDefault() },
           board.map((cell,i) => {
             const d = DROPS[cell.type];
@@ -2226,7 +2233,6 @@ function DropBattle() {
                    cell.up && h("span", { key:"u", style:{ position:"absolute", top:"-4%", right:"2%", fontSize:"0.85rem", fontWeight:900, color:"#ffd54a", textShadow:"0 1px 2px #000, 0 0 2px #000", pointerEvents:"none" } }, "＋")]
                  : h("span", { style:{ width:"30%", height:"22%", borderRadius:"50%", background:"rgba(255,255,255,.30)", position:"absolute", top:"11%", left:"13%", pointerEvents:"none" } }));
           }))),
-      logBox,
       overlays));
 }
 
