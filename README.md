@@ -25,7 +25,7 @@
 
 ## クレジット（BGM・すべてCC0/パブリックドメイン）
 - "Awake! (Megawall-10)", "Crystal Cave (Song 18)", "Battle Theme A" — cynicmusic.com / pixelsphere.org
-- "Epic Boss Battle" — Juhani Junkala
+- "Boss Battle #2 (Symphonic Metal)" — nene (OpenGameArt)
 （CC0のためクレジット義務はないが感謝を込めて記載）
 
 ## アートスタイル規定（再生成時）

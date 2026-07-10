@@ -30,9 +30,11 @@ with sync_playwright() as pw:
     assert "終了▶" not in page.content(), "end-turn button still present"
     print("C2 end-turn button removed OK")
 
-    # 敵の攻撃を受けてからポーション
-    resolve(page)
-    hp0 = st(page)["php"]
+    # 敵の攻撃を受けてからポーション（お邪魔開始型の敵対策で最大3ターン回す）
+    for _ in range(3):
+        resolve(page)
+        hp0 = st(page)["php"]
+        if hp0 < 250: break
     assert hp0 < 250
     page.evaluate("window.__test.useItem(0)")
     time.sleep(0.5)

@@ -154,6 +154,9 @@ const ITEMS = {
   pierce:{ mark:"貫", img:"assets/mk_pierce.png", color:"#ffe6f0", ring:"rgba(255,120,190,.95)", glowc:"#f06aae", name:"貫通", desc:"消すと今ターンの攻撃が敵を貫通する" },
   bombx: { mark:"爆", img:"assets/mk_bombx.png", color:"#ffd9c8", ring:"rgba(255,140,90,.95)", glowc:"#ff7a3c", name:"クロスボム", desc:"消すと上下左右のドロップも巻き込んで消す" },
   bombd: { mark:"斜", img:"assets/mk_bombd.png", color:"#e8d8ff", ring:"rgba(180,120,255,.95)", glowc:"#a86aff", name:"Xボム", desc:"消すと斜め4方向のドロップも巻き込んで消す" },
+  aoe:   { mark:"全", img:"assets/mk_aoe.png", color:"#ffe2c8", ring:"rgba(255,170,80,.95)", glowc:"#ff9a3c", name:"乱れ斬り", desc:"攻撃で消すと、このターンの攻撃が敵全体に当たる" },
+  gold:  { mark:"金", img:"assets/mk_gold.png", color:"#fff2c8", ring:"rgba(240,200,80,.95)", glowc:"#e8c04a", name:"金貨", desc:"消すとコイン+5" },
+  bolt:  { mark:"雷", img:"assets/mk_bolt.png", color:"#fffbc8", ring:"rgba(255,230,90,.95)", glowc:"#ffd83c", name:"サンダー", desc:"消すと同じ色のドロップが盤面全体から消える" },
   heal: { mark:"♥", img:"assets/mk_heart.png", color:"#d6ffe4", ring:"rgba(80,230,140,.95)", glowc:"#48e890", name:"ヒール", desc:"消すと10回復" },
   def:  { mark:"盾", img:"assets/icon_def.png", color:"#d6e8ff", ring:"rgba(90,160,255,.95)", glowc:"#5aa0ff", name:"ガード", desc:"消した効果の半分を防御に追加" },
   atk:  { mark:"剣", img:"assets/icon_atk.png", color:"#ffd9d9", ring:"rgba(255,90,90,.95)", glowc:"#ff5a5a", name:"ソード", desc:"消した効果の半分を攻撃に追加" },
@@ -169,13 +172,16 @@ const DESC_UP = {
   pierce:"【強化】貫通＋消した数を+1する",
   bombx: "【強化】周囲8マスを巻き込んで消す",
   bombd: "【強化】周囲8マスを巻き込んで消す",
+  aoe:   "【強化】全体攻撃＋攻撃の効果1.2倍",
+  gold:  "【強化】消すとコイン+12",
+  bolt:  "【強化】同色全消し＋消した数を+3する",
   heal: "【強化】消すと25回復",
   def:  "【強化】消した効果と同量を防御に追加",
   atk:  "【強化】消した効果と同量を攻撃に追加",
   atkx: "【強化】攻撃で消すと効果×2.5",
   defx: "【強化】防御で消すと効果×2.5"
 };
-const initZero = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, heal:0, def:0, atk:0, atkx:0, defx:0 });
+const initZero = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0 });
 // ===== レリック（パッシブ遺物）=====
 const RELICS = {
   // rar1=コモン rar2=レア rar3=ボス級
@@ -396,7 +402,11 @@ const encounterFor = (node, act) => {
   const hpS = 1 + D * 0.26, atkS = 1 + D * 0.13;
   const pool = ACT_POOLS[act] || ACT_POOLS[0];
   let list;
-  if (node.type === "boss") list = [{ kind: pick(BOSS_BY_ACT[act] || ["demon"]), hpM:1, atkM:1, boss:true, noScale:true }];
+  if (node.type === "boss") {
+    list = [{ kind: pick(BOSS_BY_ACT[act] || ["demon"]), hpM:1, atkM:1, boss:true, noScale:true }];
+    const minions = 1 + (Math.random() < 0.5 ? 1 : 0);
+    for (let m = 0; m < minions; m++) list.push({ kind: pick(pool.light), hpM:0.55, atkM:0.7 });
+  }
   else if (node.type === "elite") list = [{ kind:pick(pool.heavy), hpM:2.2, atkM:1.45, elite:true }];
   else if (node.type === "horde") {
     list = [0,1].map(() => ({ kind:pick(pool.light), hpM:0.62, atkM:0.72 }));
@@ -428,7 +438,7 @@ const encounterFor = (node, act) => {
 };
 
 // ===== 袋（抽選プール）=====
-const initOwned = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, heal:3, def:3, atk:3, atkx:0, defx:0 });
+const initOwned = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:3, def:3, atk:3, atkx:0, defx:0 });
 const refillBag = owned => ({ ...owned });
 const bagTotal = bag => ITEM_KEYS.reduce((s,k) => s+bag[k], 0);
 const drawFromBag = (bagRef, ownedRef, bagUpRef, ownedUpRef, cellsNow) => {
@@ -532,15 +542,15 @@ const expandIds = (cells, ids) => {
   return out;
 };
 const groupInfo = (cells, ids) => {
-  const sp = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, heal:0, def:0, atk:0, atkx:0, defx:0 };
-  const spu = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, heal:0, def:0, atk:0, atkx:0, defx:0 };
+  const sp = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0 };
+  const spu = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0 };
   let junkCnt = 0;
   for (const cell of cells) if (ids.has(cell.id)) {
     if (cell.special) { sp[cell.special]++; if (cell.up) spu[cell.special]++; }
     if (cell.type === JUNK) junkCnt++;
   }
   const junk = junkCnt > 0 && junkCnt === ids.size; // 全部お邪魔のときだけ効果ゼロ
-  const base = ids.size + sp.plus + spu.plus + spu.pierce; // ＋=+1（強化＋はさらに+1）/ 貫＋=+1
+  const base = ids.size + sp.plus + spu.plus + spu.pierce + spu.bolt * 3; // ＋/貫＋/雷＋のボーナス込み
   let mult = 1;
   const starOn = sp.star > 0 && base >= Math.max(4, (spu.star > 0 ? 5 : STAR_THRESHOLD) - (hasR("starbook") ? 1 : 0));
   if (starOn) mult *= 1 + sp.star;
@@ -684,7 +694,12 @@ const SFX = {
   hurt: () => { softTone(110, 0.22, "sine", 0.16, 0, 45); noise(0.18, 350, 0.1, 0, 0.7, "lowpass"); },
   crack:() => { noise(0.2, 2400, 0.16, 0, 0.5); noise(0.25, 700, 0.12, 0.03, 0.6); softTone(80, 0.22, "sine", 0.12, 0.02, 40); },
   heal: () => { softTone(523, 0.3, "sine", 0.06); softTone(784, 0.35, "sine", 0.05, 0.08); noise(0.25, 6000, 0.02, 0.05, 2); },
-  win:  () => [392, 523, 659, 784].forEach((f, i) => softTone(f, 0.4, "sine", 0.07, i * 0.11)),
+  win:  () => {
+    [[523,0],[659,0.1],[784,0.2],[1046,0.34]].forEach(p => ringTone(p[0], 0.4, 0.075, p[1]));
+    [[392,0],[523,0.1],[659,0.2],[784,0.34]].forEach(p => softTone(p[0], 0.45, "triangle", 0.05, p[1]));
+    softTone(1318, 0.55, "sine", 0.045, 0.48);
+    noise(0.35, 7200, 0.03, 0.36, 2);
+  },
   lose: () => { [294, 262, 220, 175].forEach((f, i) => softTone(f, 0.45, "sine", 0.07, i * 0.16)); noise(0.6, 250, 0.05, 0.1, 0.5, "lowpass"); },
   pick: () => { softTone(880, 0.12, "sine", 0.06); softTone(1318, 0.14, "sine", 0.05, 0.05); },
   step: () => { noise(0.06, 1400, 0.05); softTone(440, 0.08, "sine", 0.04, 0, 520); },
@@ -869,7 +884,7 @@ function DropBattle() {
     };
     dispRafRef.current = requestAnimationFrame(step);
   }, [tv.atk, tv.def, tv.heal]);
-  const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false });
+  const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false, aoe:false, aoeUp:false });
   const turnRef = useRef(freshTurn());
   const syncTurn = () => setTv({ ...turnRef.current });
 
@@ -949,8 +964,43 @@ function DropBattle() {
     const ens = enemiesRef.current.map(e => ({ ...e }));
     const tn = turnNumRef.current;
 
-    // ① プレイヤー攻撃：対象単体のみ。貫通ドロップを消していれば余剰が次の敵へ
-    if (atk > 0) {
+    // ① プレイヤー攻撃：単体（貫通=余剰が次へ / 全=敵全体に同じダメージ）
+    if (atk > 0 && turnRef.current.aoe) {
+      const dmgAll = Math.round(atk * (turnRef.current.aoeUp ? 1.2 : 1));
+      const alive = ens.filter(e => e.alive);
+      let first = true;
+      for (const en of alive) {
+        let remA = dmgAll;
+        let dealtS = 0;
+        if ((en.shd || 0) > 0) {
+          const eff = hasR("ram") ? 2 : 1;
+          dealtS = Math.min(en.shd, remA * eff);
+          en.shd -= dealtS;
+          remA -= Math.ceil(dealtS / eff);
+        }
+        const dealtH = Math.min(en.hp, Math.max(0, remA));
+        en.hp -= dealtH;
+        if (en.hp <= 0) en.alive = false;
+        const snap = ens.map(e => ({ ...e }));
+        const isFirst = first; first = false;
+        const dead = !en.alive;
+        seq.push({
+          text: `${isFirst ? "乱れ斬り！" : ""}${en.name}に ${dealtH}！`, color: "#ff9a3c", act: "atk",
+          wait: 520,
+          run: () => {
+            if (isFirst) setAnim("hero", "attack");
+            SFX.don();
+            setTimeout(() => {
+              setAnim(en.id, dead ? "die" : "hit");
+              addPop(en.id, dealtH > 0 ? "-" + dealtH : "BLOCK", dealtH > 0 ? "#ffe2de" : "#9db8e8");
+              if (dead && en.boss) { setShakeSeq(q => q + 1); setFlashSeq(q => q + 1); }
+            }, 160);
+            setTimeout(() => setEnemiesBoth(snap), 180);
+          }
+        });
+        logs.push(`⚔全 ${en.name}に ${dealtH}${dead ? "（撃破）" : ""}`);
+      }
+    } else if (atk > 0) {
       const pierce = turnRef.current.pierce;
       const alive = ens.filter(e => e.alive);
       const tgt = alive.find(e => e.id === targetRef.current) || alive[0];
@@ -1485,7 +1535,15 @@ function DropBattle() {
     const act = actionRef.current;
     if (!act || usedRef.current.has(act)) return;
     const seedJunk = boardRef.current[idx].type === JUNK;
-    const ids = seedJunk ? findGroup(boardRef.current, idx) : expandIds(boardRef.current, findGroup(boardRef.current, idx));
+    let ids0 = findGroup(boardRef.current, idx);
+    if (!seedJunk) {
+      const hasBolt = boardRef.current.some(c => ids0.has(c.id) && c.special === "bolt");
+      if (hasBolt) {
+        const t = boardRef.current[idx].type;
+        boardRef.current.forEach(c => { if (c.type === t) ids0.add(c.id); });
+      }
+    }
+    const ids = seedJunk ? ids0 : expandIds(boardRef.current, ids0);
     const info = groupInfo(boardRef.current, ids);
     const eff = computeEffect(act, info);
     const next = refill(boardRef.current, ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
@@ -1497,6 +1555,16 @@ function DropBattle() {
     if (eff.splitDef) turnRef.current.def += eff.splitDef;
     if (eff.healBonus) turnRef.current.heal += eff.healBonus;
     if (info.sp.pierce > 0) turnRef.current.pierce = true;
+    if (act === "atk" && info.sp.aoe > 0) {
+      turnRef.current.aoe = true;
+      if (info.spu.aoe > 0) turnRef.current.aoeUp = true;
+    }
+    if (info.sp.gold > 0) {
+      const g = (info.sp.gold - info.spu.gold) * 5 + info.spu.gold * 12;
+      setCoinsBoth(coinsRef.current + g);
+      SFX.coin();
+      addLog([`金 コイン+${g}`]);
+    }
     syncTurn();
     if (info.junk) SFX.tap();
     else SFX.clear();
@@ -1508,6 +1576,8 @@ function DropBattle() {
     if (eff.splitDef) ll.push(`盾 防御+${eff.splitDef}`);
     if (eff.healBonus) ll.push(`♥ 回復+${eff.healBonus}`);
     if (info.sp.pierce > 0) ll.push("貫 攻撃が貫通化！");
+    if (act === "atk" && info.sp.aoe > 0) ll.push("全 攻撃が全体化！");
+    if (info.sp.bolt > 0) ll.push("雷 同色を全消し！");
     if (ll.length) addLog([ll.join(" / ")]);
     const newUsed = new Set(usedRef.current);
     newUsed.add(act);
@@ -1590,7 +1660,15 @@ function DropBattle() {
   };
   const makePreview = (b, idx) => {
     const seedJunk = b[idx].type === JUNK;
-    const ids = seedJunk ? findGroup(b, idx) : expandIds(b, findGroup(b, idx));
+    let ids0 = findGroup(b, idx);
+    if (!seedJunk) {
+      const hasBolt = b.some(c => ids0.has(c.id) && c.special === "bolt");
+      if (hasBolt) {
+        const t = b[idx].type;
+        b.forEach(c => { if (c.type === t) ids0.add(c.id); });
+      }
+    }
+    const ids = seedJunk ? ids0 : expandIds(b, ids0);
     return { ids, over:true, info: groupInfo(b, ids) };
   };
   useEffect(() => {
@@ -2061,9 +2139,6 @@ function DropBattle() {
           h("button", { onClick: () => restart(true), className:"rounded-xl px-6 py-2.5 tracking-widest font-bold", style:{ background:"rgba(255,255,255,.1)", color:"#c9b8e8", border:"1px solid rgba(169,107,255,.4)" } }, "タイトルへ")))));
   }
 
-  const logBox = h("div", { ref: logRef, className:"rounded-lg px-3 py-2 text-[11px] leading-relaxed", style:{ background:"rgba(22,17,31,.92)", height:56, overflowY:"auto", border:"2px solid #3c3450" } },
-    log.map((l,i) => h("div", { key:i, style:{ opacity: l.startsWith("―") ? 0.55 : 0.95 } }, l)));
-
   // ===== マップ画面 =====
   if (status === "map" || (status === "reward" && pendingNodeRef.current && pendingNodeRef.current.type === "treasure")) {
     const selIds = selectableIds();
@@ -2118,7 +2193,6 @@ function DropBattle() {
           })),
         h("div", { className:"flex justify-center gap-1 mb-1 text-[9px]", style:{ flexWrap:"wrap" } },
           Object.keys(NODE_META).map(k => h("span", { key:k, className:"rounded-full", style:{ color:NODE_META[k].color, background:"rgba(30,24,42,.92)", border:"1px solid #3c3450", padding:"1px 8px" } }, NODE_META[k].icon, NODE_META[k].label))),
-        logBox,
         overlays));
   }
 
@@ -2149,10 +2223,10 @@ function DropBattle() {
           h("div", { className:"w-full mt-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:8 })),
           h("span", { className:"text-[10px] font-bold mt-1", style:{ color: hit === "player" ? "#ff9a9a" : hit === "heal" ? "#7cffb0" : "#cfe9d8", fontVariantNumeric:"tabular-nums", transition:"color .3s" } }, pHP, "/", pMax)),
         // 敵
-        h("div", { className:"absolute flex items-end scene-actor", style:{ right:30, bottom:8, gap:4, zIndex:1 } },
+        h("div", { className:"absolute flex items-end scene-actor", style:{ right:30, bottom:4, gap:4, zIndex:1 } },
           enemies.map(en => {
             const k = KINDS[en.kind];
-            const sz = en.boss ? 112 : enemies.length >= 3 ? Math.min(k.size, 58) : k.size;
+            const sz = en.boss ? 84 : enemies.length >= 3 ? Math.min(k.size, 58) : Math.min(k.size, 66);
             const a = anims[en.id];
             const isT = targetId === en.id && en.alive;
             const iv = intentOf(en, enemies);
@@ -2201,6 +2275,7 @@ function DropBattle() {
           Array.from({ length:3 }).map((_,i) => h("span", { key:i, className:"inline-block rounded-full", style:{ width:9, height:9, background: i < remaining ? "#d8a848" : "rgba(255,255,255,.18)" } }))),
         h("span", { className:"flex gap-1 items-center" },
           tv.pierce && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#f06aae", border:"1px solid #f06aae", padding:"1px 4px" } }, "貫通"),
+          tv.aoe && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#ff9a3c", border:"1px solid #ff9a3c", padding:"1px 4px" } }, "全体"),
           tv.atkBoost && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#e05a50", border:"1px solid #e05a50", padding:"1px 4px" } }, "攻2倍"),
           tv.defBoost && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#5a8fd0", border:"1px solid #5a8fd0", padding:"1px 4px" } }, "防2倍"),
           tv.stun && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#c9a2ff", border:"1px solid #c9a2ff", padding:"1px 4px" } }, "時止め"),
