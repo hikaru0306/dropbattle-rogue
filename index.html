@@ -100,10 +100,10 @@ button:active{filter:brightness(1.12)}
 .act-h{height:62px}
 .scene-actor{transform-origin:50% 100%}
 @media (max-height:800px){.scene-h{height:150px}.scene-actor{transform:scale(.9)}}
-@media (max-height:770px){button[data-idx]{aspect-ratio:1/.88 !important}}
-@media (max-height:700px){.scene-h{height:126px}.scene-actor{transform:scale(.74)}button[data-idx]{aspect-ratio:1/.92 !important}}
-@media (max-height:680px){.scene-h{height:112px}button[data-idx]{aspect-ratio:1/.8 !important}.scene-actor{transform:scale(.7)}}
-@media (max-height:600px){.scene-h{height:96px}button[data-idx]{aspect-ratio:1/.72 !important}.scene-actor{transform:scale(.58)}}
+@media (max-height:770px){.board-wrap{max-width:90%;margin-left:auto;margin-right:auto}}
+@media (max-height:700px){.scene-h{height:126px}.scene-actor{transform:scale(.74)}.board-wrap{max-width:88%}}
+@media (max-height:680px){.scene-h{height:112px}.scene-actor{transform:scale(.7)}.board-wrap{max-width:80%}}
+@media (max-height:600px){.scene-h{height:96px}.scene-actor{transform:scale(.58)}.board-wrap{max-width:70%}}
 .pop-in{animation:popIn .28s cubic-bezier(.3,1.4,.6,1)}
 .fade-in{animation:fadeIn .3s ease}
 </style>
@@ -2234,7 +2234,7 @@ function DropBattle() {
             textShadow: isSel && selEff && tv[key] === 0 && info && info.mult > 1 ? "0 0 8px #ffd54a" : "none" } }, valEl));
       })),
       // 盤面
-      h("div", { className:"relative rounded-2xl", style:{ padding:5, background:"rgba(19,14,28,.8)", border:"2px solid #3c3450", marginBottom:4 } },
+      h("div", { className:"relative rounded-2xl board-wrap", style:{ padding:5, background:"rgba(19,14,28,.8)", border:"2px solid #3c3450", marginBottom:4 } },
         h("div", { className:"grid grid-cols-6 gap-1.5", style:{ touchAction:"none" }, onContextMenu: e => e.preventDefault() },
           board.map((cell,i) => {
             const d = DROPS[cell.type];
