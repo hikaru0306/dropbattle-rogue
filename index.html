@@ -1,0 +1,2238 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>ドロップバトル</title>
+<meta name="description" content="ルートを選んで進むドロップ消しローグライク。魔王を倒せ！" />
+<meta property="og:title" content="ドロップバトル" />
+<meta property="og:description" content="ルートを選んで進むドロップ消しローグライク。魔王を倒せ！" />
+<meta property="og:type" content="website" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+html,body{margin:0;padding:0;background:#131019;overscroll-behavior:none;overflow-x:hidden;-webkit-text-size-adjust:100%}
+body{padding-bottom:env(safe-area-inset-bottom)}
+#root{min-height:100vh}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;padding:0;margin:0}
+button:active{filter:brightness(1.12)}
+.relative{position:relative}.absolute{position:absolute}.fixed{position:fixed}
+.inset-0{top:0;right:0;bottom:0;left:0}
+.flex{display:flex}.grid{display:grid}.inline-block{display:inline-block}.block{display:block}
+.flex-1{flex:1 1 0%}.flex-col{flex-direction:column}
+.items-center{align-items:center}.items-end{align-items:flex-end}.items-stretch{align-items:stretch}
+.justify-between{justify-content:space-between}.justify-center{justify-content:center}
+.grid-cols-1{grid-template-columns:repeat(1,minmax(0,1fr))}
+.grid-cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.grid-cols-6{grid-template-columns:repeat(6,minmax(0,1fr))}
+.gap-1{gap:.25rem}.gap-1\.5{gap:.375rem}.gap-2{gap:.5rem}.gap-3{gap:.75rem}
+.w-full{width:100%}
+.p-2{padding:.5rem}.p-4{padding:1rem}
+.px-3{padding-left:.75rem;padding-right:.75rem}.px-4{padding-left:1rem;padding-right:1rem}
+.px-5{padding-left:1.25rem;padding-right:1.25rem}.px-6{padding-left:1.5rem;padding-right:1.5rem}
+.py-1{padding-top:.25rem;padding-bottom:.25rem}.py-1\.5{padding-top:.375rem;padding-bottom:.375rem}
+.py-2{padding-top:.5rem;padding-bottom:.5rem}.py-2\.5{padding-top:.625rem;padding-bottom:.625rem}
+.py-3{padding-top:.75rem;padding-bottom:.75rem}
+.mb-1{margin-bottom:.25rem}.mb-2{margin-bottom:.5rem}.mb-3{margin-bottom:.75rem}.mb-4{margin-bottom:1rem}
+.mt-1{margin-top:.25rem}.mt-2{margin-top:.5rem}.mt-3{margin-top:.75rem}.my-3{margin-top:.75rem;margin-bottom:.75rem}
+.rounded-lg{border-radius:.5rem}.rounded-xl{border-radius:.75rem}.rounded-2xl{border-radius:1rem}.rounded-full{border-radius:9999px}
+.text-center{text-align:center}.text-left{text-align:left}.text-right{text-align:right}
+.text-xs{font-size:.75rem;line-height:1rem}.text-sm{font-size:.875rem;line-height:1.25rem}
+.text-\[9px\]{font-size:9px}.text-\[10px\]{font-size:10px}.text-\[11px\]{font-size:11px}
+.font-bold{font-weight:700}
+.tracking-widest{letter-spacing:.1em}
+.leading-relaxed{line-height:1.625}
+.pointer-events-none{pointer-events:none}
+@keyframes dropIn{from{transform:translateY(-46px);opacity:0}to{transform:translateY(0);opacity:1}}
+@keyframes markPulse{0%,100%{opacity:.78}50%{opacity:1}}
+@keyframes fxPop{0%{transform:scale(.6) translateY(10px);opacity:0}22%{transform:scale(1.12) translateY(0);opacity:1}80%{opacity:1}100%{opacity:0;transform:translateY(-10px)}}
+@keyframes hitShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+@keyframes breathA{0%,100%{transform:scaleY(1) scaleX(1)}50%{transform:scaleY(1.04) scaleX(.99) translateY(-1px)}}
+@keyframes breathB{0%,100%{transform:scaleY(1) rotate(0deg)}50%{transform:scaleY(1.03) scaleX(.992) rotate(-.5deg)}}
+@keyframes floatY{0%,100%{transform:translateY(-2px)}50%{transform:translateY(-9px)}}
+@keyframes heroLunge{0%{transform:translateX(0)}35%{transform:translateX(30px) rotate(4deg)}70%{transform:translateX(-4px)}100%{transform:translateX(0)}}
+@keyframes enemyLunge{0%{transform:translateX(0)}35%{transform:translateX(-28px) rotate(-4deg)}70%{transform:translateX(4px)}100%{transform:translateX(0)}}
+@keyframes spriteHit{0%{filter:brightness(1)}25%{filter:brightness(2.6) saturate(.3);transform:translateX(-5px)}50%{transform:translateX(5px)}75%{filter:brightness(1.6);transform:translateX(-3px)}100%{filter:brightness(1);transform:translateX(0)}}
+@keyframes spriteDie{0%{opacity:1;transform:scale(1) rotate(0)}100%{opacity:0;transform:scale(.5) rotate(14deg) translateY(14px)}}
+@keyframes healPulse{0%,100%{filter:none;transform:translateY(0)}40%{filter:brightness(1.3) saturate(1.25);transform:translateY(-4px)}}
+@keyframes chargePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05);filter:brightness(1.18) saturate(1.3)}}
+@keyframes nodePulse{0%,100%{box-shadow:0 0 0 2px rgba(216,168,72,.85);transform:translate(-50%,-50%) scale(1)}50%{box-shadow:0 0 0 3px rgba(216,168,72,1);transform:translate(-50%,-50%) scale(1.07)}}
+@keyframes targetBob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,5px)}}
+@keyframes mistDrift{0%{transform:translateX(-12%)}50%{transform:translateX(12%)}100%{transform:translateX(-12%)}}
+@keyframes popIn{0%{transform:scale(.85);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes intentBlink{0%,100%{opacity:1}50%{opacity:.55}}
+.sp-idle-a{animation:breathA 2.6s ease-in-out infinite;transform-origin:50% 100%}
+.sp-idle-b{animation:breathB 3.4s ease-in-out infinite;transform-origin:50% 100%}
+.sp-idle-f{animation:floatY 3.2s ease-in-out infinite}
+.sp-atk-hero{animation:heroLunge .55s cubic-bezier(.3,1.4,.6,1)}
+.sp-atk-enemy{animation:enemyLunge .55s cubic-bezier(.3,1.4,.6,1)}
+.sp-hit{animation:spriteHit .5s ease}
+.sp-die{animation:spriteDie .6s ease forwards}
+.sp-heal{animation:healPulse .9s ease}
+.sp-charge{animation:chargePulse 1s ease-in-out infinite}
+@keyframes actPulse{0%{transform:scale(1)}35%{transform:scale(1.07)}100%{transform:scale(1)}}
+.title-bg{object-fit:cover;object-position:center bottom}
+@media (min-aspect-ratio: 4/5){.title-bg{object-fit:contain;object-position:center}}
+@keyframes dmgPop{0%{opacity:0;transform:translate(-50%,8px) scale(.7)}15%{opacity:1;transform:translate(-50%,0) scale(1.2)}35%{transform:translate(-50%,-4px) scale(1)}100%{opacity:0;transform:translate(-50%,-30px) scale(.95)}}
+.dmg-pop{position:absolute;top:6%;left:50%;font-weight:900;font-size:1.05rem;text-shadow:0 2px 0 #000,0 0 3px #000;animation:dmgPop .9s ease forwards;pointer-events:none;z-index:6;white-space:nowrap}
+@keyframes sceneShake{0%,100%{transform:translate(0,0)}15%{transform:translate(-7px,3px)}30%{transform:translate(6px,-3px)}45%{transform:translate(-5px,2px)}60%{transform:translate(4px,-2px)}75%{transform:translate(-2px,1px)}}
+.scene-shake{animation:sceneShake .45s ease}
+@keyframes impactFlash{0%{opacity:.55}100%{opacity:0}}
+.impact-flash{background:radial-gradient(circle at 60% 45%, rgba(255,240,220,.95), rgba(255,200,160,.35) 45%, transparent 70%);animation:impactFlash .35s ease forwards;z-index:4}
+@keyframes valPulse{0%{transform:scale(1.35)}100%{transform:scale(1)}}
+.val-pulse{animation:valPulse .28s cubic-bezier(.3,1.4,.6,1)}
+@media (max-width:400px){
+  .grid-cols-6{gap:.28rem !important}
+  .grid-cols-3{gap:.35rem !important}
+}
+.fly-dot{position:fixed;width:10px;height:10px;border-radius:50%;z-index:90;pointer-events:none;margin:-5px 0 0 -5px;transition:transform .42s cubic-bezier(.55,0,.85,.45),opacity .42s ease;box-shadow:inset 0 -2px 2px rgba(0,0,0,.3)}
+@keyframes angerPulse{0%,100%{transform:scale(1) rotate(-4deg)}50%{transform:scale(1.3) rotate(6deg)}}
+@keyframes boomFx{0%{transform:translate(-50%,-50%) scale(.25);opacity:.95}60%{opacity:.7}100%{transform:translate(-50%,-50%) scale(1.15);opacity:0}}
+.boom-fx{position:fixed;width:76px;height:76px;border-radius:50%;z-index:89;pointer-events:none;background:radial-gradient(circle, rgba(255,235,180,.95) 8%, rgba(255,150,60,.75) 34%, rgba(200,60,20,.35) 58%, transparent 72%);border:3px solid rgba(255,190,110,.8);animation:boomFx .45s ease-out forwards}
+.pop-in{animation:popIn .28s cubic-bezier(.3,1.4,.6,1)}
+.fade-in{animation:fadeIn .3s ease}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+(function(){
+  var R = window.React, RD = window.ReactDOM;
+  if(!R || !RD){ document.getElementById('root').innerHTML = '<p style="color:#fff;padding:20px">読み込みに失敗しました。通信環境を確認して再読み込みしてください。</p>'; return; }
+  var h = R.createElement;
+  var useState=R.useState, useRef=R.useRef, useEffect=R.useEffect, useCallback=R.useCallback;
+  var FONT = "'M PLUS Rounded 1c','Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic',sans-serif";
+
+// ===== 基本設定 =====
+const SIZE = 6;
+const TOTAL = SIZE * SIZE;
+const P_MAX = 250;
+const NUM_SPECIAL = 5;
+const STAR_THRESHOLD = 6;
+const ATK_PER = 10, DEF_PER = 10, HEAL_PER = 2;
+const ROWS = 8;
+const ACTS = 3;
+const ACT_NAMES = ["翠緑の森", "毒霧の沼窟", "灼熱の魔城"];
+const BOSS_BY_ACT = [["kslime","treant","alraune"], ["vamp","lich","toadking"], ["demon","dragon","ifrit","reaper"]];
+const MAP_BGS = ["assets/bg_map_tall.jpg", "assets/bg_map2.jpg", "assets/bg_map3.jpg"];
+const BATTLE_BGS = ["assets/bg_battle.jpg", "assets/bg_battle2.jpg", "assets/bg_battle3.jpg"];
+const ACT_POOLS = [
+  { light:["slime","bat","wolf","bee","crow","pixie"], mid:["slime","wolf","spore","mandra","pixie","fox","crow"], heavy:["imp","boar","snail","mandra","fox"] },
+  { light:["bat","shade","eel","wisp","toad"], mid:["shade","toad","eel","wisp","sludge","spore","turtle"], heavy:["golem","mudman","crab","scorp","turtle"] },
+  { light:["shade","hound","skel","sala"], mid:["scorp","sala","hound","skel","ifrita","spore","wraith"], heavy:["golem","gargo","knight","bomber","wraith"] }
+];
+
+const DROPS = {
+  0: { c1:"#ef8078", c2:"#d84a40", c3:"#7e2620", glow:"#d84a40" },
+  1: { c1:"#f3c96e", c2:"#dfa03a", c3:"#8a5c1a", glow:"#dfa03a" },
+  2: { c1:"#b795e6", c2:"#8d63cf", c3:"#4e3078", glow:"#8d63cf" },
+  3: { c1:"#6fd1b8", c2:"#379e8b", c3:"#1c584c", glow:"#379e8b" },
+  4: { c1:"#767083", c2:"#575064", c3:"#2e2938", glow:"#575064" }
+};
+const JUNK = 4;
+const DROP_IMG = { 0:"assets/drop_red.png", 1:"assets/drop_gold.png", 2:"assets/drop_purple.png", 3:"assets/drop_teal.png", 4:"assets/drop_junk.png" };
+
+const ITEMS = {
+  star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a", name:"スター", desc:"6個以上同時消しで効果(★の数+1)倍" },
+  plus: { mark:"＋", img:"assets/mk_plus.png", color:"#eafaff", ring:"rgba(120,210,255,.95)", glowc:"#8ad8ff", name:"プラス", desc:"消した数を+1する" },
+  three:{ mark:"3", img:"assets/mk_three.png", color:"#ffe1b0", ring:"rgba(255,150,40,.95)", glowc:"#ff9d2e", name:"トリプル", desc:"ちょうど3個で消すと3倍" },
+  pierce:{ mark:"貫", img:"assets/mk_pierce.png", color:"#ffe6f0", ring:"rgba(255,120,190,.95)", glowc:"#f06aae", name:"貫通", desc:"消すと今ターンの攻撃が敵を貫通する" },
+  bombx: { mark:"爆", img:"assets/mk_bombx.png", color:"#ffd9c8", ring:"rgba(255,140,90,.95)", glowc:"#ff7a3c", name:"クロスボム", desc:"消すと上下左右のドロップも巻き込んで消す" },
+  bombd: { mark:"斜", img:"assets/mk_bombd.png", color:"#e8d8ff", ring:"rgba(180,120,255,.95)", glowc:"#a86aff", name:"Xボム", desc:"消すと斜め4方向のドロップも巻き込んで消す" },
+  heal: { mark:"♥", img:"assets/mk_heart.png", color:"#d6ffe4", ring:"rgba(80,230,140,.95)", glowc:"#48e890", name:"ヒール", desc:"消すと10回復" },
+  def:  { mark:"盾", img:"assets/icon_def.png", color:"#d6e8ff", ring:"rgba(90,160,255,.95)", glowc:"#5aa0ff", name:"ガード", desc:"消した効果の半分を防御に追加" },
+  atk:  { mark:"剣", img:"assets/icon_atk.png", color:"#ffd9d9", ring:"rgba(255,90,90,.95)", glowc:"#ff5a5a", name:"ソード", desc:"消した効果の半分を攻撃に追加" },
+  atkx: { mark:"攻", img:"assets/mk_atkx.png", color:"#ffe8cc", ring:"rgba(255,140,0,.95)", glowc:"#ff8c00", name:"猛攻", desc:"攻撃で消すと効果×2" },
+  defx: { mark:"防", img:"assets/mk_defx.png", color:"#cce4ff", ring:"rgba(0,160,255,.95)", glowc:"#00a0ff", name:"鉄壁", desc:"防御で消すと効果×2" }
+};
+const ITEM_KEYS = Object.keys(ITEMS);
+// ドロップ強化（焚き火の「鍛える」。種類単位で恒久強化）
+const DESC_UP = {
+  star: "【強化】5個以上の同時消しで発動する",
+  plus: "【強化】消した数を+2する",
+  three:"【強化】ちょうど3個で消すと4倍",
+  pierce:"【強化】貫通＋消した数を+1する",
+  bombx: "【強化】周囲8マスを巻き込んで消す",
+  bombd: "【強化】周囲8マスを巻き込んで消す",
+  heal: "【強化】消すと25回復",
+  def:  "【強化】消した効果と同量を防御に追加",
+  atk:  "【強化】消した効果と同量を攻撃に追加",
+  atkx: "【強化】攻撃で消すと効果×2.5",
+  defx: "【強化】防御で消すと効果×2.5"
+};
+const initZero = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, heal:0, def:0, atk:0, atkx:0, defx:0 });
+// ===== レリック（パッシブ遺物）=====
+const RELICS = {
+  // rar1=コモン rar2=レア rar3=ボス級
+  piggy:      { icon:"🐖", name:"小さな貯金箱", desc:"勝利時にコイン+10", rar:1 },
+  member:     { icon:"🏷", name:"会員証", desc:"ショップの価格が20%安くなる", rar:1 },
+  hammer:     { icon:"⚒", name:"鍛冶ハンマー", desc:"鍛える費用が半額（25）になる", rar:1 },
+  regen:      { icon:"💗", name:"再生の護符", desc:"ターン終了時にHP+2", rar:1 },
+  blanket:    { icon:"🛌", name:"休息の毛布", desc:"焚き火の回復が60%になる", rar:1 },
+  bento:      { icon:"🍖", name:"弁当箱", desc:"勝利時にHP+8回復", rar:1 },
+  salt:       { icon:"🧂", name:"清めの塩", desc:"敵のお邪魔変換数-1", rar:1 },
+  herb:       { icon:"🌿", name:"携帯薬草", desc:"ポーションの回復が120になる", rar:1 },
+  ram:        { icon:"🔨", name:"破城槌", desc:"敵シールドへのダメージ2倍", rar:1 },
+  dice:       { icon:"🎲", name:"いかさまダイス", desc:"ショップの品揃えが6品になる", rar:1 },
+  adventmap:  { icon:"🗺", name:"冒険者の地図", desc:"焚き火に着くとコイン+30", rar:1 },
+  scale:      { icon:"⚖", name:"商人の天秤", desc:"コイン獲得が1.5倍になる", rar:2 },
+  swordcrest: { icon:"🗡", name:"剛剣の紋章", desc:"攻撃の効果が1.1倍", rar:2 },
+  shieldcrest:{ icon:"🛡", name:"重盾の紋章", desc:"防御の効果が1.2倍", rar:2 },
+  holywater:  { icon:"💧", name:"聖水", desc:"回復の効果が1.5倍", rar:2 },
+  warring:    { icon:"💍", name:"闘志の指輪", desc:"毎ターン攻撃+10の状態で始まる", rar:2 },
+  guardring:  { icon:"🪬", name:"守護の指輪", desc:"毎ターン防御+10の状態で始まる", rar:2 },
+  lifefruit:  { icon:"🍎", name:"生命の果実", desc:"取得時、最大HP+40", rar:2 },
+  stardust:   { icon:"✨", name:"星のかけら", desc:"盤面の特殊ドロップ+1", rar:2 },
+  starbook:   { icon:"📖", name:"星読みの書", desc:"★の発動個数が1減る", rar:2 },
+  pouch:      { icon:"🎒", name:"大きなポーチ", desc:"消費アイテムを4個持てる", rar:2 },
+  mist:       { icon:"🌫", name:"霧のマント", desc:"各戦闘の1ターン目、受けるダメージ半減", rar:2 },
+  deathmark:  { icon:"💀", name:"死神の刻印", desc:"雑魚敵がHP10%減った状態で出現", rar:2 },
+  magnet:     { icon:"🧲", name:"磁石の指輪", desc:"勝利報酬の選択肢が4つになる", rar:2 },
+  bigstar:    { icon:"🌟", name:"大星晶", desc:"盤面の特殊ドロップ+2", rar:3 },
+  prism:      { icon:"🔮", name:"プリズム", desc:"ターン開始時、盤面の最少色が他の色に変わる（3色になる）", rar:3 },
+  crown:      { icon:"👑", name:"王家の印章", desc:"章クリアの最大HPボーナスが+80になる", rar:3 },
+  ironwill:   { icon:"⛓", name:"鉄の意志", desc:"余った防御の半分を次のターンに持ち越す", rar:3 }
+};
+const RELIC_KEYS = Object.keys(RELICS);
+const RELIC_PRICE = { 1:90, 2:130, 3:180 };
+let RELICSET = new Set();
+const hasR = k => RELICSET.has(k);
+const specialTarget = () => NUM_SPECIAL + (hasR("stardust") ? 1 : 0) + (hasR("bigstar") ? 2 : 0);
+const itemCap = () => hasR("pouch") ? 4 : 3;
+const FORGE_COST = 50;
+const itemDesc = k => ITEMS[k].desc;
+const itemName = k => ITEMS[k].name;
+// 消費アイテム（最大3個・ショップでコイン交換）
+const CONSUM = {
+  potion:   { icon:"🧪", name:"ポーション", desc:"HPを80回復する", price:45 },
+  might:    { icon:"💪", name:"剛力の薬",   desc:"このターン、攻撃の効果2倍", price:55 },
+  aegis:    { icon:"🛡", name:"守護の薬",   desc:"このターン、防御の効果2倍", price:55 },
+  colorize: { icon:"🎨", name:"変換の書",   desc:"最少色のドロップを最多色に変える", price:60 },
+  purify:   { icon:"🧹", name:"浄化の書",   desc:"お邪魔ドロップを全て通常色に戻す", price:50 },
+  stun:     { icon:"⏳", name:"時止めの砂", desc:"このターン敵は行動できない", price:65 },
+  bomb:     { icon:"💣", name:"爆裂瓶",     desc:"敵全体に80ダメージ", price:60 },
+  venom:    { icon:"🐍", name:"弱体の毒",   desc:"敵全体の攻撃力を25%下げる（この戦闘中）", price:55 },
+  gemrain:  { icon:"💎", name:"星降りの粉", desc:"盤面に特殊ドロップを3個追加", price:60 },
+  phoenix:  { icon:"🪶", name:"不死鳥の羽", desc:"倒れたとき自動で復活する（HP40%）", price:80 }
+};
+const ACTIONS = {
+  atk: { label:"攻撃", icon:"⚔", img:"assets/icon_atk.png", per:ATK_PER, color:"#e05a50", bg:"rgba(224,90,80,.14)" },
+  def: { label:"防御", icon:"🛡", img:"assets/icon_def.png", per:DEF_PER, color:"#5a8fd0", bg:"rgba(90,143,208,.14)" },
+  heal:{ label:"回復", icon:"✚", img:"assets/icon_heal.png", per:HEAL_PER, color:"#54b878", bg:"rgba(84,184,120,.14)" }
+};
+const ORDER = ["atk", "def", "heal"];
+
+// ===== 敵定義 =====
+const KINDS = {
+  slime: { name:"スライム", hp:130, atk:30, size:60, idle:"a",
+    pats:[["attack"], ["attack","attack","double"]] },
+  bat:   { name:"コウモリ", hp:120, atk:30, size:58, idle:"f",
+    pats:[["double"], ["attack","double"], ["double","double","attack"]] },
+  imp:   { name:"インプ",   hp:150, atk:34, size:64, idle:"b", bigMul:1.9,
+    pats:[["attack","attack","bigatk"], ["double","attack","bigatk"], ["attack","bigatk"]] },
+  golem: { name:"ゴーレム", hp:230, atk:30, size:72, idle:"b", bigMul:3.2,
+    pats:[["charge","charge","bigatk"], ["charge","bigatk","attack"], ["attack","charge","bigatk"]] },
+  shade: { name:"シェイド", hp:150, atk:32, size:62, idle:"f", jamN:3, bigMul:1.8,
+    pats:[["jam","attack"], ["jamatk","attack"], ["jam","charge","bigatk"]] },
+  spore: { name:"スポア",   hp:120, atk:30, size:56, idle:"a", healMul:1.6,
+    pats:[["healally"], ["healally","attack"]] },
+  demon: { name:"魔王ヴァルガ", hp:1050, atk:55, size:112, idle:"b", bigMul:2.4, jamN:4,
+    pats:[["attack","jam","charge","bigatk"], ["jam","attack","charge","bigatk"], ["jamatk","charge","bigatk","attack"]] },
+  kslime:{ name:"キングスライム", hp:520, atk:34, size:104, idle:"a", bigMul:2.0, jamN:3,
+    pats:[["attack","jam","bigatk"], ["jamatk","attack","bigatk"]] },
+  vamp:  { name:"ヴァンピール", hp:780, atk:44, size:106, idle:"f", bigMul:2.4,
+    pats:[["drain","attack","charge","bigatk"]] },
+  wolf:  { name:"シルバウルフ", hp:125, atk:32, size:62, idle:"a",
+    pats:[["attack","double"], ["double","attack"], ["attack","attack","double"]] },
+  mandra:{ name:"マンドレイク", hp:130, atk:30, size:56, idle:"a", jamN:2,
+    pats:[["jam","attack"], ["healally","jam"], ["jamatk","healally"]] },
+  scorp: { name:"サソリオン",   hp:150, atk:33, size:62, idle:"b", bigMul:2.3,
+    pats:[["attack","charge","bigatk"], ["double","charge","bigatk"]] },
+  gargo: { name:"ガーゴイル",   hp:190, atk:31, size:66, idle:"b", bigMul:2.2,
+    pats:[["charge","bigatk"], ["attack","charge","bigatk"], ["charge","charge","bigatk"]] },
+  treant:{ name:"古樹トレント", hp:580, atk:30, size:106, idle:"b", bigMul:2.8,
+    pats:[["charge","bigatk","attack"]] },
+  lich:  { name:"死霊王リッチ", hp:740, atk:40, size:104, idle:"f", bigMul:2.2, jamN:4,
+    pats:[["jam","drain","charge","bigatk"], ["jamatk","drain","charge","bigatk"]] },
+  dragon:{ name:"黒竜ファヴニル", hp:1100, atk:58, size:114, idle:"b", bigMul:2.2,
+    pats:[["attack","charge","bigatk","double"]] },
+  boar:  { name:"タックボア",   hp:140, atk:31, size:64, idle:"b", bigMul:2.2, pats:[["charge","bigatk"], ["attack","charge","bigatk"]] },
+  bee:   { name:"キラービー",   hp:120, atk:30, size:52, idle:"f", pats:[["double"], ["double","double","attack"]] },
+  pixie: { name:"イタズラピクシー", hp:120, atk:30, size:52, idle:"f", jamN:2, pats:[["jam","attack"], ["jamatk","jam"]] },
+  snail: { name:"アイアンスネイル", hp:200, atk:30, size:60, idle:"b", pats:[["attack"], ["charge","attack","attack"]] },
+  fox:   { name:"妖狐コンコ",   hp:125, atk:31, size:60, idle:"a", pats:[["drain","attack"], ["drain"]] },
+  crow:  { name:"ヨルガラス",   hp:120, atk:30, size:56, idle:"f", pats:[["attack"], ["double","attack"]] },
+  toad:  { name:"ドクガエル",   hp:135, atk:31, size:60, idle:"a", jamN:3, pats:[["attack","jam"], ["jamatk","double"]] },
+  eel:   { name:"ヌマウナギ",   hp:125, atk:30, size:60, idle:"f", pats:[["double"], ["double","attack"]] },
+  mudman:{ name:"マッドマン",   hp:170, atk:32, size:64, idle:"b", bigMul:2.5, pats:[["charge","bigatk","attack"]] },
+  wisp:  { name:"ウィルウィスプ", hp:120, atk:30, size:52, idle:"f", jamN:2, pats:[["drain"], ["drain","jam"]] },
+  crab:  { name:"シザークラブ", hp:160, atk:32, size:62, idle:"b", bigMul:2.0, pats:[["attack","attack","bigatk"]] },
+  sludge:{ name:"ヘドロスライム", hp:135, atk:30, size:58, idle:"a", jamN:3, pats:[["jam","attack"], ["jamatk","attack"]] },
+  turtle:{ name:"ロックタートル", hp:195, atk:30, size:62, idle:"b", bigMul:2.4, pats:[["charge","attack"], ["charge","charge","bigatk"]] },
+  sala:  { name:"サラマンドラ", hp:140, atk:35, size:60, idle:"a", bigMul:1.8, pats:[["attack","bigatk"]] },
+  bomber:{ name:"ボムデビル",   hp:130, atk:32, size:58, idle:"f", bigMul:3.0, pats:[["charge","bigatk"]] },
+  knight:{ name:"ダークナイト", hp:180, atk:34, size:66, idle:"b", bigMul:2.2, pats:[["attack","attack","bigatk"], ["double","charge","bigatk"]] },
+  hound: { name:"ヘルハウンド", hp:130, atk:31, size:60, idle:"a", bigMul:2.0, pats:[["double","attack","bigatk"]] },
+  ifrita:{ name:"フレイムメイジ", hp:135, atk:33, size:58, idle:"f", bigMul:2.4, jamN:3, pats:[["jam","charge","bigatk"], ["jamatk","charge","bigatk"]] },
+  skel:  { name:"スケルトン兵", hp:145, atk:31, size:62, idle:"b", pats:[["attack","attack","double"]] },
+  wraith:{ name:"亡霊騎士レイス", hp:155, atk:33, size:62, idle:"f", bigMul:2.2, pats:[["drain","charge","bigatk"]] },
+  alraune: { name:"森妃アルラウネ", hp:540, atk:32, size:104, idle:"a", bigMul:2.6, jamN:3, pats:[["jam","charge","bigatk"], ["jamatk","charge","bigatk"]] },
+  toadking:{ name:"大王ガマ",     hp:760, atk:42, size:108, idle:"a", bigMul:2.3, jamN:3, pats:[["double","jam","charge","bigatk"]] },
+  ifrit:   { name:"炎魔イフリート", hp:1080, atk:56, size:110, idle:"b", bigMul:2.3, pats:[["attack","double","charge","bigatk"]] },
+  reaper:  { name:"死神モルス",   hp:1150, atk:60, size:110, idle:"f", bigMul:2.4, jamN:4, pats:[["drain","charge","bigatk","jam"], ["drain","charge","bigatk","jamatk"]] }
+};
+const PATTERNS = {
+  attack:  { icon:"⚔",  label:"こうげき",   color:"#ffb3a8" },
+  double:  { icon:"⚔⚔", label:"れんぞく",   color:"#ffb3a8" },
+  bigatk:  { icon:"💥", label:"おおわざ",   color:"#ff6b6b" },
+  charge:  { icon:"⏳", label:"ためる",     color:"#ffd88a" },
+  jam:     { icon:"🌀", label:"おじゃま",   color:"#c9a2ff" },
+  healally:{ icon:"💚", label:"なかま回復", color:"#8ce8b0" },
+  drain:   { icon:"🩸", label:"吸血",       color:"#ff9ad0" },
+  jamatk:  { icon:"⚔🌀", label:"呪撃",      color:"#e8a2ff" }
+};
+// 敵の次の行動。仲間がいないヒーラーは攻撃に切り替わる
+const intentOf = (en, allies) => {
+  const k = KINDS[en.kind];
+  const pat = en.pat || k.pats[0];
+  let act = pat[en.pi % pat.length];
+  if (act === "healally" && !(allies || []).some(a => a.alive && a.id !== en.id)) act = "attack";
+  const roll = en.rollMul || 1; // 1行動ごとに振り直されるダメージロール
+  const hit = act === "double" ? Math.max(1, Math.round(en.atk * 0.6 * roll)) : Math.max(1, Math.round(en.atk * roll));
+  const dmg = act === "attack" || act === "drain" || act === "jamatk" ? hit
+    : act === "double" ? hit * 2
+    : act === "bigatk" ? Math.max(1, Math.round(en.atk * (k.bigMul || 2) * roll)) : 0;
+  return { act, dmg, hit, hits: act === "double" ? 2 : 1,
+    jamN: Math.max(1, (k.jamN || 3) - (hasR("salt") ? 1 : 0)), heal: Math.round(en.atk * (k.healMul || 1.5)) };
+};
+const rollDmg = () => TEST_MODE ? 1 : 0.85 + Math.random() * 0.3;
+// 大攻撃まであと何ターンか（ため表示用）
+// 次の激昂まで残り何ターンか（0=このターン終了時に強化）
+const enrLeft = (en, turn) => {
+  if (!en.enrEvery) return -1;
+  return (en.enrEvery - (turn % en.enrEvery)) % en.enrEvery;
+};
+const chargeLeft = en => {
+  const pat = en.pat || KINDS[en.kind].pats[0], len = pat.length;
+  for (let j = 1; j <= len; j++) if (pat[(en.pi + j) % len] === "bigatk") return j;
+  return "";
+};
+// 装甲持ちの敵: sh=シールド最大値 / c=ターン開始時に張り直す確率（量は50〜100%でランダム）
+const SHIELDS = {
+  snail:{sh:25,c:0.55}, boar:{sh:15,c:0.5}, crow:{sh:12,c:0.35},
+  turtle:{sh:30,c:0.55}, golem:{sh:25,c:0.45}, mudman:{sh:20,c:0.5}, crab:{sh:22,c:0.5}, toad:{sh:15,c:0.45},
+  gargo:{sh:30,c:0.55}, knight:{sh:25,c:0.5}, skel:{sh:15,c:0.4}, sala:{sh:15,c:0.4},
+  kslime:{sh:25,c:0.4}, treant:{sh:40,c:0.5}, alraune:{sh:30,c:0.45},
+  vamp:{sh:25,c:0.4}, lich:{sh:35,c:0.45}, toadking:{sh:30,c:0.4},
+  demon:{sh:50,c:0.45}, dragon:{sh:60,c:0.45}, ifrit:{sh:45,c:0.45}, reaper:{sh:70,c:0.4}
+};
+const NODE_META = {
+  battle:  { icon:"⚔",  label:"バトル", color:"#ff8a8a" },
+  horde:   { icon:"👥", label:"群れ",   color:"#ffb35c" },
+  elite:   { icon:"💀", label:"精鋭",   color:"#d05cff" },
+  treasure:{ icon:"🎁", label:"宝箱",   color:"#ffd95c" },
+  rest:    { icon:"🔥", label:"休憩",   color:"#7cffb0" },
+  boss:    { icon:"👑", label:"ボス",   color:"#ff5c7a" }
+};
+
+let UID = 1;
+const TEST_MODE = location.search.indexOf("test=1") >= 0;
+const pick = arr => arr[Math.floor(Math.random()*arr.length)];
+const shuffle = arr => { for (let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; };
+const makeDrop = (special=false) => ({ id:UID++, type:Math.floor(Math.random()*4), special, up:false });
+
+// ===== マップ生成（分岐ルート）=====
+const genMap = () => {
+  let id = 0;
+  const rows = [];
+  for (let r = 0; r < ROWS; r++) {
+    let types;
+    if (r === 0) types = ["battle","battle"];
+    else if (r === ROWS-1) types = ["boss"];
+    else if (r === ROWS-2) types = shuffle(["rest","elite"]);
+    else {
+      const n = 2 + (Math.random() < 0.55 ? 1 : 0);
+      types = Array.from({length:n}, () => {
+        const x = Math.random();
+        return x<0.40?"battle":x<0.60?"horde":x<0.74?"elite":x<0.88?"treasure":"rest";
+      });
+      if (!types.some(t => t==="battle"||t==="horde")) types[0] = "battle";
+      if (types.filter(t=>t==="rest").length > 1) types[types.indexOf("rest")] = "battle";
+    }
+    rows.push(types.map((t,c) => ({ id:id++, row:r, col:c, n:types.length, type:t })));
+  }
+  const edges = [];
+  for (let r = 0; r < ROWS-1; r++) {
+    const a = rows[r], b = rows[r+1];
+    const n0 = a.length, n1 = b.length;
+    a.forEach((na,i) => {
+      const js = Math.floor(i*n1/n0), je = Math.floor(((i+1)*n1-1)/n0);
+      for (let j=js; j<=je; j++) edges.push({ from:na.id, to:b[j].id });
+      if (n0===n1 && i+1<n1) edges.push({ from:na.id, to:b[i+1].id });
+    });
+  }
+  return { nodes: rows.flat(), edges, rows };
+};
+
+// ===== エンカウント生成（場所で敵の数・強さが変わる）=====
+const encounterFor = (node, act) => {
+  const r = node.row;
+  const D = act * 5 + r; // 章をまたいで難度が伸びる
+  const hpS = 1 + D * 0.26, atkS = 1 + D * 0.13;
+  const pool = ACT_POOLS[act] || ACT_POOLS[0];
+  let list;
+  if (node.type === "boss") list = [{ kind: pick(BOSS_BY_ACT[act] || ["demon"]), hpM:1, atkM:1, boss:true, noScale:true }];
+  else if (node.type === "elite") list = [{ kind:pick(pool.heavy), hpM:2.2, atkM:1.45, elite:true }];
+  else if (node.type === "horde") {
+    list = [0,1].map(() => ({ kind:pick(pool.light), hpM:0.62, atkM:0.72 }));
+    list.push({ kind: Math.random() < 0.45 ? "spore" : pick(pool.light), hpM:0.62, atkM:0.72 });
+  }
+  else {
+    if (r <= 1) list = [{ kind:pick(pool.light), hpM:1, atkM:1 }];
+    else if (r <= 3) list = Math.random() < 0.5
+      ? [{ kind:pick(pool.heavy), hpM:1, atkM:1 }]
+      : [0,1].map(() => ({ kind:pick(pool.light), hpM:0.85, atkM:0.85 }));
+    else list = [
+      { kind:pick(pool.mid), hpM:0.9, atkM:0.9 },
+      { kind:pick(pool.heavy), hpM:0.9, atkM:0.9 }
+    ];
+  }
+  return list.map((e,i) => {
+    const k = KINDS[e.kind];
+    const hs = e.noScale ? 1 : hpS, as = e.noScale ? 1 : atkS;
+    const hp = Math.round(k.hp * hs * e.hpM * (!e.boss && hasR("deathmark") ? 0.9 : 1));
+    const si = SHIELDS[e.kind];
+    const shd = (!TEST_MODE && si && Math.random() < si.c) ? Math.round(si.sh * (0.5 + Math.random() * 0.5)) : 0;
+    return { id:"e"+(UID++), kind:e.kind, name:k.name, hp, max:hp,
+      atk: Math.max(1, Math.round(k.atk * as * e.atkM)), alive:true, pi:0,
+      pat: pick(k.pats), rollMul: rollDmg(),
+      enr: 0, enrEvery: TEST_MODE ? 0 : 2 + Math.floor(Math.random() * 3),
+      shd, shdMax: si ? si.sh : 0, shdC: si ? si.c : 0,
+      elite:!!e.elite, boss:!!e.boss, idx:i };
+  });
+};
+
+// ===== 袋（抽選プール）=====
+const initOwned = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, heal:3, def:3, atk:3, atkx:0, defx:0 });
+const refillBag = owned => ({ ...owned });
+const bagTotal = bag => ITEM_KEYS.reduce((s,k) => s+bag[k], 0);
+const drawFromBag = (bagRef, ownedRef, bagUpRef, ownedUpRef, cellsNow) => {
+  if (bagTotal(bagRef.current) <= 0) {
+    // 盤面に残っている特殊ドロップは補充から除外（推測可能性の担保）
+    const onB = initZero(), onBU = initZero();
+    for (const c of (cellsNow || [])) if (c && c.special) { onB[c.special]++; if (c.up) onBU[c.special]++; }
+    const nb = {}, nbu = {};
+    let tot = 0;
+    for (const k of ITEM_KEYS) {
+      nb[k] = Math.max(0, ownedRef.current[k] - onB[k]);
+      nbu[k] = Math.max(0, (ownedUpRef ? ownedUpRef.current[k] : 0) - onBU[k]);
+      tot += nb[k];
+    }
+    if (tot > 0) {
+      bagRef.current = nb;
+      if (bagUpRef) bagUpRef.current = nbu;
+    } else {
+      bagRef.current = refillBag(ownedRef.current);
+      if (bagUpRef) bagUpRef.current = ownedUpRef ? { ...ownedUpRef.current } : initZero();
+    }
+  }
+  const total = bagTotal(bagRef.current);
+  if (total <= 0) return { k:"star", up:false };
+  let r = Math.floor(Math.random()*total);
+  for (const k of ITEM_KEYS) {
+    if (r < bagRef.current[k]) {
+      let up = false;
+      if (bagUpRef && bagUpRef.current[k] > 0) {
+        up = Math.random() < bagUpRef.current[k] / bagRef.current[k];
+        if (up) bagUpRef.current = { ...bagUpRef.current, [k]: bagUpRef.current[k]-1 };
+      }
+      bagRef.current = { ...bagRef.current, [k]: bagRef.current[k]-1 };
+      return { k, up };
+    }
+    r -= bagRef.current[k];
+  }
+  return { k:"star", up:false };
+};
+const makeBoard = (bagRef, ownedRef, bagUpRef, ownedUpRef) => {
+  const cells = Array.from({length:TOTAL}, () => makeDrop(false));
+  const idxs = shuffle([...Array(TOTAL).keys()]);
+  for (let k = 0; k < specialTarget(); k++) {
+    const d = drawFromBag(bagRef, ownedRef, bagUpRef, ownedUpRef, cells);
+    cells[idxs[k]].special = d.k; cells[idxs[k]].up = d.up;
+  }
+  return cells;
+};
+const findGroup = (cells, idx) => {
+  const t = cells[idx].type;
+  const seen = new Set(), ids = new Set(), stack = [idx];
+  while (stack.length) {
+    const i = stack.pop();
+    if (seen.has(i)) continue;
+    seen.add(i);
+    if (cells[i].type !== t) continue;
+    ids.add(cells[i].id);
+    const r = Math.floor(i/SIZE), c = i%SIZE;
+    if (r > 0) stack.push(i-SIZE);
+    if (r < SIZE-1) stack.push(i+SIZE);
+    if (c > 0) stack.push(i-1);
+    if (c < SIZE-1) stack.push(i+1);
+  }
+  return ids;
+};
+// プリズム: 盤面の最少色を他の色へ変換して3色にする（ターン開始時のみ）
+const prismBoard = cells => {
+  const counts = [0, 0, 0, 0];
+  for (const c of cells) if (c.type < 4) counts[c.type]++;
+  const present = [0, 1, 2, 3].filter(t => counts[t] > 0);
+  if (present.length <= 3) return cells;
+  let minT = present[0];
+  for (const t of present) if (counts[t] < counts[minT]) minT = t;
+  const others = present.filter(t => t !== minT);
+  return cells.map(c => c.type === minT ? { ...c, id: UID++, type: pick(others) } : c);
+};
+
+// 爆弾特殊: グループ内の爆弾が周囲を巻き込む（連鎖爆発はしない）
+const expandIds = (cells, ids) => {
+  // 爆風に巻き込まれた爆弾も誘爆する（各爆弾は1回だけ起爆）
+  const out = new Set(ids);
+  const done = new Set();
+  const ORTH = [[-1,0],[1,0],[0,-1],[0,1]], DIAG = [[-1,-1],[-1,1],[1,-1],[1,1]];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    cells.forEach((c, i) => {
+      if (!out.has(c.id) || done.has(c.id)) return;
+      if (c.special !== "bombx" && c.special !== "bombd") return;
+      done.add(c.id);
+      const r = (i / SIZE) | 0, col = i % SIZE;
+      const dirs = c.special === "bombx" ? (c.up ? ORTH.concat(DIAG) : ORTH) : (c.up ? DIAG.concat(ORTH) : DIAG);
+      for (const d of dirs) {
+        const nr = r + d[0], nc = col + d[1];
+        if (nr < 0 || nr >= SIZE || nc < 0 || nc >= SIZE) continue;
+        const id2 = cells[nr * SIZE + nc].id;
+        if (!out.has(id2)) { out.add(id2); changed = true; }
+      }
+    });
+  }
+  return out;
+};
+const groupInfo = (cells, ids) => {
+  const sp = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, heal:0, def:0, atk:0, atkx:0, defx:0 };
+  const spu = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, heal:0, def:0, atk:0, atkx:0, defx:0 };
+  let junkCnt = 0;
+  for (const cell of cells) if (ids.has(cell.id)) {
+    if (cell.special) { sp[cell.special]++; if (cell.up) spu[cell.special]++; }
+    if (cell.type === JUNK) junkCnt++;
+  }
+  const junk = junkCnt > 0 && junkCnt === ids.size; // 全部お邪魔のときだけ効果ゼロ
+  const base = ids.size + sp.plus + spu.plus + spu.pierce; // ＋=+1（強化＋はさらに+1）/ 貫＋=+1
+  let mult = 1;
+  const starOn = sp.star > 0 && base >= Math.max(4, (spu.star > 0 ? 5 : STAR_THRESHOLD) - (hasR("starbook") ? 1 : 0));
+  if (starOn) mult *= 1 + sp.star;
+  const threeOn = ids.size === 3;
+  if (sp.three > 0 && threeOn) mult *= spu.three > 0 ? 4 : 3;
+  return { count:ids.size, base, sp, spu, mult, starOn, threeOn: threeOn && sp.three > 0, junk };
+};
+const computeEffect = (act, info) => {
+  if (info.junk) return { main:0, splitAtk:0, splitDef:0, healBonus:0 };
+  let actBoost = 1;
+  if (act === "atk" && info.sp.atkx > 0) actBoost = info.spu.atkx > 0 ? 2.5 : 2;
+  if (act === "def" && info.sp.defx > 0) actBoost = info.spu.defx > 0 ? 2.5 : 2;
+  let relicMul = 1;
+  if (act === "atk" && hasR("swordcrest")) relicMul = 1.1;
+  if (act === "def" && hasR("shieldcrest")) relicMul = 1.2;
+  if (act === "heal" && hasR("holywater")) relicMul = 1.5;
+  const main = Math.round(info.base * ACTIONS[act].per * info.mult * actBoost * relicMul);
+  const healMult = act === "heal" ? 10 : 1;
+  const splitAtk = Math.round(main * ((info.sp.atk - info.spu.atk) * 0.5 + info.spu.atk) * healMult);
+  const splitDef = Math.round(main * ((info.sp.def - info.spu.def) * 0.5 + info.spu.def) * healMult);
+  const healBonus = (info.sp.heal - info.spu.heal) * 10 + info.spu.heal * 25;
+  return { main, splitAtk, splitDef, healBonus };
+};
+// お邪魔変換：特殊なし・非お邪魔のドロップから n 個を選んで置き換える
+const jamBoard = (cells, n) => {
+  const next = cells.slice();
+  const cand = shuffle(next.map((c,i) => (!c.special && c.type !== JUNK) ? i : -1).filter(i => i >= 0));
+  for (let k = 0; k < n && k < cand.length; k++) next[cand[k]] = { id:UID++, type:JUNK, special:false };
+  return next;
+};
+const refill = (cells, removeIds, bagRef, ownedRef, bagUpRef, ownedUpRef) => {
+  const next = cells.slice();
+  const newPositions = [];
+  for (let c = 0; c < SIZE; c++) {
+    const survivors = [];
+    for (let r = 0; r < SIZE; r++) {
+      const cell = cells[r*SIZE+c];
+      if (!removeIds.has(cell.id)) survivors.push(cell);
+    }
+    const need = SIZE - survivors.length;
+    const col = [];
+    for (let k = 0; k < need; k++) col.push(makeDrop(false));
+    for (const s of survivors) col.push(s);
+    for (let r = 0; r < SIZE; r++) {
+      next[r*SIZE+c] = col[r];
+      if (r < need) newPositions.push(r*SIZE+c);
+    }
+  }
+  let specials = 0;
+  for (const cell of next) if (cell.special) specials++;
+  let needSpecial = specialTarget() - specials;
+  if (needSpecial > 0) {
+    const np = shuffle(newPositions.slice());
+    for (let k = 0; k < needSpecial && k < np.length; k++) {
+      const d = drawFromBag(bagRef, ownedRef, bagUpRef, ownedUpRef, next);
+      next[np[k]] = { ...next[np[k]], special: d.k, up: d.up };
+    }
+  }
+  return next;
+};
+
+// ===== SFX（WebAudio 簡易シンセ）=====
+let AC = null, sfxEnabled = true;
+const ac = () => {
+  if (!AC) { try { AC = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){} }
+  if (AC && AC.state === "suspended") AC.resume();
+  return AC;
+};
+const tone = (f, dur, type, vol, delay, slide) => {
+  const c = ac(); if (!c || !sfxEnabled) return;
+  try {
+    const t = c.currentTime + (delay||0);
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type||"sine"; o.frequency.setValueAtTime(f, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f+slide), t+dur);
+    g.gain.setValueAtTime(vol||0.1, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(t); o.stop(t+dur+0.02);
+  } catch(e){}
+};
+// ノイズ+ソフトトーンのレイヤー合成（ビープ感の除去）
+let NOISE_BUF = null;
+const noiseSrc = c => {
+  if (!NOISE_BUF) {
+    NOISE_BUF = c.createBuffer(1, (c.sampleRate / 2) | 0, c.sampleRate);
+    const d = NOISE_BUF.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const src = c.createBufferSource(); src.buffer = NOISE_BUF; return src;
+};
+const noise = (dur, freq, vol, delay, q, type) => {
+  const c = ac(); if (!c || !sfxEnabled) return;
+  try {
+    const t = c.currentTime + (delay || 0);
+    const src = noiseSrc(c), f = c.createBiquadFilter(), g = c.createGain();
+    f.type = type || "bandpass"; f.frequency.value = freq; f.Q.value = q || 0.8;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f); f.connect(g); g.connect(c.destination);
+    src.start(t); src.stop(t + dur + 0.02);
+  } catch (e) {}
+};
+const softTone = (f0, dur, type, vol, delay, f1) => {
+  const c = ac(); if (!c || !sfxEnabled) return;
+  try {
+    const t = c.currentTime + (delay || 0);
+    const o = c.createOscillator(), g = c.createGain(), fl = c.createBiquadFilter();
+    fl.type = "lowpass"; fl.frequency.value = 2600; fl.Q.value = 0.4;
+    o.type = type || "sine"; o.frequency.setValueAtTime(f0, t);
+    if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(fl); fl.connect(g); g.connect(c.destination);
+    o.start(t); o.stop(t + dur + 0.03);
+  } catch (e) {}
+};
+const SFX = {
+  tap:  () => { noise(0.05, 2600, 0.05); softTone(660, 0.07, "sine", 0.04); },
+  clear:() => { softTone(784, 0.16, "sine", 0.07); softTone(1175, 0.2, "sine", 0.05, 0.03); noise(0.12, 5200, 0.03, 0.02, 1.4); },
+  atk:  () => { noise(0.12, 900, 0.12, 0, 0.6); softTone(150, 0.16, "sine", 0.14, 0.01, 55); },
+  hurt: () => { softTone(110, 0.22, "sine", 0.16, 0, 45); noise(0.18, 350, 0.1, 0, 0.7, "lowpass"); },
+  crack:() => { noise(0.2, 2400, 0.16, 0, 0.5); noise(0.25, 700, 0.12, 0.03, 0.6); softTone(80, 0.22, "sine", 0.12, 0.02, 40); },
+  heal: () => { softTone(523, 0.3, "sine", 0.06); softTone(784, 0.35, "sine", 0.05, 0.08); noise(0.25, 6000, 0.02, 0.05, 2); },
+  win:  () => [392, 523, 659, 784].forEach((f, i) => softTone(f, 0.4, "sine", 0.07, i * 0.11)),
+  lose: () => { [294, 262, 220, 175].forEach((f, i) => softTone(f, 0.45, "sine", 0.07, i * 0.16)); noise(0.6, 250, 0.05, 0.1, 0.5, "lowpass"); },
+  pick: () => { softTone(880, 0.12, "sine", 0.06); softTone(1318, 0.14, "sine", 0.05, 0.05); },
+  step: () => { noise(0.06, 1400, 0.05); softTone(440, 0.08, "sine", 0.04, 0, 520); },
+  coin: () => { softTone(2093, 0.09, "sine", 0.06); softTone(2637, 0.14, "sine", 0.05, 0.05); noise(0.05, 8000, 0.02, 0.01, 2); },
+  forge:() => { noise(0.08, 3000, 0.14, 0, 2); softTone(1200, 0.3, "sine", 0.05, 0.02); softTone(90, 0.15, "sine", 0.1, 0, 50); },
+  charge:() => { softTone(90, 0.5, "sine", 0.08, 0, 260); noise(0.5, 500, 0.03, 0, 0.4); },
+  jam:  () => { softTone(320, 0.2, "sine", 0.07, 0, 180); noise(0.22, 900, 0.06, 0.02, 0.5); },
+  open: () => { noise(0.07, 1800, 0.05); softTone(520, 0.12, "sine", 0.05, 0.01, 760); }
+};
+
+// ===== BGM（CC0実音源: cynicmusic / Juhani Junkala）=====
+const BGM_FILES = { title:"assets/bgm/title.mp3", map:"assets/bgm/map.mp3", battle:"assets/bgm/battle.mp3", boss:"assets/bgm/boss.mp3" };
+let bgmOn = true, bgmAudio = null, bgmTrack = null;
+const bgmStop = () => {
+  bgmTrack = null;
+  if (bgmAudio) { try { bgmAudio.pause(); } catch (e) {} }
+};
+const bgmPlay = name => {
+  if (!name || !bgmOn) { bgmStop(); return; }
+  if (bgmTrack === name && bgmAudio && !bgmAudio.paused) return;
+  bgmTrack = name;
+  try {
+    if (!bgmAudio) { bgmAudio = new Audio(); bgmAudio.loop = true; bgmAudio.preload = "auto"; }
+    bgmAudio.src = BGM_FILES[name];
+    bgmAudio.volume = name === "battle" ? 0.26 : 0.3;
+    const p = bgmAudio.play();
+    if (p && p.catch) p.catch(() => {});
+  } catch (e) {}
+};
+
+// ===== キャラ画像スプライト（ComfyUI生成・透過PNG） =====
+const CharImg = ({ kind, size }) => h("img", {
+  src: "assets/" + kind + ".png", alt: kind, draggable: false,
+  style: { display:"block", width:size, height:size, objectFit:"contain",
+    pointerEvents:"none", filter:"drop-shadow(0 4px 3px rgba(0,0,0,.35))" }
+});
+
+// スプライト表示。外層＝呼吸idle（全体共通の縦スケール変形：MIDNIGHT MIRAGE手法）／内層＝アクションアニメ
+function SpriteBox({ kind, size, idle, anim, charge, dead }) {
+  const inner = anim ? h("span", {
+    key: anim.seq,
+    className: anim.kind === "attack" ? (kind === "hero" ? "sp-atk-hero" : "sp-atk-enemy")
+      : anim.kind === "hit" ? "sp-hit"
+      : anim.kind === "die" ? "sp-die"
+      : anim.kind === "heal" ? "sp-heal" : "",
+    style: { display:"block", width:size, height:size }
+  }, h(CharImg, { kind, size })) : h("span", { style:{ display:"block", width:size, height:size } }, h(CharImg, { kind, size }));
+  return h("span", {
+    className: "sp-idle-" + (idle||"a") + (charge ? " sp-charge" : ""),
+    style: {
+      display:"block", width:size, height:size,
+      opacity: dead && (!anim || anim.kind !== "die") ? 0 : 1,
+      transition: "opacity .4s ease .5s",
+      animationDelay: (kind.length % 3) * 0.45 + "s"
+    }
+  }, inner);
+}
+
+function Bar({ value, max, from, to, height }) {
+  const pct = Math.max(0, Math.min(100, value/max*100));
+  return h("div", { style:{ height:height||10, borderRadius:999, background:"#15101f", overflow:"hidden", border:"2px solid rgba(12,9,18,.9)", boxShadow:"0 1px 0 rgba(255,255,255,.07)" } },
+    h("div", { style:{ height:"100%", width:pct+"%", borderRadius:999, background:`linear-gradient(180deg, ${to} 0%, ${from} 100%)`, transition:"width .4s ease", boxShadow:"inset 0 2px 0 rgba(255,255,255,.3)" } }));
+}
+
+// ===== 本体 =====
+function DropBattle() {
+  const ownedRef = useRef(initOwned());
+  const bagRef = useRef(refillBag(ownedRef.current));
+  const ownedUpRef = useRef(initZero());
+  const bagUpRef = useRef(initZero());
+  const [ownedView, setOwnedView] = useState({ ...ownedRef.current });
+  const [bagView, setBagView] = useState({ ...bagRef.current });
+  const [ownedUpView, setOwnedUpView] = useState({ ...ownedUpRef.current });
+  const syncOwned = () => { setOwnedView({ ...ownedRef.current }); setBagView({ ...bagRef.current }); setOwnedUpView({ ...ownedUpRef.current }); };
+  const syncBag = () => setBagView({ ...bagRef.current });
+
+  // マップ
+  const [map, setMap] = useState(() => genMap());
+  const mapRef = useRef(map); mapRef.current = map;
+  const [curNodeId, setCurNodeId] = useState(null);
+  const curNodeRef = useRef(null); curNodeRef.current = curNodeId;
+  const [visited, setVisited] = useState(new Set());
+  const pendingNodeRef = useRef(null); // 攻略中のノード
+
+  // バトル
+  const [enemies, setEnemies] = useState([]);
+  const enemiesRef = useRef(enemies); enemiesRef.current = enemies;
+  const [targetId, setTargetId] = useState(null);
+  const targetRef = useRef(null); targetRef.current = targetId;
+  const [board, setBoard] = useState(() => makeBoard(bagRef, ownedRef, bagUpRef, ownedUpRef));
+  const [action, setAction] = useState("atk");
+  const [used, setUsed] = useState(new Set());
+  const [preview, setPreview] = useState(null);
+  const [clearing, setClearing] = useState(new Set());
+  const [locked, setLocked] = useState(false);
+  const [pHP, setPHP_] = useState(P_MAX);
+  const pRef = useRef(P_MAX);
+  const setPHP = v => { pRef.current = v; setPHP_(v); };
+  const [pMax, setPMax_] = useState(P_MAX);
+  const pMaxRef = useRef(P_MAX);
+  const setPMax = v => { pMaxRef.current = v; setPMax_(v); };
+  const [act, setAct_] = useState(0);
+  const actRef = useRef(0);
+  const setAct = v => { actRef.current = v; setAct_(v); };
+  const [actClear, setActClear] = useState(null); // {picks:[relicKeys]}
+  const actClearRef = useRef(false); actClearRef.current = actClear;
+  const [turn, setTurn] = useState(1);
+  const [status, setStatus] = useState("title"); // title | map | battle | reward | clear | lose
+  const [log, setLog] = useState([]);
+  const [fx, setFx] = useState([]);
+  const [rewards, setRewards] = useState(null); // {picks, kind:'battle'|'elite'|'treasure'|'horde', healed}
+  const [restMsg, setRestMsg] = useState(null);
+  const [coins, setCoins] = useState(0);
+  const coinsRef = useRef(0);
+  const setCoinsBoth = v => { coinsRef.current = v; setCoins(v); };
+  const [items, setItems] = useState(["potion"]); // 初期アイテム
+  const itemsRef = useRef(["potion"]);
+  const setItemsBoth = a => { itemsRef.current = a; setItems(a); };
+  const [shop, setShop] = useState(null); // {offers:[...], relic}
+  const shopRef = useRef(null); shopRef.current = shop;
+  const rewardsRef = useRef(null); rewardsRef.current = rewards;
+  const relicsRef = useRef([]);
+  const [relicsView, setRelicsView] = useState([]);
+  const addRelic = k => {
+    if (!k || relicsRef.current.includes(k)) return;
+    relicsRef.current = [...relicsRef.current, k];
+    RELICSET = new Set(relicsRef.current);
+    setRelicsView([...relicsRef.current]);
+    if (k === "lifefruit") { setPMax(pMaxRef.current + 40); setPHP(Math.min(pMaxRef.current, pRef.current + 40)); }
+    addLog([`🏺 レリック獲得: ${RELICS[k].icon} ${RELICS[k].name}`]);
+    SFX.pick();
+  };
+  const pickRelics = (count, rarePref) => {
+    const unowned = RELIC_KEYS.filter(k => !relicsRef.current.includes(k));
+    const byRar = r => unowned.filter(k => RELICS[k].rar === r);
+    const out = [];
+    for (let i = 0; i < count; i++) {
+      let pool = [];
+      if (rarePref === "boss" && i === 0) pool = byRar(3);
+      if (!pool.length) pool = Math.random() < (rarePref ? 0.5 : 0.6) ? byRar(1) : byRar(2);
+      if (!pool.length) pool = unowned;
+      const cand = pool.filter(k => !out.includes(k));
+      if (!cand.length) break;
+      out.push(pick(cand));
+    }
+    return out;
+  };
+  const [campfire, setCampfire] = useState(null); // null | "menu" | "remove" | "forge"
+  const campfireRef = useRef(null); campfireRef.current = campfire;
+  const [bagOpen, setBagOpen] = useState(false);
+  const [sfxOn, setSfxOn] = useState(true);
+  const [bgmOnView, setBgmOnView] = useState(true);
+  const [tut, setTut] = useState(null); // チュートリアル 0..2
+  const tutRef = useRef(null); tutRef.current = tut;
+
+  const [tv, setTv] = useState({ atk:0, def:0, heal:0 });
+  const [dispTv, setDispTv] = useState({ atk:0, def:0, heal:0 });
+  const dispRef = useRef({ atk:0, def:0, heal:0 });
+  const dispRafRef = useRef(null);
+  useEffect(() => {
+    const from = { ...dispRef.current };
+    const to = { atk: tv.atk || 0, def: tv.def || 0, heal: tv.heal || 0 };
+    if (dispRafRef.current) cancelAnimationFrame(dispRafRef.current);
+    // 減少（ターンリセット等）は即時反映
+    if (to.atk < from.atk || to.def < from.def || to.heal < from.heal) {
+      dispRef.current = to; setDispTv(to); return;
+    }
+    if (to.atk === from.atk && to.def === from.def && to.heal === from.heal) return;
+    const t0 = performance.now() + 360; // 粒子の到着に合わせる
+    const step = now => {
+      if (now < t0) { dispRafRef.current = requestAnimationFrame(step); return; }
+      const p = Math.min(1, (now - t0) / 300);
+      const cur = {
+        atk: Math.round(from.atk + (to.atk - from.atk) * p),
+        def: Math.round(from.def + (to.def - from.def) * p),
+        heal: Math.round(from.heal + (to.heal - from.heal) * p)
+      };
+      dispRef.current = cur; setDispTv(cur);
+      if (p < 1) dispRafRef.current = requestAnimationFrame(step);
+    };
+    dispRafRef.current = requestAnimationFrame(step);
+  }, [tv.atk, tv.def, tv.heal]);
+  const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false });
+  const turnRef = useRef(freshTurn());
+  const syncTurn = () => setTv({ ...turnRef.current });
+
+  const boardRef = useRef(board);
+  const actionRef = useRef(action);
+  const usedRef = useRef(used);
+  const lockedRef = useRef(locked);
+  const statusRef = useRef(status);
+  const turnNumRef = useRef(turn);
+  const pressingRef = useRef(false);
+  const startGroupRef = useRef(null);
+  const commitRef = useRef(() => {});
+  actionRef.current = action; usedRef.current = used; lockedRef.current = locked;
+  statusRef.current = status; turnNumRef.current = turn;
+
+  // アニメ管理（key再マウントで再生）
+  const [anims, setAnims] = useState({});
+  const animSeqRef = useRef(0);
+  const setAnim = (key, kind) => {
+    animSeqRef.current++;
+    const seq = animSeqRef.current;
+    setAnims(p => ({ ...p, [key]: { kind, seq } }));
+  };
+
+  const logRef = useRef(null);
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
+  const addLog = lines => setLog(p => [...p, ...lines].slice(-40));
+  const commitBoard = next => { boardRef.current = next; setBoard(next); };
+
+  // 演出キュー
+  const fxTimer = useRef(null);
+  const playFx = (seq, after) => {
+    if (fxTimer.current) { clearTimeout(fxTimer.current); fxTimer.current = null; }
+    setFx([]);
+    const items = Array.isArray(seq) ? seq.filter(Boolean) : [];
+    let i = 0;
+    const step = () => {
+      if (i >= items.length) {
+        fxTimer.current = setTimeout(() => { setFx([]); after && after(); }, 640);
+        return;
+      }
+      const item = items[i];
+      if (item.text) setFx(prev => [...prev.slice(-2), item]);
+      if (item.run) item.run();
+      i++;
+      fxTimer.current = setTimeout(step, item.wait || 680);
+    };
+    step();
+  };
+
+  const [sv, setSv] = useState(null); // 敵ターン中のシールド残量表示
+  const [shakeSeq, setShakeSeq] = useState(0);
+  const [flashSeq, setFlashSeq] = useState(0);
+  const [pops, setPops] = useState({}); // ダメージポップ {key:{text,color,seq}}
+  const popSeq = useRef(0);
+  const addPop = (key, text, color) => {
+    popSeq.current++;
+    const seq = popSeq.current;
+    setPops(p => ({ ...p, [key]: { text, color, seq } }));
+  };
+  const [hit, setHit] = useState(null);
+  const hitTimer = useRef(null);
+  const flash = who => {
+    if (hitTimer.current) clearTimeout(hitTimer.current);
+    setHit(who);
+    hitTimer.current = setTimeout(() => setHit(null), 500);
+  };
+
+  const setEnemiesBoth = next => { enemiesRef.current = next; setEnemies(next); };
+  const aliveEnemies = () => enemiesRef.current.filter(e => e.alive);
+
+  // ===== ターン解決：自攻撃 → 敵攻撃(全員) → 回復 =====
+  const resolveTurn = useCallback(() => {
+    const { atk, def, heal } = turnRef.current;
+    const seq = [];
+    const logs = [`― ターン ${turnNumRef.current} ―`];
+    const ens = enemiesRef.current.map(e => ({ ...e }));
+    const tn = turnNumRef.current;
+
+    // ① プレイヤー攻撃：対象単体のみ。貫通ドロップを消していれば余剰が次の敵へ
+    if (atk > 0) {
+      const pierce = turnRef.current.pierce;
+      const alive = ens.filter(e => e.alive);
+      const tgt = alive.find(e => e.id === targetRef.current) || alive[0];
+      const order = tgt ? (pierce ? [tgt, ...alive.filter(e => e !== tgt)] : [tgt]) : [];
+      let rem = atk;
+      let first = true;
+      for (const en of order) {
+        if (rem <= 0) break;
+        let dealtS = 0;
+        if ((en.shd || 0) > 0) {
+          const eff = hasR("ram") ? 2 : 1; // 破城槌: シールドに2倍
+          dealtS = Math.min(en.shd, rem * eff);
+          en.shd -= dealtS;
+          rem -= Math.ceil(dealtS / eff);
+        }
+        const dealtH = Math.min(en.hp, rem);
+        en.hp -= dealtH;
+        rem = pierce ? rem - dealtH : 0;
+        if (en.hp <= 0) en.alive = false;
+        const snap = ens.map(e => ({ ...e }));
+        const isFirst = first; first = false;
+        const dead = !en.alive;
+        const txt = dealtH > 0
+          ? `${isFirst ? "" : "貫通！"}${en.name}に${dealtS > 0 ? `シールド${dealtS}を砕き` : ""} ${dealtH}！`
+          : `${en.name}のシールドが受け止めた！`;
+        seq.push({
+          text: txt, color: dealtH > 0 ? "#ff6b6b" : "#9db8e8", act: "atk",
+          run: () => {
+            if (isFirst) setAnim("hero", "attack");
+            SFX.atk();
+            setTimeout(() => {
+              setAnim(en.id, dead ? "die" : "hit");
+              addPop(en.id, dealtH > 0 ? "-" + dealtH : "BLOCK", dealtH > 0 ? "#ffe2de" : "#9db8e8");
+              if (dealtS > 0) SFX.crack();
+              if (dead && en.boss) { setShakeSeq(q => q + 1); setFlashSeq(q => q + 1); }
+            }, 160);
+            setTimeout(() => setEnemiesBoth(snap), 180);
+          }
+        });
+        logs.push(`${isFirst ? "⚔" : "⚔貫通"} ${en.name}に ${dealtH}${dealtS > 0 ? `（盾-${dealtS}）` : ""}${dead ? "（撃破）" : ""}`);
+      }
+    }
+
+    const allDead = ens.every(e => !e.alive);
+    if (allDead && ens.length) {
+      if (heal > 0) {
+        const before = pRef.current;
+        const np = Math.min(pMaxRef.current, before + heal);
+        if (np - before > 0) {
+          seq.push({ text: `${np - before} 回復！`, color: "#5bd98a", act: "heal",
+            run: () => { setPHP(np); setAnim("hero","heal"); SFX.heal(); flash("heal"); addPop("hero", "+" + (np - before), "#8ce8b0"); } });
+          logs.push(`✚ ${np - before} 回復`);
+        }
+      }
+      logs.push("🏆 勝利！");
+      addLog(logs);
+      playFx(seq, () => onVictoryRef.current());
+      return;
+    }
+
+    // ② 敵の行動（パターン制）。防御はシールドとして全ヒット共通で消費
+    let shield = def;
+    let php = pRef.current;
+    if (turnRef.current.stun) {
+      seq.push({ text:"⏳ 時は止まっている…", color:"#c9a2ff", run: () => SFX.tap() });
+      logs.push("⏳ 敵は動けない（時止めの砂）");
+    }
+    for (const en of ens) {
+      if (turnRef.current.stun) break; // 行動もパターン進行も1ターン遅れる
+      if (!en.alive) continue;
+      const actsN = (en.enr || 0) >= 3 ? 2 : 1; // 激昂3以上で2回行動
+      for (let ai = 0; ai < actsN; ai++) {
+      const iv = intentOf(en, ens);
+      en.pi++;
+      if (iv.act === "jamatk") {
+        const jn = Math.max(1, iv.jamN - 1);
+        seq.push({ text: `${en.name}の呪撃！ドロップ${jn}個汚染`, color: "#e8a2ff",
+          run: () => { setTimeout(() => { commitBoard(jamBoard(boardRef.current, jn)); SFX.jam(); }, 150); } });
+        logs.push(`⚔🌀 ${en.name}の呪撃（お邪魔${jn}個）`);
+        iv.act = "attack";
+        iv.dmg = iv.hit;
+      }
+      if (iv.act === "charge") {
+        seq.push({ text: `${en.name}は力をためている…`, color: "#ffd88a",
+          run: () => { setAnim(en.id, "heal"); SFX.charge(); } });
+        logs.push(`⏳ ${en.name}は力をためている`);
+        continue;
+      }
+      if (iv.act === "jam") {
+        const jn = iv.jamN;
+        seq.push({ text: `${en.name}の呪い！ドロップ${jn}個が汚染`, color: "#c9a2ff",
+          run: () => {
+            setAnim(en.id, "attack");
+            setTimeout(() => { commitBoard(jamBoard(boardRef.current, jn)); SFX.jam(); }, 220);
+          } });
+        logs.push(`🌀 ${en.name}がドロップ${jn}個をお邪魔に変えた`);
+        continue;
+      }
+      if (iv.act === "healally") {
+        const tgts = ens.filter(a => a.alive && a.id !== en.id && a.hp < a.max);
+        const tg = tgts.sort((a,b) => a.hp/a.max - b.hp/b.max)[0];
+        if (tg) {
+          const amt = Math.min(iv.heal, tg.max - tg.hp);
+          tg.hp += amt;
+          const snap = ens.map(e => ({ ...e }));
+          seq.push({ text: `${en.name}が${tg.name}を${amt}回復`, color: "#8ce8b0",
+            run: () => {
+              setAnim(en.id, "attack");
+              setTimeout(() => { setAnim(tg.id, "heal"); setEnemiesBoth(snap); SFX.heal(); addPop(tg.id, "+" + amt, "#8ce8b0"); }, 200);
+            } });
+          logs.push(`💚 ${en.name}が${tg.name}を${amt}回復`);
+        } else {
+          seq.push({ text: `${en.name}は様子をうかがっている`, color: "#b8b2c4",
+            run: () => SFX.tap() });
+          logs.push(`… ${en.name}は様子をうかがっている`);
+        }
+        continue;
+      }
+      if (iv.act === "drain") {
+        const one = iv.dmg;
+        const blocked = Math.min(shield, one);
+        const broke = blocked > 0 && shield - blocked <= 0 && one > blocked;
+        shield -= blocked;
+        const shAfter = shield;
+        const through = one - blocked;
+        php = Math.max(0, php - through);
+        const np = php;
+        const healed = Math.min(en.max - en.hp, through);
+        en.hp += healed;
+        const snap = ens.map(x => ({ ...x }));
+        seq.push({
+          text: through > 0 ? `${broke ? "防御崩壊！" : ""}${en.name}の吸血 ${through}！` : `${en.name}の吸血をガード！`,
+          color: through > 0 ? "#ff9ad0" : "#7da8e8", act:"def",
+          run: () => {
+            setAnim(en.id, "attack");
+            setTimeout(() => {
+              setPHP(np); setSv(shAfter);
+              if (broke) SFX.crack();
+              if (through > 0) {
+                setAnim("hero","hit"); SFX.hurt(); flash("player");
+                addPop("hero", "-" + through, "#ff9ad0");
+                if (healed > 0) setTimeout(() => { setAnim(en.id, "heal"); setEnemiesBoth(snap); SFX.heal(); addPop(en.id, "+" + healed, "#8ce8b0"); }, 300);
+              } else { SFX.tap(); addPop("hero", "ガード", "#9db8e8"); }
+            }, 200);
+          }
+        });
+        logs.push(through > 0 ? `🩸 ${en.name}の吸血 ${through}（${healed}回復）` : `🛡 ${en.name}の吸血を防いだ`);
+        if (php <= 0) break;
+        continue;
+      }
+      // 攻撃系（attack / double / bigatk）
+      for (let hi = 0; hi < iv.hits; hi++) {
+        const one = iv.hits > 1 ? iv.hit : iv.dmg;
+        const blocked = Math.min(shield, one);
+        const broke = blocked > 0 && shield - blocked <= 0 && one > blocked; // この一撃で防御が砕けた
+        shield -= blocked;
+        const shAfter = shield;
+        let through = one - blocked;
+        if (through > 0 && hasR("mist") && tn === 1) through = Math.ceil(through / 2); // 霧のマント
+        php = Math.max(0, php - through);
+        const np = php;
+        const big = iv.act === "bigatk";
+        seq.push({
+          text: through > 0 ? `${broke ? "防御崩壊！" : ""}${en.name}の${big ? "大攻撃" : "攻撃"} ${through}！` : `${en.name}の攻撃をガード！`,
+          color: through > 0 ? (big ? "#ff5c5c" : "#ffae42") : "#7da8e8",
+          act: "def",
+          wait: iv.hits > 1 ? 480 : 680,
+          run: () => {
+            setAnim(en.id, "attack");
+            setTimeout(() => {
+              setPHP(np);
+              setSv(shAfter);
+              if (broke) SFX.crack();
+              if (through > 0) {
+                setAnim("hero","hit"); SFX.hurt(); flash("player");
+                addPop("hero", "-" + through, big ? "#ff5c5c" : "#ffb08a");
+                if (big) { setShakeSeq(q => q + 1); setFlashSeq(q => q + 1); }
+              } else { SFX.tap(); addPop("hero", "ガード", "#9db8e8"); }
+            }, 200);
+          }
+        });
+        logs.push(through > 0 ? `${big ? "💥" : "🗡"} ${en.name}の攻撃 ${through}` : `🛡 ${en.name}の攻撃を防いだ`);
+        if (php <= 0) break;
+      }
+      if (php <= 0) break;
+      }
+      if (php <= 0) break;
+    }
+
+    // ③ 回復
+    if (php > 0 && heal > 0) {
+      const np = Math.min(pMaxRef.current, php + heal);
+      if (np - php > 0) {
+        const healed = np - php;
+        seq.push({ text: `${healed} 回復！`, color: "#5bd98a", act: "heal",
+          run: () => { setPHP(np); setAnim("hero","heal"); SFX.heal(); flash("heal"); addPop("hero", "+" + healed, "#8ce8b0"); } });
+        logs.push(`✚ ${healed} 回復`);
+      }
+      php = np;
+    }
+    const finalHp = php;
+    addLog(logs);
+    playFx(seq, () => {
+      const regenLogs = [];
+      for (const en of ens) {
+        if (!en.alive) continue;
+        en.rollMul = rollDmg(); // 次の行動のダメージを振り直す
+        if (!TEST_MODE && en.enrEvery && tn % en.enrEvery === 0) {
+          en.enr = (en.enr || 0) + 1;
+          en.atk = Math.round(en.atk * 1.15);
+          regenLogs.push(`🔥 ${en.name}が激昂！攻撃力上昇${en.enr === 3 ? "・2回行動に！" : `（${en.enr}）`}`);
+          const eid = en.id, twice = en.enr === 3;
+          setTimeout(() => { addPop(eid, twice ? "💪×2行動!" : "💪UP!", "#ff8a5a"); setAnim(eid, "heal"); }, 250);
+        }
+        if (!TEST_MODE && en.shdMax && Math.random() < en.shdC) {
+          const gain = Math.round(en.shdMax * (0.5 + Math.random() * 0.5));
+          if (gain > (en.shd || 0)) { en.shd = gain; regenLogs.push(`🛡 ${en.name}がシールドを張った（${gain}）`); }
+        }
+      }
+      if (regenLogs.length) addLog(regenLogs);
+      setEnemiesBoth(ens.map(e => ({ ...e })));
+      setSv(null);
+      if (finalHp <= 0) {
+        const fi = itemsRef.current.indexOf("phoenix");
+        if (fi >= 0) {
+          setItemsBoth(itemsRef.current.filter((_, i) => i !== fi));
+          setPHP(Math.round(pMaxRef.current * 0.4));
+          setAnim("hero", "heal"); SFX.heal(); flash("heal");
+          addLog(["🪶 不死鳥の羽が燃え上がる！HP40%で復活"]);
+        } else {
+          setStatus("lose"); statusRef.current = "lose";
+          setLocked(true); lockedRef.current = true;
+          SFX.lose();
+          return;
+        }
+      }
+      turnRef.current = freshTurn();
+      if (hasR("ironwill") && shield > 0) turnRef.current.def += Math.floor(shield / 2);
+      if (hasR("regen")) setPHP(Math.min(pMaxRef.current, pRef.current + 2));
+      if (hasR("prism")) { commitBoard(prismBoard(boardRef.current)); addLog(["🔮 プリズム: 盤面が3色になった"]); }
+      syncTurn();
+      setUsed(new Set()); usedRef.current = new Set();
+      setAction("atk"); actionRef.current = "atk";
+      setTurn(t => t + 1);
+      setLocked(false); lockedRef.current = false;
+    });
+  }, []);
+
+  // ===== 勝利 → 報酬 =====
+  const onVictoryRef = useRef(() => {});
+  onVictoryRef.current = () => {
+    const node = pendingNodeRef.current;
+    if (node && node.type === "boss") {
+      SFX.win();
+      if (actRef.current < ACTS - 1) { setActClear({ picks: pickRelics(3, "boss") }); return; }
+      setStatus("clear"); statusRef.current = "clear";
+      return;
+    }
+    SFX.win();
+    const row = node ? node.row : 0;
+    let gain = node && node.type === "elite" ? 60 + row * 5
+      : node && node.type === "horde" ? 40 + row * 4 : 25 + row * 4;
+    if (hasR("piggy")) gain += 10;
+    if (hasR("scale")) gain = Math.round(gain * 1.5);
+    setCoinsBoth(coinsRef.current + gain);
+    addLog([`💰 コイン +${gain}`]);
+    if (hasR("bento")) setPHP(Math.min(pMaxRef.current, pRef.current + 8));
+    let relicDrop = null;
+    if (node && node.type === "elite") { relicDrop = pickRelics(1)[0] || null; if (relicDrop) addRelic(relicDrop); }
+    let picks = shuffle(ITEM_KEYS.slice()).slice(0, hasR("magnet") ? 4 : 3);
+    let healed = 0;
+    if (node && node.type === "elite" && !picks.some(k => k === "atkx" || k === "defx")) picks[0] = pick(["atkx","defx"]);
+    if (node && node.type === "horde") {
+      healed = Math.min(pMaxRef.current - pRef.current, 20);
+      if (healed > 0) setPHP(pRef.current + healed);
+    }
+    playFx([
+      { text: "🏆 敵を撃破！", color:"#ffd54a", wait:850, run: () => {} },
+      { text: `💰 コイン +${gain} 獲得`, color:"#e8c06a", wait:850, run: () => SFX.coin() }
+    ], () => {
+      setRewards({ picks, kind: node ? node.type : "battle", healed, coins: gain, relic: relicDrop });
+      setStatus("reward"); statusRef.current = "reward";
+    });
+  };
+
+  const finishNode = () => {
+    const node = pendingNodeRef.current;
+    if (node) {
+      setVisited(v => new Set(v).add(node.id));
+      setCurNodeId(node.id); curNodeRef.current = node.id;
+    }
+    pendingNodeRef.current = null;
+    setStatus("map"); statusRef.current = "map";
+    setLocked(false); lockedRef.current = false;
+  };
+
+  const chooseReward = key => {
+    ownedRef.current = { ...ownedRef.current, [key]: ownedRef.current[key] + 1 };
+    bagRef.current = { ...bagRef.current, [key]: bagRef.current[key] + 1 };
+    syncOwned();
+    SFX.pick();
+    addLog([`🎁 ${ITEMS[key].name}を獲得`]);
+    setRewards(null);
+    if (pendingNodeRef.current && pendingNodeRef.current.type === "horde") openShop();
+    else finishNode();
+  };
+
+  // ===== 章クリア → 次章 =====
+  const nextAct = () => {
+    const na = actRef.current + 1;
+    setAct(na);
+    setPMax(pMaxRef.current + (hasR("crown") ? 80 : 50));
+    setPHP(pMaxRef.current);
+    setCoinsBoth(coinsRef.current + 100);
+    const m = genMap();
+    setMap(m); mapRef.current = m;
+    setCurNodeId(null); curNodeRef.current = null;
+    setVisited(new Set());
+    pendingNodeRef.current = null;
+    setEnemiesBoth([]);
+    setActClear(null);
+    setStatus("map"); statusRef.current = "map";
+    setLocked(false); lockedRef.current = false;
+    addLog([`― 第${na + 1}章「${ACT_NAMES[na]}」開始 ―`, "🎁 最大HP+50・全回復・💰+100"]);
+    SFX.step();
+  };
+
+  // ===== ショップ（群れ勝利後・休憩所） =====
+  const priceOf = base => Math.round(base * (hasR("member") ? 0.8 : 1));
+  const openShop = () => {
+    setShop({ offers: shuffle(Object.keys(CONSUM)).slice(0, hasR("dice") ? 6 : 4), relic: pickRelics(1)[0] || null });
+    SFX.open();
+  };
+  const buyRelic = k => {
+    const cost = priceOf(RELIC_PRICE[RELICS[k].rar]);
+    if (coinsRef.current < cost) { SFX.tap(); return; }
+    setCoinsBoth(coinsRef.current - cost);
+    addRelic(k);
+    setShop(sp => sp ? { ...sp, relic: null } : sp);
+  };
+  const closeShop = () => { setShop(null); SFX.step(); finishNode(); };
+  const buyItem = k => {
+    const c = CONSUM[k];
+    if (coinsRef.current < priceOf(c.price) || itemsRef.current.length >= itemCap()) { SFX.tap(); return; }
+    setCoinsBoth(coinsRef.current - priceOf(c.price));
+    setItemsBoth([...itemsRef.current, k]);
+    addLog([`🛒 ${c.name}を購入（-${c.price}）`]);
+    SFX.pick();
+  };
+
+  // ===== 焚き火（休む / 特殊ドロップ削除） =====
+  const restHeal = () => {
+    const healAmt = Math.min(pMaxRef.current - pRef.current, Math.round(pMaxRef.current * (hasR("blanket") ? 0.6 : 0.4)));
+    setPHP(pRef.current + healAmt);
+    addLog([`🔥 焚き火で休んだ（+${healAmt}）`]);
+    setRestMsg(`🔥 焚き火で休んだ　HP +${healAmt}`);
+    setTimeout(() => { setRestMsg(null); }, 1500);
+    setCampfire(null);
+    openShop();
+  };
+  const forgeCost = () => hasR("hammer") ? 25 : FORGE_COST;
+  const forgeUpgrade = k => {
+    if (coinsRef.current < forgeCost()) { SFX.tap(); return; }
+    if (ownedRef.current[k] - ownedUpRef.current[k] <= 0) return;
+    setCoinsBoth(coinsRef.current - forgeCost());
+    ownedUpRef.current = { ...ownedUpRef.current, [k]: ownedUpRef.current[k] + 1 };
+    if (bagRef.current[k] - bagUpRef.current[k] > 0)
+      bagUpRef.current = { ...bagUpRef.current, [k]: bagUpRef.current[k] + 1 };
+    syncOwned();
+    addLog([`🔨 ${ITEMS[k].name}を1つ鍛えた（-${forgeCost()}💰）→ ${DESC_UP[k]}`]);
+    SFX.forge();
+    setCampfire(null);
+    openShop();
+  };
+  const removeOwned = k => {
+    if (ownedRef.current[k] <= 0) return;
+    const total = ITEM_KEYS.reduce((t, kk) => t + ownedRef.current[kk], 0);
+    if (total <= 1) return;
+    ownedRef.current = { ...ownedRef.current, [k]: ownedRef.current[k] - 1 };
+    if (ownedUpRef.current[k] > ownedRef.current[k])
+      ownedUpRef.current = { ...ownedUpRef.current, [k]: ownedRef.current[k] };
+    bagRef.current = { ...bagRef.current, [k]: Math.min(bagRef.current[k], ownedRef.current[k]) };
+    bagUpRef.current = { ...bagUpRef.current, [k]: Math.min(bagUpRef.current[k], ownedUpRef.current[k], bagRef.current[k]) };
+    syncOwned();
+    addLog([`🗑 ${ITEMS[k].name}を袋から1つ削除した`]);
+    SFX.hurt();
+    setCampfire(null);
+    openShop();
+  };
+
+  // ===== 消費アイテム使用 =====
+  const useItem = idx => {
+    const k = itemsRef.current[idx];
+    if (!k) return;
+    const st = statusRef.current;
+    if (st !== "battle" && st !== "map") return;
+    if (st === "battle" && lockedRef.current) return;
+    if (st === "map" && k !== "potion") { SFX.tap(); return; }
+    if (st === "battle" && statusRef.current !== "battle") return;
+    let used = false;
+    if (k === "potion") {
+      const np = Math.min(pMaxRef.current, pRef.current + (hasR("herb") ? 120 : 80));
+      if (np > pRef.current) {
+        addLog([`🧪 ポーション +${np - pRef.current}`]);
+        setPHP(np); setAnim("hero", "heal"); SFX.heal(); flash("heal");
+        used = true;
+      }
+    } else if (k === "purify") {
+      const b = boardRef.current;
+      if (b.some(c => c.type === JUNK)) {
+        commitBoard(b.map(c => c.type === JUNK ? { id:UID++, type:Math.floor(Math.random()*4), special:false } : c));
+        addLog(["🧹 浄化の書：お邪魔を一掃した"]); SFX.clear();
+        used = true;
+      }
+    } else if (k === "colorize") {
+      const b = boardRef.current;
+      const counts = [0,0,0,0];
+      for (const c of b) if (c.type < 4 && !c.special) counts[c.type]++;
+      const majT = counts.indexOf(Math.max(...counts));
+      let minT = -1, minV = Infinity;
+      for (let t = 0; t < 4; t++) if (t !== majT && counts[t] > 0 && counts[t] < minV) { minV = counts[t]; minT = t; }
+      if (minT >= 0) {
+        commitBoard(b.map(c => (c.type === minT && !c.special) ? { id:UID++, type:majT, special:false } : c));
+        addLog(["🎨 変換の書：盤面の色を寄せた"]); SFX.clear();
+        used = true;
+      }
+    } else if (k === "stun") {
+      if (!turnRef.current.stun) { turnRef.current.stun = true; syncTurn(); addLog(["⏳ 時止めの砂：このターン敵は行動しない"]); SFX.pick(); used = true; }
+    } else if (k === "bomb") {
+      const ens = enemiesRef.current.map(e => ({ ...e }));
+      let hitAny = false;
+      for (const en of ens) {
+        if (!en.alive) continue;
+        hitAny = true;
+        let dmg = 80;
+        if ((en.shd || 0) > 0) { const bs = Math.min(en.shd, dmg); en.shd -= bs; dmg -= bs; }
+        en.hp = Math.max(0, en.hp - dmg);
+        if (en.hp <= 0) en.alive = false;
+        addPop(en.id, "-" + dmg, "#ffb08a");
+      }
+      if (hitAny) {
+        setEnemiesBoth(ens);
+        ens.forEach(en => setAnim(en.id, en.alive ? "hit" : "die"));
+        SFX.atk(); addLog(["💣 爆裂瓶：敵全体に80ダメージ"]);
+        used = true;
+        if (ens.every(e => !e.alive)) {
+          setLocked(true); lockedRef.current = true;
+          setTimeout(() => onVictoryRef.current(), 650);
+        }
+      }
+    } else if (k === "venom") {
+      const ens = enemiesRef.current.map(e => e.alive ? { ...e, atk: Math.max(1, Math.round(e.atk * 0.75)) } : e);
+      if (ens.some(e => e.alive)) {
+        setEnemiesBoth(ens);
+        addLog(["🐍 弱体の毒：敵全体の攻撃力-25%"]); SFX.hurt();
+        used = true;
+      }
+    } else if (k === "gemrain") {
+      const b = boardRef.current;
+      const cand = shuffle(b.map((c, i) => (!c.special && c.type !== JUNK) ? i : -1).filter(i => i >= 0));
+      if (cand.length) {
+        const next = b.slice();
+        for (let j = 0; j < 3 && j < cand.length; j++) {
+          const d = drawFromBag(bagRef, ownedRef, bagUpRef, ownedUpRef, next);
+          next[cand[j]] = { ...next[cand[j]], special: d.k, up: d.up };
+        }
+        commitBoard(next); syncBag();
+        addLog(["💎 星降りの粉：特殊ドロップ+3"]); SFX.clear();
+        used = true;
+      }
+    } else if (k === "phoenix") {
+      addLog(["🪶 不死鳥の羽は持っているだけで倒れた時に自動発動する"]);
+    } else if (k === "might") {
+      if (!turnRef.current.atkBoost) { turnRef.current.atkBoost = true; syncTurn(); addLog(["💪 剛力の薬：このターン攻撃2倍"]); SFX.pick(); used = true; }
+    } else if (k === "aegis") {
+      if (!turnRef.current.defBoost) { turnRef.current.defBoost = true; syncTurn(); addLog(["🛡 守護の薬：このターン防御2倍"]); SFX.pick(); used = true; }
+    }
+    if (used) setItemsBoth(itemsRef.current.filter((_, i) => i !== idx));
+    else SFX.tap();
+  };
+
+  // ===== ノード進入 =====
+  const selectableIds = () => {
+    const m = mapRef.current;
+    if (curNodeRef.current == null) return m.rows[0].map(n => n.id);
+    return m.edges.filter(e => e.from === curNodeRef.current).map(e => e.to);
+  };
+  const enterNode = node => {
+    if (statusRef.current !== "map" || lockedRef.current || shopRef.current || campfireRef.current) return;
+    if (!selectableIds().includes(node.id)) return;
+    pendingNodeRef.current = node;
+    SFX.step();
+    if (node.type === "rest") {
+      if (hasR("adventmap")) { setCoinsBoth(coinsRef.current + 30); addLog(["🗺 冒険者の地図: コイン+30"]); }
+      setCampfire("menu");
+      SFX.open();
+      return;
+    }
+    if (node.type === "treasure") {
+      const picks = shuffle(ITEM_KEYS.slice()).slice(0, hasR("magnet") ? 4 : 3);
+      setRewards({ picks, kind:"treasure", healed:0 });
+      setStatus("reward"); statusRef.current = "reward";
+      return;
+    }
+    // バトル系
+    const ens = encounterFor(node, actRef.current);
+    setEnemiesBoth(ens);
+    setTargetId(ens[0].id); targetRef.current = ens[0].id;
+    let bd0 = makeBoard(bagRef, ownedRef, bagUpRef, ownedUpRef);
+    if (hasR("prism")) bd0 = prismBoard(bd0);
+    commitBoard(bd0);
+    syncBag(); // 盤面生成で袋から引いた分を表示に反映
+    setPops({}); // 前バトルのダメージポップを掃除
+    setAction("atk"); actionRef.current = "atk";
+    setUsed(new Set()); usedRef.current = new Set();
+    setPreview(null); setClearing(new Set());
+    turnRef.current = freshTurn(); syncTurn();
+    setTurn(1); turnNumRef.current = 1;
+    setAnims({});
+    addLog([`― ${node.row + 1}層 ${NODE_META[node.type].label}戦 開始 ―`]);
+    setStatus("battle"); statusRef.current = "battle";
+    setLocked(false); lockedRef.current = false;
+    let tutDone = "1";
+    try { tutDone = localStorage.getItem("db_tut") || ""; } catch (e) {}
+    if (!tutDone && !TEST_MODE) setTut(0);
+  };
+
+  // ===== 盤面操作 =====
+  const commit = useCallback(idx => {
+    if (lockedRef.current || statusRef.current !== "battle") return;
+    const act = actionRef.current;
+    if (!act || usedRef.current.has(act)) return;
+    const seedJunk = boardRef.current[idx].type === JUNK;
+    const ids = seedJunk ? findGroup(boardRef.current, idx) : expandIds(boardRef.current, findGroup(boardRef.current, idx));
+    const info = groupInfo(boardRef.current, ids);
+    const eff = computeEffect(act, info);
+    const next = refill(boardRef.current, ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
+    let mainAdd = eff.main;
+    if (act === "atk" && turnRef.current.atkBoost) mainAdd *= 2;
+    if (act === "def" && turnRef.current.defBoost) mainAdd *= 2;
+    turnRef.current[act] += mainAdd;
+    if (eff.splitAtk) turnRef.current.atk += eff.splitAtk;
+    if (eff.splitDef) turnRef.current.def += eff.splitDef;
+    if (eff.healBonus) turnRef.current.heal += eff.healBonus;
+    if (info.sp.pierce > 0) turnRef.current.pierce = true;
+    syncTurn();
+    SFX.clear();
+    const ll = [];
+    if (info.sp.bombx || info.sp.bombd) ll.push(`💥 爆発！計${info.count}個を消した`);
+    if (info.starOn) ll.push(`★ ${info.base}個消し ${info.mult}倍`);
+    else if (info.threeOn) ll.push("3 ちょうど3個 3倍");
+    if (eff.splitAtk) ll.push(`剣 攻撃+${eff.splitAtk}`);
+    if (eff.splitDef) ll.push(`盾 防御+${eff.splitDef}`);
+    if (eff.healBonus) ll.push(`♥ 回復+${eff.healBonus}`);
+    if (info.sp.pierce > 0) ll.push("貫 攻撃が貫通化！");
+    if (ll.length) addLog([ll.join(" / ")]);
+    const newUsed = new Set(usedRef.current);
+    newUsed.add(act);
+    setUsed(newUsed); usedRef.current = newUsed;
+    // エフェクト: 爆弾バースト + 数値への粒子集約（盤面が消える前に座標を取る）
+    const clearedIdxs = [], bombIdxs = [];
+    boardRef.current.forEach((c, i) => {
+      if (!ids.has(c.id)) return;
+      clearedIdxs.push(i);
+      if (c.special === "bombx" || c.special === "bombd") bombIdxs.push(i);
+    });
+    if (bombIdxs.length) boomAt(bombIdxs);
+    if (!info.junk) flyParticles(clearedIdxs, act);
+    setClearing(new Set(ids));
+    setLocked(true); lockedRef.current = true;
+    setTimeout(() => {
+      commitBoard(next);
+      setClearing(new Set());
+      syncBag();
+      if (newUsed.size >= 3) {
+        setTimeout(() => resolveTurn(), 350);
+      } else {
+        const nextAct = ORDER.find(a => !newUsed.has(a));
+        setAction(nextAct); actionRef.current = nextAct;
+        setLocked(false); lockedRef.current = false;
+      }
+    }, 240);
+  }, [resolveTurn]);
+  commitRef.current = commit;
+
+  // 爆発バースト（爆弾セルの位置に）
+  const boomAt = idxs => {
+    try {
+      idxs.forEach(i => {
+        const el = document.querySelector(`[data-idx="${i}"]`);
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        const d = document.createElement("div");
+        d.className = "boom-fx";
+        d.style.left = (r.left + r.width / 2) + "px";
+        d.style.top = (r.top + r.height / 2) + "px";
+        document.body.appendChild(d);
+        setTimeout(() => d.remove(), 520);
+      });
+      if (idxs.length) { SFX.crack(); setShakeSeq(q => q + 1); }
+    } catch (e) {}
+  };
+  // 消したドロップからアクション数値へ粒子が飛ぶ
+  const flyParticles = (idxs, key) => {
+    try {
+      const target = document.getElementById("actval-" + key);
+      if (!target) return;
+      const tr = target.getBoundingClientRect();
+      const tx = tr.left + tr.width / 2, ty = tr.top + tr.height / 2;
+      idxs.slice(0, 14).forEach((i, j) => {
+        const el = document.querySelector(`[data-idx="${i}"]`);
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        const d = document.createElement("div");
+        d.className = "fly-dot";
+        d.style.left = cx + "px";
+        d.style.top = cy + "px";
+        d.style.background = ACTIONS[key].color;
+        d.style.transitionDelay = (j * 16) + "ms";
+        document.body.appendChild(d);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          d.style.transform = `translate(${tx - cx}px, ${ty - cy}px) scale(.45)`;
+          d.style.opacity = "0.2";
+        }));
+        setTimeout(() => d.remove(), 760 + j * 16);
+      });
+    } catch (e) {}
+  };
+
+  const cellAt = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    const b = el && el.closest ? el.closest("[data-idx]") : null;
+    return b ? parseInt(b.getAttribute("data-idx"), 10) : null;
+  };
+  const makePreview = (b, idx) => {
+    const seedJunk = b[idx].type === JUNK;
+    const ids = seedJunk ? findGroup(b, idx) : expandIds(b, findGroup(b, idx));
+    return { ids, over:true, info: groupInfo(b, ids) };
+  };
+  useEffect(() => {
+    const move = e => {
+      if (!pressingRef.current) return;
+      const idx = cellAt(e.clientX, e.clientY);
+      if (idx == null) setPreview({ ids:new Set(), over:false, info:null });
+      else {
+        const cellId = boardRef.current[idx].id;
+        if (startGroupRef.current && startGroupRef.current.has(cellId)) setPreview(makePreview(boardRef.current, idx));
+        else setPreview({ ids:new Set(), over:false, info:null });
+      }
+    };
+    const up = e => {
+      if (!pressingRef.current) return;
+      pressingRef.current = false;
+      const idx = cellAt(e.clientX, e.clientY);
+      setPreview(null);
+      if (idx != null) {
+        const releaseId = boardRef.current[idx].id;
+        if (startGroupRef.current && startGroupRef.current.has(releaseId)) commitRef.current(idx);
+      }
+      startGroupRef.current = null;
+    };
+    window.addEventListener("pointermove", move, { passive:false });
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+    };
+  }, []);
+  const onDown = (e, idx) => {
+    if (lockedRef.current || statusRef.current !== "battle") return;
+    if (!actionRef.current || usedRef.current.has(actionRef.current)) return;
+    e.preventDefault();
+    pressingRef.current = true;
+    startGroupRef.current = findGroup(boardRef.current, idx);
+    setPreview(makePreview(boardRef.current, idx));
+    SFX.tap();
+  };
+
+  const restart = (toTitle = false) => {
+    UID = 1;
+    ownedRef.current = initOwned();
+    bagRef.current = refillBag(ownedRef.current);
+    syncOwned();
+    const m = genMap();
+    setMap(m); mapRef.current = m;
+    setCurNodeId(null); curNodeRef.current = null;
+    setVisited(new Set());
+    pendingNodeRef.current = null;
+    setEnemiesBoth([]);
+    setPHP(P_MAX);
+    commitBoard(makeBoard(bagRef, ownedRef, bagUpRef, ownedUpRef));
+    syncBag();
+    setPops({});
+    // 章リセットは上で実施済み
+    setAction("atk"); actionRef.current = "atk";
+    setUsed(new Set()); usedRef.current = new Set();
+    setPreview(null); setClearing(new Set());
+    setLocked(false); lockedRef.current = false;
+    setTurn(1);
+    setRewards(null); setRestMsg(null); setAnims({});
+    setCoinsBoth(0); setItemsBoth(["potion"]); setShop(null); setCampfire(null);
+    ownedUpRef.current = initZero(); bagUpRef.current = initZero();
+    setAct(0); setPMax(P_MAX); setActClear(null);
+    relicsRef.current = []; RELICSET = new Set(); setRelicsView([]);
+    setStatus(toTitle ? "title" : "map"); statusRef.current = toTitle ? "title" : "map";
+    setLog(toTitle ? [] : ["― ルートを選んで進もう ―"]);
+    setFx([]);
+    turnRef.current = freshTurn(); syncTurn();
+  };
+
+  const toggleSfx = () => { sfxEnabled = !sfxEnabled; setSfxOn(sfxEnabled); };
+  const toggleBgm = () => { bgmOn = !bgmOn; setBgmOnView(bgmOn); if (!bgmOn) bgmStop(); };
+
+  // 画面に応じてBGMを切り替え
+  useEffect(() => {
+    if (status === "title") bgmPlay("title");
+    else if (status === "map") bgmPlay("map");
+    else if (status === "battle") bgmPlay(enemies.some(e => e.boss && e.alive) ? "boss" : "battle");
+    else if (status === "clear" || status === "lose") bgmStop();
+    // reward中は直前の曲を継続
+  }, [status, enemies, bgmOnView]);
+  useEffect(() => () => bgmStop(), []);
+  useEffect(() => { syncBag(); }, []); // 初期盤面生成後の袋表示同期
+
+  // テストフック（?test=1 のときのみ）
+  useEffect(() => {
+    if (location.search.indexOf("test=1") < 0) return;
+    window.__test = {
+      state: () => ({ status: statusRef.current, cur: curNodeRef.current, php: pRef.current,
+        turn: turnNumRef.current, tv: { ...turnRef.current },
+        enemies: enemiesRef.current.map(e => ({ kind:e.kind, hp:e.hp, alive:e.alive, pi:e.pi, shd:e.shd || 0, enr:e.enr || 0, atk:e.atk })),
+        junk: boardRef.current.filter(c => c.type === JUNK).length,
+        bagLeft: ITEM_KEYS.reduce((t, k) => t + bagRef.current[k], 0),
+        colors: new Set(boardRef.current.filter(c => c.type < 4).map(c => c.type)).size,
+        coins: coinsRef.current, items: itemsRef.current.slice(),
+        shop: shopRef.current ? shopRef.current.offers.slice() : null,
+        campfire: campfireRef.current,
+        act: actRef.current, pmax: pMaxRef.current, actClear: !!actClearRef.current,
+        relics: relicsRef.current.slice(),
+        rewardPicks: rewardsRef.current ? (rewardsRef.current.picks || []).length : 0,
+        specials: boardRef.current.filter(c => c.special).length,
+        ownedTotal: ITEM_KEYS.reduce((t, k) => t + ownedRef.current[k], 0),
+        enemyAtks: enemiesRef.current.map(e => e.atk),
+        selectable: statusRef.current === "map" ? selectableIds() : [],
+        edges: mapRef.current.edges,
+        map: mapRef.current.nodes.map(n => ({ id:n.id, row:n.row, type:n.type })) }),
+      start: () => { setStatus("map"); statusRef.current = "map"; },
+      enter: id => { const n = mapRef.current.nodes.find(n => n.id === id); if (n) enterNode(n); },
+      weaken: () => { const ens = enemiesRef.current.map(e => e.alive ? { ...e, hp:1 } : e); setEnemiesBoth(ens); },
+      spawn: kinds => {
+        const ens = kinds.map((kind,i) => { const k = KINDS[kind];
+          return { id:"e"+(UID++), kind, name:k.name, hp:k.hp, max:k.hp, atk:k.atk, alive:true, pi:0, pat:k.pats[0], rollMul:1, shd:0, shdMax:(SHIELDS[kind]||{}).sh||0, shdC:0, enr:0, enrEvery:0, elite:false, boss:kind==="demon", idx:i }; });
+        setEnemiesBoth(ens); setTargetId(ens[0].id); targetRef.current = ens[0].id;
+      },
+      hurtEnemies: () => { const ens = enemiesRef.current.map(e => e.alive ? { ...e, hp: Math.max(1, e.hp - 30) } : e); setEnemiesBoth(ens); },
+      setShd: (i, v) => { const ens = enemiesRef.current.map((e, ix) => ix === i ? { ...e, shd: v } : e); setEnemiesBoth(ens); },
+      setEnrEvery: (i, v) => { const ens = enemiesRef.current.map((e, ix) => ix === i ? { ...e, enrEvery: v } : e); setEnemiesBoth(ens); },
+      setCellType: (i, t) => { const b = boardRef.current.slice(); b[i] = { ...b[i], type: t, special: false, up: false }; commitBoard(b); },
+      setCellSpecial: (i, k, up) => { const b = boardRef.current.slice(); b[i] = { ...b[i], special: k, up: !!up }; commitBoard(b); },
+      addAtk: v => { turnRef.current.atk += v; syncTurn(); },
+      setPierce: v => { turnRef.current.pierce = !!v; syncTurn(); },
+      addCoins: v => setCoinsBoth(coinsRef.current + v),
+      giveItem: k => setItemsBoth([...itemsRef.current, k].slice(0, itemCap())),
+      useItem: i => useItem(i),
+      buy: k => buyItem(k),
+      closeShop: () => closeShop(),
+      restHeal: () => restHeal(),
+      restRemove: k => removeOwned(k),
+      forge: k => forgeUpgrade(k),
+      ups: () => ({ ...ownedUpRef.current }),
+      tutStart: () => setTut(0),
+      nextAct: () => nextAct(),
+      giveRelic: k => addRelic(k),
+      tutVal: () => tutRef.current,
+      tutStep: () => { const el = [...document.querySelectorAll("button")].find(b => b.textContent.includes("次へ") || b.textContent.includes("はじめる！")); if (el) el.click(); },
+      jumpTo: row => { // 指定rowの手前まで踏破済みにする
+        const m = mapRef.current;
+        const path = [];
+        for (let r = 0; r < row; r++) path.push(m.rows[r][0]);
+        let cur = null; const vis = new Set();
+        for (const n of path) { vis.add(n.id); cur = n.id; }
+        setVisited(vis); setCurNodeId(cur); curNodeRef.current = cur;
+        setStatus("map"); statusRef.current = "map";
+      },
+      setCur: id => { setVisited(v => new Set(v).add(id)); setCurNodeId(id); curNodeRef.current = id; },
+      restart: () => restart(false),
+      resolve: () => resolveTurn(),
+      commit: i => commitRef.current(i)
+    };
+  }, []);
+
+  const mapBoxRef = useRef(null);
+  useEffect(() => {
+    if (status !== "map") return;
+    const el = mapBoxRef.current;
+    if (!el) return;
+    const cn = map.nodes.find(nd => nd.id === curNodeId);
+    const frac = (7 + (ROWS - 1 - (cn ? cn.row : 0)) * (86 / (ROWS - 1))) / 100;
+    const y = el.offsetTop + el.offsetHeight * frac - window.innerHeight * 0.55;
+    window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+  }, [status, curNodeId]);
+
+  // ===== 派生値 =====
+  const info = preview && preview.over && preview.info && preview.info.count > 0 ? preview.info : null;
+  const actColor = action ? ACTIONS[action].color : "#fff";
+  const remaining = 3 - used.size;
+  const selEff = info ? computeEffect(action, info) : null;
+  const bagLeft = ITEM_KEYS.reduce((s,k) => s + bagView[k], 0);
+  const ownedTotal = ITEM_KEYS.reduce((s,k) => s + ownedView[k], 0);
+  const onBoardCnt = {};
+  if (status === "battle" || status === "reward") board.forEach(c => { if (c.special) onBoardCnt[c.special] = (onBoardCnt[c.special] || 0) + 1; });
+  const onBoardTotal = ITEM_KEYS.reduce((s,k) => s + (onBoardCnt[k] || 0), 0);
+  const numCell = { display:"inline-block", minWidth:40, textAlign:"right", fontVariantNumeric:"tabular-nums" };
+  const curNode = map.nodes.find(n => n.id === curNodeId);
+  const progRow = pendingNodeRef.current ? pendingNodeRef.current.row + 1 : curNode ? curNode.row + 1 : 0;
+  const incomingPreview = Math.max(0, enemies.filter(e => e.alive).reduce((s,e) => s + intentOf(e, enemies).dmg * ((e.enr || 0) >= 3 ? 2 : 1), 0) - tv.def);
+  const rootStyle = {
+    fontFamily: FONT,
+    minHeight: "100vh",
+    background: '#141019 url("assets/bg_texture.jpg") repeat', backgroundSize:"512px",
+    color: "#f4eef9",
+    WebkitUserSelect: "none",
+    userSelect: "none"
+  };
+
+  const relicBarEl = relicsView.length > 0 && h("div", { className:"flex items-center gap-1 mb-1", style:{ flexWrap:"wrap" } },
+    relicsView.map(k => h("button", { key:k, title:`${RELICS[k].name}: ${RELICS[k].desc}`,
+      onClick: () => { setRestMsg(`${RELICS[k].icon} ${RELICS[k].name}：${RELICS[k].desc}`); setTimeout(() => setRestMsg(null), 2200); },
+      className:"rounded-lg", style:{ width:30, height:30, fontSize:"1rem", background:"rgba(30,24,42,.92)", border:"1px solid #6e5a3c", lineHeight:"28px" } }, RELICS[k].icon)));
+
+  const itemBarEl = h("div", { className:"flex items-center gap-2 mb-1" },
+    h("span", { className:"text-[10px] font-bold", style:{ color:"#c9bfe0", width:44 } }, "アイテム"),
+    Array.from({ length: itemCap() }).map((_, i) => {
+      const k = items[i];
+      const c = k ? CONSUM[k] : null;
+      return h("button", { key:i, onClick: () => useItem(i), disabled: !k,
+        title: c ? `${c.name}：${c.desc}` : "空きスロット",
+        className:"rounded-xl flex items-center justify-center",
+        style:{ width:44, height:44, background: k ? "rgba(30,24,42,.92)" : "rgba(20,16,28,.7)",
+          border: `2px solid ${k ? "#8a6f3c" : "#2c2740"}`, fontSize:"1.25rem",
+          opacity: k ? 1 : 0.45, cursor: k ? "pointer" : "default" } },
+        c ? c.icon : "");
+    }),
+    h("span", { className:"text-[9px]", style:{ opacity:0.55, marginLeft:2 } }, "タップで使用（最大", itemCap(), "個）"));
+
+  const header = h("div", { className:"flex items-center justify-between mb-2 rounded-xl px-3 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450" } },
+    h("h1", { className:"tracking-widest font-bold", style:{ fontSize:"1.1rem", color:"#f2e6c8", textShadow:"0 2px 0 rgba(0,0,0,.55)" } },
+      "ドロップバトル ",
+      h("span", { style:{ fontSize:"0.74rem", color:"#ffcf5d" } }, "第", act + 1, "章 ", progRow, "/", ROWS)),
+    h("div", { className:"flex items-center gap-2" },
+      h("span", { className:"rounded-xl px-2 py-1.5 text-sm font-bold", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c", color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, "💰", coins),
+      h("button", { onClick: toggleBgm, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", fontSize:"0.9rem", opacity: bgmOnView ? 1 : 0.45 } }, "🎵"),
+      h("button", { onClick: toggleSfx, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", fontSize:"0.9rem", opacity: sfxOn ? 1 : 0.45 } }, sfxOn ? "🔊" : "🔇"),
+      h("button", { onClick: () => { setBagOpen(true); SFX.open(); }, className:"relative rounded-xl px-3 py-1.5 flex items-center gap-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c" } },
+        h("span", { style:{ fontSize:"1.05rem" } }, "🎒"),
+        h("span", { className:"font-bold text-sm", style:{ color:"#ffcf5d", fontVariantNumeric:"tabular-nums" } }, "残", bagLeft))));
+
+  // ===== タイトル =====
+  if (status === "title") {
+    return h("div", { style: { fontFamily:FONT, minHeight:"100vh", background:'#0d131a url("assets/bg_texture.jpg") repeat', backgroundSize:"512px", color:"#ece7f2", position:"relative", overflow:"hidden", WebkitUserSelect:"none", userSelect:"none", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"space-between", padding:"clamp(28px,6vh,56px) 20px clamp(24px,5vh,44px)", textAlign:"center" } },
+      h("img", { src:"assets/bg_title2.jpg", alt:"", draggable:false, className:"title-bg", style:{ position:"absolute", inset:0, width:"100%", height:"100%" } }),
+      h("div", { style:{ position:"absolute", inset:0, background:"linear-gradient(180deg, rgba(10,14,20,.42) 0%, rgba(10,14,20,0) 30%, rgba(10,14,20,0) 62%, rgba(10,14,20,.7) 100%)" } }),
+      h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
+        h("p", { style:{ fontSize:"clamp(0.62rem,2vw,0.78rem)", color:"#c4d2d8", letterSpacing:"0.32em", marginBottom:8, textShadow:"0 1px 2px #000" } }, "PUZZLE × ROGUELIKE"),
+        h("h1", { style:{ fontSize:"clamp(2.5rem,11.5vw,3.8rem)", fontWeight:900, letterSpacing:"0.04em", color:"#f2e6c8", margin:"0 0 8px", lineHeight:1.1, textShadow:"0 4px 0 rgba(10,12,18,.85), -2px 0 0 rgba(10,12,18,.7), 2px 0 0 rgba(10,12,18,.7), 0 -2px 0 rgba(10,12,18,.7), 0 2px 0 rgba(10,12,18,.7)" } }, "ドロップバトル"),
+        h("p", { style:{ fontSize:"clamp(0.8rem,2.3vw,0.92rem)", color:"#e8d8a8", textShadow:"0 1px 3px #000", fontWeight:800 } }, "ルートを選び、ドロップを消して、魔王を倒せ。")),
+      h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
+        h("button", {
+          onClick: () => { setStatus("map"); statusRef.current = "map"; setLog(["― ルートを選んで進もう ―"]); SFX.pick(); },
+          style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", borderRadius:14, padding:"clamp(13px,3.2vw,16px) clamp(48px,12vw,66px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", boxShadow:"0 4px 0 #6e4e1a, 0 6px 12px rgba(0,0,0,.4)", border:"2px solid #6e4e1a", fontFamily:"inherit", marginBottom:14 } }, "冒険に出る"),
+        h("p", { style:{ fontSize:"clamp(0.66rem,1.9vw,0.74rem)", color:"#c8d2d4", textShadow:"0 1px 2px #000", lineHeight:1.8, maxWidth:340 } },
+          "⚔攻撃 / 🛡防御 / ✚回復 を選んで同色ドロップをタップ。3回消すと敵のターン。")));
+  }
+
+  // ===== 共通オーバーレイ =====
+  const overlays = [];
+  if (bagOpen) overlays.push(h("div", { key:"bag", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setBagOpen(false) },
+    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, background:"rgba(24,15,34,.98)", border:"1px solid rgba(255,221,90,.45)" }, onClick: e => e.stopPropagation() },
+      h("div", { className:"flex justify-between items-center mb-1" },
+        h("span", { className:"font-bold", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, "🎒 所持アイテム"),
+        h("button", { onClick: () => setBagOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
+      h("div", { className:"rounded-xl px-3 py-2 mb-3 text-[11px]", style:{ background:"rgba(255,255,255,.05)", border:"1px solid #3c3450", lineHeight:1.9 } },
+        h("span", { className:"font-bold", style:{ color:"#f0e4c8" } }, "所持合計 ", ownedTotal, " 個"),
+        h("span", { style:{ opacity:0.6 } }, " ＝ "),
+        h("span", { style:{ color:"#8ce8b0", fontWeight:800 } }, "袋に残り ", bagLeft),
+        (status === "battle" || status === "reward") && h("span", null,
+          h("span", { style:{ opacity:0.6 } }, " ＋ "),
+          h("span", { style:{ color:"#e8c06a", fontWeight:800 } }, "盤面に ", onBoardTotal)),
+        h("span", { style:{ opacity:0.6 } }, " ＋ "),
+        h("span", { style:{ color:"#9b93a6", fontWeight:800 } }, "消化済み ", Math.max(0, ownedTotal - bagLeft - ((status === "battle" || status === "reward") ? onBoardTotal : 0)))),
+      h("div", { className:"flex flex-col gap-2" }, ITEM_KEYS.filter(k => ownedView[k] > 0).map(k => {
+        const it = ITEMS[k];
+        return h("div", { key:k, className:"flex items-center gap-3 rounded-xl px-3 py-2", style:{ background:"rgba(255,255,255,.05)", border:`1px solid ${it.ring}` } },
+          h("img", { src:it.img, alt:it.name, draggable:false, style:{ width:26, height:26, objectFit:"contain", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.5))" } }),
+          h("span", { className:"flex-1" },
+            h("span", { className:"font-bold text-sm", style:{ color:it.glowc } }, itemName(k),
+              ownedUpView[k] > 0 && h("span", { style:{ color:"#e8c06a", marginLeft:4, fontSize:"0.72rem" } }, "＋×", ownedUpView[k])),
+            h("span", { className:"block text-[10px]", style:{ opacity:0.75 } }, itemDesc(k)),
+            ownedUpView[k] > 0 && h("span", { className:"block text-[9px]", style:{ color:"#e8d8a8" } }, DESC_UP[k])),
+          h("span", { className:"text-right", style:{ minWidth:84 } },
+            h("span", { className:"font-bold", style:{ fontSize:"1.05rem", color: bagView[k] > 0 ? "#8ce8b0" : "#776f88", fontVariantNumeric:"tabular-nums" } }, "残り", bagView[k]),
+            h("span", { className:"block text-[9px]", style:{ color:"#c9bfe0" } },
+              (status === "battle" || status === "reward") && (onBoardCnt[k] || 0) > 0 ? `盤面${onBoardCnt[k]}・` : "",
+              "計", ownedView[k], "個")));
+      })),
+      h("p", { className:"text-[9px] mt-3", style:{ opacity:0.5 } }, "特殊が消えるたび袋から1個抽選して盤面へ。袋が空になると「盤面に出ていない分」だけが袋に戻る＝次に何が落ちるか推測できる。"))));
+
+  if (tut !== null) {
+    const TUT = [
+      { t:"① アクションを選ぼう", d:"⚔攻撃・🛡防御・✚回復のどれかを選ぶと、次に消すドロップの効果になる。1ターンに各1回ずつ、計3回消せる。" },
+      { t:"② 同じ色をタップ", d:"つながっている同色ドロップがまとめて消える。大きいかたまりほど効果大！枠付きの特殊ドロップを巻き込むとボーナスが乗る。" },
+      { t:"③ 敵の予告を見よう", d:"敵の頭上の赤いチップは次の攻撃（⚔17×2=17を2回）。💥大技の前は防御をたっぷり仕込むか、時止めやポーションでしのごう。" }
+    ];
+    const step = TUT[tut];
+    overlays.push(h("div", { key:"tut", className:"fixed inset-0 flex items-end justify-center fade-in", style:{ background:"rgba(8,4,14,.72)", zIndex:80, paddingBottom:"14vh" } },
+      h("div", { className:"rounded-2xl p-4 pop-in", style:{ maxWidth:340, width:"92%", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
+        h("div", { className:"flex justify-between items-center mb-1" },
+          h("span", { className:"font-bold", style:{ color:"#e8c06a", fontSize:"1rem" } }, step.t),
+          h("span", { className:"text-[10px]", style:{ opacity:0.6 } }, tut + 1, " / ", TUT.length)),
+        h("p", { className:"text-[12px] leading-relaxed mb-3", style:{ opacity:0.9 } }, step.d),
+        h("button", {
+          onClick: () => {
+            SFX.tap();
+            if (tut >= TUT.length - 1) { setTut(null); try { localStorage.setItem("db_tut", "1"); } catch (e) {} }
+            else setTut(tut + 1);
+          },
+          className:"w-full rounded-xl py-2.5 font-bold",
+          style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } },
+          tut >= TUT.length - 1 ? "はじめる！" : "次へ ▶"))));
+  }
+  if (campfire) {
+    const ownedTotalCamp = ITEM_KEYS.reduce((t, k) => t + ownedView[k], 0);
+    overlays.push(h("div", { key:"camp", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.87)", zIndex:58 } },
+      h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:370, background:"rgba(30,24,42,.98)", border:"2px solid #7cffb0" } },
+        h("h2", { className:"text-center font-bold mb-1", style:{ fontSize:"1.15rem", color:"#7cffb0", textShadow:"0 2px 0 rgba(0,0,0,.6)" } }, "🔥 焚き火"),
+        campfire === "menu" ? h("div", null,
+          h("p", { className:"text-center text-[11px] mb-3", style:{ opacity:0.75 } }, "どれか1つを選ぼう"),
+          h("button", { onClick: restHeal, className:"w-full rounded-xl px-4 py-3 flex items-center gap-3 text-left mb-2", style:{ background:"rgba(124,255,176,.08)", border:"2px solid #3c5a48" } },
+            h("span", { style:{ fontSize:"1.5rem" } }, "🔥"),
+            h("span", null,
+              h("span", { className:"font-bold", style:{ color:"#7cffb0" } }, "休む"),
+              h("span", { className:"block text-[11px]", style:{ opacity:0.8 } }, "HPを40%回復する"))),
+          h("button", { onClick: () => { if (coins >= forgeCost() && ITEM_KEYS.some(k => ownedView[k] - ownedUpView[k] > 0)) setCampfire("forge"); },
+            disabled: coins < forgeCost() || !ITEM_KEYS.some(k => ownedView[k] - ownedUpView[k] > 0),
+            className:"w-full rounded-xl px-4 py-3 flex items-center gap-3 text-left mb-2", style:{ background:"rgba(232,192,106,.08)", border:"2px solid #6e5a3c", opacity: (coins >= forgeCost() && ITEM_KEYS.some(k => ownedView[k] - ownedUpView[k] > 0)) ? 1 : 0.45 } },
+            h("span", { style:{ fontSize:"1.5rem" } }, "🔨"),
+            h("span", { className:"flex-1" },
+              h("span", { className:"font-bold", style:{ color:"#e8c06a" } }, "鍛える"),
+              h("span", { className:"block text-[11px]", style:{ opacity:0.8 } }, "特殊ドロップを1つ選んで＋に強化する")),
+            h("span", { className:"text-sm font-bold", style:{ color: coins >= forgeCost() ? "#e8c06a" : "#f0a8a0" } }, "💰", forgeCost())),
+          h("button", { onClick: () => { if (ownedTotalCamp > 1) setCampfire("remove"); }, disabled: ownedTotalCamp <= 1,
+            className:"w-full rounded-xl px-4 py-3 flex items-center gap-3 text-left", style:{ background:"rgba(240,168,160,.08)", border:"2px solid #5a3c48", opacity: ownedTotalCamp <= 1 ? 0.45 : 1 } },
+            h("span", { style:{ fontSize:"1.5rem" } }, "🗑"),
+            h("span", null,
+              h("span", { className:"font-bold", style:{ color:"#f0a8a0" } }, "整理する"),
+              h("span", { className:"block text-[11px]", style:{ opacity:0.8 } }, "特殊ドロップを1つ選んで袋から削除する"))))
+        : campfire === "forge" ? h("div", null,
+          h("p", { className:"text-center text-[11px] mb-2", style:{ opacity:0.75 } }, "鍛える特殊ドロップを1つ選ぶ（💰", forgeCost(), " ／ 所持 💰", coins, "）"),
+          h("div", { className:"flex flex-col gap-1.5 mb-2", style:{ maxHeight:320, overflowY:"auto" } },
+            ITEM_KEYS.filter(k => ownedView[k] - ownedUpView[k] > 0).map(k => {
+              const it = ITEMS[k];
+              return h("button", { key:k, onClick: () => forgeUpgrade(k), className:"flex items-center gap-3 rounded-xl px-3 py-2 text-left", style:{ background:"rgba(255,255,255,.05)", border:`1px solid ${it.ring}` } },
+                h("img", { src:it.img, alt:it.name, draggable:false, style:{ width:24, height:24, objectFit:"contain" } }),
+                h("span", { className:"flex-1" },
+                  h("span", { className:"font-bold text-sm", style:{ color:it.glowc } }, it.name, h("span", { style:{ color:"#e8c06a" } }, " → ", it.name, "＋")),
+                  h("span", { className:"block text-[10px]", style:{ color:"#e8d8a8" } }, DESC_UP[k])),
+                h("span", { className:"text-[10px] font-bold text-right", style:{ color:"#c9bfe0", minWidth:52 } }, "未強化 ", ownedView[k] - ownedUpView[k], h("span", { className:"block", style:{ color:"#e8c06a" } }, "＋ ", ownedUpView[k])));
+            })),
+          h("button", { onClick: () => setCampfire("menu"), className:"w-full rounded-xl py-2 text-xs font-bold", style:{ background:"rgba(255,255,255,.08)", border:"1px solid #3c3450", color:"#c9bfe0" } }, "← もどる"))
+        : h("div", null,
+          h("p", { className:"text-center text-[11px] mb-2", style:{ opacity:0.75 } }, "削除する特殊ドロップを選ぶ（出現しなくなる）"),
+          h("div", { className:"flex flex-col gap-1.5 mb-2", style:{ maxHeight:320, overflowY:"auto" } },
+            ITEM_KEYS.filter(k => ownedView[k] > 0).map(k => {
+              const it = ITEMS[k];
+              return h("button", { key:k, onClick: () => removeOwned(k), className:"flex items-center gap-3 rounded-xl px-3 py-2 text-left", style:{ background:"rgba(255,255,255,.05)", border:`1px solid ${it.ring}` } },
+                h("img", { src:it.img, alt:it.name, draggable:false, style:{ width:24, height:24, objectFit:"contain", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.5))" } }),
+                h("span", { className:"flex-1" },
+                  h("span", { className:"font-bold text-sm", style:{ color:it.glowc } }, itemName(k)),
+                  h("span", { className:"block text-[10px]", style:{ opacity:0.7 } }, itemDesc(k))),
+                h("span", { className:"text-xs font-bold", style:{ color:"#f0a8a0" } }, ownedView[k], " → ", ownedView[k] - 1));
+            })),
+          h("button", { onClick: () => setCampfire("menu"), className:"w-full rounded-xl py-2 text-xs font-bold", style:{ background:"rgba(255,255,255,.08)", border:"1px solid #3c3450", color:"#c9bfe0" } }, "← もどる")))));
+  }
+  if (shop) {
+    overlays.push(h("div", { key:"shop", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:58 } },
+      h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:370, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
+        h("div", { className:"flex justify-between items-center mb-1" },
+          h("span", { className:"font-bold", style:{ color:"#e8c06a", fontSize:"1.05rem" } }, "🛒 行商人"),
+          h("span", { className:"text-sm font-bold", style:{ color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, "💰", coins)),
+        h("p", { className:"text-[10px] mb-2", style:{ opacity:0.7 } }, "コインでアイテムと交換できる（所持 ", items.length, "/", itemCap(), "）"),
+        shop.relic && (() => {
+          const rk = shop.relic, rc = priceOf(RELIC_PRICE[RELICS[rk].rar]);
+          const can = coins >= rc;
+          return h("div", { className:"flex items-center gap-3 rounded-xl px-3 py-2 mb-2", style:{ background:"rgba(232,192,106,.08)", border:"2px solid #6e5a3c" } },
+            h("span", { style:{ fontSize:"1.4rem", minWidth:30, textAlign:"center" } }, RELICS[rk].icon),
+            h("span", { className:"flex-1" },
+              h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, "🏺 ", RELICS[rk].name),
+              h("span", { className:"block text-[10px]", style:{ opacity:0.75 } }, RELICS[rk].desc)),
+            h("button", { onClick: () => buyRelic(rk), disabled:!can,
+              className:"rounded-lg px-3 py-1.5 text-xs font-bold",
+              style:{ background: can ? "linear-gradient(180deg,#e8c06a,#b8862e)" : "rgba(255,255,255,.08)",
+                color: can ? "#2c2030" : "#776f88",
+                border: can ? "1px solid #6e4e1a" : "1px solid #3c3450" } }, "💰", rc));
+        })(),
+        h("div", { className:"flex flex-col gap-2 mb-3" }, shop.offers.map(k => {
+          const c = CONSUM[k];
+          const can = coins >= priceOf(c.price) && items.length < itemCap();
+          return h("div", { key:k, className:"flex items-center gap-3 rounded-xl px-3 py-2", style:{ background:"rgba(255,255,255,.05)", border:"2px solid #453b5c" } },
+            h("span", { style:{ fontSize:"1.4rem", minWidth:30, textAlign:"center" } }, c.icon),
+            h("span", { className:"flex-1" },
+              h("span", { className:"font-bold text-sm", style:{ color:"#f0e4c8" } }, c.name),
+              h("span", { className:"block text-[10px]", style:{ opacity:0.75 } }, c.desc)),
+            h("button", { onClick: () => buyItem(k), disabled: !can,
+              className:"rounded-lg px-3 py-1.5 text-xs font-bold",
+              style:{ background: can ? "linear-gradient(180deg,#e8c06a,#b8862e)" : "rgba(255,255,255,.08)",
+                color: can ? "#2c2030" : "#776f88",
+                border: can ? "1px solid #6e4e1a" : "1px solid #3c3450" } }, "💰", priceOf(c.price)));
+        })),
+        items.length >= itemCap() && h("p", { className:"text-[10px] mb-2 text-center", style:{ color:"#f0a8a0" } }, "持ち物がいっぱい（", itemCap(), "個まで）"),
+        h("button", { onClick: closeShop, className:"w-full rounded-xl py-2.5 font-bold", style:{ background:"rgba(255,255,255,.1)", border:"2px solid #453b5c", color:"#d8cfe8" } }, "先へ進む ▶"))));
+  }
+  if (rewards) {
+    const rTitle = rewards.kind === "treasure" ? "🎁 宝箱発見！" : rewards.kind === "elite" ? "💀 精鋭撃破！" : "🏆 勝利！";
+    overlays.push(h("div", { key:"reward", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:50 } },
+      h("div", { className:"w-full pop-in rounded-2xl", style:{ maxWidth:380, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", padding:"16px 14px" } },
+        h("h2", { className:"text-center font-bold mb-1", style:{ fontSize:"1.25rem", color:"#e0b45c", textShadow:"0 2px 0 rgba(0,0,0,.6)" } }, rTitle),
+        h("p", { className:"text-center text-xs mb-1", style:{ opacity:0.8 } },
+          rewards.kind === "treasure" ? "好きなアイテムを1つ持っていこう" : "戦利品を1つ選んで先へ進もう"),
+        rewards.coins > 0 && h("p", { className:"text-center text-xs mb-1", style:{ color:"#e8c06a", fontWeight:800 } }, "💰 コイン +", rewards.coins),
+        rewards.relic && h("div", { className:"flex items-center gap-2 rounded-xl px-3 py-2 mb-2", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.5)" } },
+          h("span", { style:{ fontSize:"1.4rem" } }, RELICS[rewards.relic].icon),
+          h("span", null,
+            h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, "レリック獲得: ", RELICS[rewards.relic].name),
+            h("span", { className:"block text-[10px]", style:{ opacity:0.8 } }, RELICS[rewards.relic].desc))),
+        rewards.healed > 0 && h("p", { className:"text-center text-xs mb-1", style:{ color:"#7cffb0" } }, "群れを一掃した勢いで HP +", rewards.healed),
+        rewards.kind === "elite" && h("p", { className:"text-center text-[10px] mb-1", style:{ color:"#d05cff" } }, "精鋭の報酬にはレアが混ざる…"),
+        h("div", { className:"grid grid-cols-1 gap-2 mt-2" }, rewards.picks.map(k => {
+          const it = ITEMS[k];
+          return h("button", { key:k, onClick: () => chooseReward(k), className:"rounded-xl px-4 py-3 flex items-center gap-3 text-left", style:{ background:"rgba(255,255,255,.06)", border:`2px solid ${it.ring}`, boxShadow:"0 2px 4px rgba(0,0,0,.4)" } },
+            h("img", { src:it.img, alt:it.name, draggable:false, style:{ width:34, height:34, objectFit:"contain", filter:"drop-shadow(0 1px 2px rgba(0,0,0,.5))" } }),
+            h("span", null,
+              h("span", { className:"font-bold", style:{ color:it.glowc } }, itemName(k)),
+              h("span", { className:"block text-[11px]", style:{ opacity:0.85 } }, itemDesc(k)),
+              h("span", { className:"block text-[10px]", style:{ opacity:0.6 } }, "所持 ", ownedView[k], " → ", ownedView[k] + 1)));
+        })))));
+  }
+  if (restMsg) overlays.push(h("div", { key:"rest", className:"fixed pop-in", style:{ top:18, left:"50%", transform:"translateX(-50%)", zIndex:70, background:"rgba(20,40,26,.95)", border:"1px solid rgba(124,255,176,.6)", color:"#c8ffdd", borderRadius:12, padding:"10px 18px", fontSize:"0.85rem", fontWeight:800, boxShadow:"0 3px 8px rgba(0,0,0,.5)" } }, restMsg));
+
+  if (actClear) {
+    overlays.push(h("div", { key:"actclear", className:"fixed inset-0 flex items-center justify-center px-6 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:56 } },
+      h("div", { className:"text-center pop-in rounded-2xl p-5 w-full", style:{ maxWidth:360, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
+        h("div", { className:"font-bold", style:{ fontSize:"1.6rem", color:"#f2e6c8", textShadow:"0 3px 0 rgba(0,0,0,.55)" } }, "🎉 第", act + 1, "章 クリア！"),
+        h("p", { className:"my-2 text-sm", style:{ opacity:0.85 } }, "「", ACT_NAMES[act], "」を制覇した！"),
+        h("div", { className:"rounded-xl py-2 px-3 mb-2 text-xs", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.4)", color:"#e8d8a8", lineHeight:1.9 } },
+          "🎁 章クリアボーナス", h("br"), "最大HP +", hasR("crown") ? 80 : 50, " ／ HP全回復 ／ 💰 +100"),
+        actClear.picks && actClear.picks.length > 0 && h("div", { className:"mb-2" },
+          h("p", { className:"text-[11px] mb-1 font-bold", style:{ color:"#e8c06a" } }, "🏺 レリックを1つ選んで進む"),
+          h("div", { className:"flex flex-col gap-1.5" }, actClear.picks.map(k =>
+            h("button", { key:k, onClick: () => { addRelic(k); nextAct(); }, className:"flex items-center gap-3 rounded-xl px-3 py-2 text-left", style:{ background:"rgba(255,255,255,.05)", border:"2px solid #6e5a3c" } },
+              h("span", { style:{ fontSize:"1.35rem", minWidth:28, textAlign:"center" } }, RELICS[k].icon),
+              h("span", null,
+                h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, RELICS[k].name),
+                h("span", { className:"block text-[10px]", style:{ opacity:0.8 } }, RELICS[k].desc)))))),
+        h("button", { onClick: nextAct, className:"w-full rounded-xl py-2.5 font-bold tracking-widest",
+          style:{ background:"rgba(255,255,255,.1)", color:"#c9b8e8", border:"2px solid #453b5c" } },
+          "受け取らずに第", act + 2, "章へ ▶"))));
+  }
+  if (status === "clear" || status === "lose") {
+    overlays.push(h("div", { key:"end", className:"fixed inset-0 flex items-center justify-center px-6 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:55 } },
+      h("div", { className:"text-center pop-in" },
+        h("div", { style:{ marginBottom:6, display:"flex", justifyContent:"center" } },
+          h(SpriteBox, { kind: status === "clear" ? "hero" : "demon", size:88, idle:"b" })),
+        h("div", { className:"font-bold", style:{ fontSize:"2rem", textShadow:"0 3px 0 rgba(0,0,0,.55)" } },
+          status === "clear" ? "👑 魔王討伐！" : "💀 力尽きた…"),
+        h("p", { className:"my-3 text-sm", style:{ opacity:0.85 } },
+          status === "clear" ? "全3章を踏破し、魔の軍勢の王を打ち倒した！" : `第${act + 1}章 ${progRow}層で冒険は終わった…`),
+        h("div", { className:"flex flex-col items-center gap-2" },
+          h("button", { onClick: () => restart(false), className:"rounded-xl px-6 py-2.5 tracking-widest font-bold", style:{ background:"linear-gradient(180deg,#bf8cff,#6b2fc9)", color:"#fff", boxShadow:"0 3px 0 #4a1f8c" } }, "もう一度"),
+          h("button", { onClick: () => restart(true), className:"rounded-xl px-6 py-2.5 tracking-widest font-bold", style:{ background:"rgba(255,255,255,.1)", color:"#c9b8e8", border:"1px solid rgba(169,107,255,.4)" } }, "タイトルへ")))));
+  }
+
+  const logBox = h("div", { ref: logRef, className:"rounded-lg px-3 py-2 text-[11px] leading-relaxed", style:{ background:"rgba(22,17,31,.92)", height:56, overflowY:"auto", border:"2px solid #3c3450" } },
+    log.map((l,i) => h("div", { key:i, style:{ opacity: l.startsWith("―") ? 0.55 : 0.95 } }, l)));
+
+  // ===== マップ画面 =====
+  if (status === "map" || (status === "reward" && pendingNodeRef.current && pendingNodeRef.current.type === "treasure")) {
+    const selIds = selectableIds();
+    const CENTERS = [50, 28, 70, 30, 71, 33, 66, 50]; // 蛇行する道の中心
+    const nodeX = n => Math.max(13, Math.min(87, CENTERS[n.row] + (n.col - (n.n - 1) / 2) * 26));
+    const nodeY = n => 7 + (ROWS - 1 - n.row) * (86 / (ROWS - 1));
+    return h("div", { style: rootStyle, className:"w-full flex justify-center px-3 py-2" },
+      h("div", { key:"scr-map", className:"w-full fade-in", style:{ maxWidth:440 } },
+        header,
+        relicBarEl,
+        h("div", { className:"flex items-center gap-2 rounded-xl px-3 py-1.5 mb-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c5a48" } },
+          h("span", { style:{ fontSize:"0.9rem" } }, "🧙"),
+          h("div", { className:"flex-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:9 })),
+          h("span", { className:"text-xs font-bold", style:{ color:"#7CFFB0", fontVariantNumeric:"tabular-nums" } }, pHP, "/", pMax)),
+        itemBarEl,
+        h("div", { className:"text-center text-xs mb-1 rounded-lg py-1 font-bold", style:{ background:"rgba(216,168,72,.12)", border:"1px solid rgba(216,168,72,.4)", color:"#e8c06a", letterSpacing:"0.1em" } }, curNodeId == null ? "▼ 出発地点を選ぼう" : "▼ 次に進む場所を選ぼう"),
+        h("div", { ref: mapBoxRef, className:"relative w-full mb-1", style:{ height:1560, borderRadius:16, overflow:"hidden", border:"2px solid #453b5c", background:"#1c1626" } },
+          h("img", { src:MAP_BGS[act] || MAP_BGS[0], alt:"", draggable:false, className:"absolute pointer-events-none", style:{ left:0, top:0, width:"100%", height:"100%", objectFit:"cover", opacity:.9 } }),
+          h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"linear-gradient(180deg, rgba(19,14,28,.5) 0%, rgba(19,14,28,.12) 35%, rgba(19,14,28,.25) 100%)" } }),
+          h("svg", { className:"absolute inset-0", width:"100%", height:"100%", viewBox:"0 0 100 100", preserveAspectRatio:"none", style:{ pointerEvents:"none" } },
+            map.edges.map((e,i) => {
+              const a = map.nodes.find(n => n.id === e.from), b = map.nodes.find(n => n.id === e.to);
+              const active = status === "map" && (curNodeId === e.from) && selIds.includes(e.to);
+              const trod = visited.has(e.from) && (visited.has(e.to) || e.to === curNodeId);
+              return h("line", { key:i, x1:nodeX(a), y1:nodeY(a), x2:nodeX(b), y2:nodeY(b),
+                stroke: active ? "rgba(240,196,94,.95)" : trod ? "rgba(150,220,170,.65)" : "rgba(240,228,200,.5)",
+                strokeWidth: active ? 5 : 3.5, strokeDasharray:"0.1 7", strokeLinecap:"round",
+                vectorEffect:"non-scaling-stroke" });
+            })),
+          map.nodes.map(n => {
+            const meta = NODE_META[n.type];
+            const sel = status === "map" && selIds.includes(n.id);
+            const isCur = n.id === curNodeId;
+            const isVis = visited.has(n.id);
+            const sz = n.type === "boss" ? 70 : 54;
+            return h("button", { key:n.id, onClick: () => enterNode(n),
+              className:"absolute flex flex-col items-center justify-center",
+              style:{
+                left: nodeX(n) + "%", top: nodeY(n) + "%", transform:"translate(-50%,-50%)",
+                width:sz, height:sz, borderRadius:"50%",
+                background: isCur ? "#3a2f52" : "#241d36",
+                border: `3px solid ${isCur ? "#f0e4c8" : meta.color}`,
+                opacity: isVis && !isCur ? 0.42 : sel || isCur ? 1 : 0.7,
+                animation: sel ? "nodePulse 1.3s ease-in-out infinite" : "none",
+                boxShadow: isCur ? "0 3px 0 rgba(10,8,16,.55), 0 0 0 2px rgba(240,228,200,.4)" : "0 3px 0 rgba(10,8,16,.55)",
+                cursor: sel ? "pointer" : "default",
+                zIndex:1, fontSize: n.type === "boss" ? "1.7rem" : "1.35rem"
+              } },
+              meta.icon,
+              isCur && h("img", { src:"assets/hero.png", alt:"", draggable:false, className:"absolute pointer-events-none", style:{ width:48, height:48, objectFit:"contain", left:"50%", top:-46, transform:"translateX(-50%)", filter:"drop-shadow(0 3px 2px rgba(0,0,0,.55))" } }),
+              h("span", { className:"absolute text-[9px] font-bold pointer-events-none", style:{ top:"100%", marginTop:3, color:meta.color, background:"rgba(10,8,16,.75)", borderRadius:6, padding:"0 5px", textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } }, meta.label));
+          })),
+        h("div", { className:"flex justify-center gap-1 mb-1 text-[9px]", style:{ flexWrap:"wrap" } },
+          Object.keys(NODE_META).map(k => h("span", { key:k, className:"rounded-full", style:{ color:NODE_META[k].color, background:"rgba(30,24,42,.92)", border:"1px solid #3c3450", padding:"1px 8px" } }, NODE_META[k].icon, NODE_META[k].label))),
+        logBox,
+        overlays));
+  }
+
+  // ===== バトル画面 =====
+  const heroAnim = anims.hero;
+  return h("div", { style: rootStyle, className:"w-full flex justify-center px-3 py-2" },
+    h("div", { key:"scr-battle", className:"w-full fade-in", style:{ maxWidth:440 } },
+      header,
+      relicBarEl,
+      // 戦闘シーン
+      h("div", { key:"scn" + shakeSeq, className:"relative w-full mb-1" + (shakeSeq > 0 ? " scene-shake" : ""), style:{ height:192, borderRadius:16, overflow:"hidden", border:"2px solid #453b5c", background:"#191424" } },
+        flashSeq > 0 && h("div", { key:"fl" + flashSeq, className:"absolute inset-0 pointer-events-none impact-flash" }),
+        h("img", { src:BATTLE_BGS[act] || BATTLE_BGS[0], alt:"", draggable:false, className:"absolute pointer-events-none", style:{ left:0, top:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center bottom", opacity:.92 } }),
+        h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"linear-gradient(180deg, rgba(15,11,22,.5) 0%, rgba(15,11,22,.08) 45%, rgba(15,11,22,.42) 100%)" } }),
+        // ヒーロー
+        h("div", { className:"absolute flex flex-col items-center", style:{ left:12, bottom:8, width:88, zIndex:1 } },
+          h("div", { style:{ position:"relative" } },
+            pops.hero && h("span", { key:pops.hero.seq, className:"dmg-pop", style:{ color:pops.hero.color } }, pops.hero.text),
+            h(SpriteBox, { kind:"hero", size:74, idle:"a", anim:heroAnim }),
+            (sv !== null || tv.def > 0) && h("span", { className:"absolute font-bold flex items-center", style:{ right:-22, top:-6, gap:3, padding:"2px 8px", borderRadius:10,
+              background: (sv !== null ? sv : tv.def) > 0 ? "rgba(34,64,116,.92)" : "rgba(150,26,40,.92)",
+              border: (sv !== null ? sv : tv.def) > 0 ? "1px solid rgba(150,190,255,.7)" : "1px solid rgba(255,130,120,.7)",
+              fontSize:13, color:"#e4eeff", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums",
+              animation: sv === 0 ? "hitShake .45s ease" : "none", zIndex:2 } },
+              h("img", { src:"assets/icon_def.png", alt:"", draggable:false, style:{ width:15, height:15, objectFit:"contain" } }),
+              sv !== null ? sv : tv.def)),
+          h("div", { style:{ width:40, height:7, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-5, filter:"blur(2px)" } }),
+          h("div", { className:"w-full mt-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:8 })),
+          h("span", { className:"text-[10px] font-bold mt-1", style:{ color: hit === "player" ? "#ff9a9a" : hit === "heal" ? "#7cffb0" : "#cfe9d8", fontVariantNumeric:"tabular-nums", transition:"color .3s" } }, pHP, "/", pMax)),
+        // 敵
+        h("div", { className:"absolute flex items-end", style:{ right:8, bottom:8, gap:4, zIndex:1 } },
+          enemies.map(en => {
+            const k = KINDS[en.kind];
+            const sz = en.boss ? 112 : enemies.length >= 3 ? Math.min(k.size, 58) : k.size;
+            const a = anims[en.id];
+            const isT = targetId === en.id && en.alive;
+            const iv = intentOf(en, enemies);
+            const pm = PATTERNS[iv.act];
+            const charging = en.alive && iv.act === "bigatk";
+            const twice = (en.enr || 0) >= 3;
+            const intentTxt = (iv.act === "charge" ? pm.icon + "あと" + chargeLeft(en)
+              : iv.act === "jam" ? pm.icon + iv.jamN
+              : iv.act === "healally" ? pm.icon + iv.heal
+              : iv.act === "double" ? "⚔" + iv.hit + "×" + iv.hits
+              : pm.icon + iv.dmg) + (twice ? "⚡×2" : "");
+            const isDmgIntent = iv.act === "attack" || iv.act === "double" || iv.act === "bigatk" || iv.act === "drain" || iv.act === "jamatk";
+            return h("button", { key:en.id,
+              onClick: () => { if (en.alive && !locked && status === "battle") { setTargetId(en.id); targetRef.current = en.id; SFX.tap(); } },
+              className:"relative flex flex-col items-center", style:{ width:Math.max(sz + 4, 58), cursor: en.alive ? "pointer" : "default" } },
+              h("span", { className:"text-[10px] font-bold", style:{ height:18, lineHeight:"16px", padding:"0 7px", borderRadius:9,
+                background: isDmgIntent ? (iv.act === "bigatk" ? "rgba(150,26,40,.9)" : "rgba(120,32,32,.8)") : "rgba(0,0,0,.55)",
+                border: isDmgIntent ? "1px solid rgba(255,130,120,.65)" : "1px solid rgba(255,255,255,.22)",
+                color: isDmgIntent ? "#ffd9d4" : pm.color,
+                fontSize: iv.act === "bigatk" ? 11 : 10,
+                opacity: en.alive ? 1 : 0, animation: charging ? "intentBlink .9s ease-in-out infinite" : "none", textShadow:"0 1px 2px #000" } },
+                en.alive ? intentTxt : ""),
+              en.alive && enrLeft(en, turn) === 0 && h("span", { className:"absolute pointer-events-none", style:{ top:16, right:0, fontSize:"1.2rem", zIndex:3, animation:"angerPulse .6s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)" } }, "💪"),
+              isT && h("span", { className:"absolute pointer-events-none", style:{ top:14, left:"50%", animation:"targetBob 1s ease-in-out infinite", color:"#e8c05a", fontSize:12, textShadow:"0 1px 2px #000", zIndex:2 } }, "▼"),
+              pops[en.id] && h("span", { key:pops[en.id].seq, className:"dmg-pop", style:{ color:pops[en.id].color } }, pops[en.id].text),
+              h(SpriteBox, { kind:en.kind, size:sz, idle:k.idle, anim:a, charge:charging, dead:!en.alive }),
+              h("span", { style:{ width:sz * 0.6, height:6, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-4, filter:"blur(2px)", opacity: en.alive ? 1 : 0, transition:"opacity .5s" } }),
+              h("span", { className:"w-full mt-1", style:{ opacity: en.alive ? 1 : 0, transition:"opacity .5s", maxWidth:74 } },
+                h(Bar, { value:en.hp, max:en.max, from:"#7a1d1d", to:"#ef4444", height:6 }),
+                h("span", { className:"flex items-center justify-center text-[9px] font-bold", style:{ gap:4, marginTop:1 } },
+                  h("span", { style:{ color:"#f0b8b0", fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000" } }, en.hp, "/", en.max),
+                  (en.shd || 0) > 0 && h("span", { className:"flex items-center", style:{ gap:1, color:"#9db8e8", textShadow:"0 1px 2px #000" } },
+                    h("img", { src:"assets/icon_def.png", alt:"", draggable:false, style:{ width:10, height:10, objectFit:"contain" } }), en.shd))),
+              h("span", { className:"text-[9px] font-bold", style:{ marginTop:2, padding:"0 7px", borderRadius:6, background:"rgba(10,8,16,.72)", border:"1px solid rgba(255,255,255,.12)", color: en.boss ? "#ff5c7a" : en.elite ? "#d05cff" : "#d8cbe8", opacity: en.alive ? 0.95 : 0.35, textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } },
+                ((en.enr || 0) > 0 ? "🔥" + en.enr + " " : "") + (en.elite ? "💀" : "") + en.name));
+          })),
+        // 演出ポップ
+        fx.length > 0 && h("div", { className:"absolute inset-0 flex flex-col items-center justify-center pointer-events-none", style:{ gap:6, zIndex:3 } },
+          fx.filter(Boolean).map((f,i) => h("div", { key:i, style:{ fontSize:"1.35rem", fontWeight:900, color:f.color, textShadow:"0 2px 0 #000", animation:"fxPop .7s ease forwards" } }, f.text)))),
+      // ターン情報
+      h("div", { className:"flex items-center justify-between rounded-lg px-3 py-1 mb-1 text-xs", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450" } },
+        h("span", { className:"font-bold", style:{ color:"#e8c06a" } }, "ターン ", turn),
+        h("span", { className:"flex items-center gap-1" }, "残り",
+          Array.from({ length:3 }).map((_,i) => h("span", { key:i, className:"inline-block rounded-full", style:{ width:9, height:9, background: i < remaining ? "#d8a848" : "rgba(255,255,255,.18)" } }))),
+        h("span", { className:"flex gap-1 items-center" },
+          tv.pierce && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#f06aae", border:"1px solid #f06aae", padding:"1px 4px" } }, "貫通"),
+          tv.atkBoost && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#e05a50", border:"1px solid #e05a50", padding:"1px 4px" } }, "攻2倍"),
+          tv.defBoost && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#5a8fd0", border:"1px solid #5a8fd0", padding:"1px 4px" } }, "防2倍"),
+          tv.stun && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#c9a2ff", border:"1px solid #c9a2ff", padding:"1px 4px" } }, "時止め"),
+          h("span", { className:"flex items-center", style:{ color:"#ff8a80", ...numCell, gap:2, justifyContent:"flex-end" } },
+            h("img", { src:"assets/icon_atk.png", alt:"攻", draggable:false, style:{ width:13, height:13, objectFit:"contain" } }), dispTv.atk),
+          h("span", { className:"flex items-center", style:{ color:"#9db8e8", ...numCell, gap:2, justifyContent:"flex-end" } },
+            h("img", { src:"assets/icon_def.png", alt:"防", draggable:false, style:{ width:13, height:13, objectFit:"contain" } }), dispTv.def),
+          h("span", { className:"flex items-center", style:{ color:"#8ce8b0", ...numCell, gap:2, justifyContent:"flex-end" } },
+            h("img", { src:"assets/icon_heal.png", alt:"回", draggable:false, style:{ width:13, height:13, objectFit:"contain" } }), dispTv.heal))),
+      itemBarEl,
+      h("div", { className:"flex items-center justify-end mb-1", style:{ fontSize:11, gap:4 } },
+        h("span", { style:{ opacity:0.75 } }, "次の被ダメ予測"),
+        h("b", { style:{ color: incomingPreview > 0 ? "#ff8a80" : "#7cffb0", fontSize:15, fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000" } }, incomingPreview),
+        tv.def > 0 && h("span", { className:"flex items-center", style:{ gap:2, fontSize:10, color:"#9db8e8" } },
+          "（", h("img", { src:"assets/icon_def.png", alt:"", draggable:false, style:{ width:11, height:11, objectFit:"contain" } }), tv.def, " で軽減後）")),
+      // アクション
+      h("div", { className:"grid grid-cols-3 gap-2 mb-1" }, ORDER.map(key => {
+        const a = ACTIONS[key];
+        const isUsed = used.has(key);
+        const isSel = action === key && !isUsed;
+        const crossBonus = !isSel && selEff ? (key === "atk" ? selEff.splitAtk : key === "def" ? selEff.splitDef : selEff.healBonus) : 0;
+        const mkBreakdown = (total, base, bonus, tc) => h("span", { style:{ display:"flex", alignItems:"baseline", gap:2, justifyContent:"center" } },
+          h("span", { style:{ fontSize:"1.15rem", color:tc, fontWeight:900, textShadow:`0 0 8px ${tc}` } }, total),
+          h("span", { style:{ fontSize:"0.58rem", opacity:0.6 } }, `(${base}+${bonus})`));
+        let valEl;
+        if (isSel && selEff) {
+          let v = selEff.main;
+          if (key === "atk") v += selEff.splitAtk;
+          if (key === "def") v += selEff.splitDef;
+          if (key === "heal") v += selEff.healBonus;
+          const base = dispTv[key];
+          valEl = base > 0 ? mkBreakdown(base + v, base, v, info && info.mult > 1 ? "#ffe88a" : "#fff") : `+${v}`;
+        } else if (crossBonus > 0) {
+          const base = dispTv[key];
+          valEl = base > 0 ? mkBreakdown(base + crossBonus, base, crossBonus, "#ffcf5d") : `+${crossBonus}`;
+        } else valEl = String(dispTv[key]);
+        const lit = fx.length > 0 && fx[fx.length-1].act === key;
+        return h("button", { key, onClick: () => { if (!isUsed && !locked) { setAction(key); SFX.tap(); } }, disabled:isUsed,
+          className:"relative rounded-xl flex flex-col items-center justify-center",
+          style:{ height:72,
+            background: isUsed ? (lit ? a.bg : "rgba(14,11,20,.85)") : isSel ? a.bg : "rgba(30,24,42,.92)",
+            border: `2px solid ${isUsed ? (lit ? a.color : "#2c2740") : isSel ? a.color : "#3c3450"}`,
+            boxShadow: lit ? `0 0 0 3px ${a.color}` : "none",
+            animation: lit ? "actPulse .55s ease" : "none",
+            opacity: isUsed ? (lit ? 1 : 0.4) : 1,
+            transition:"background .25s ease, border-color .25s ease, box-shadow .25s ease, opacity .25s ease" } },
+          h("span", { style:{ position:"absolute", top:0, left:"14%", right:"14%", height:3, borderRadius:"0 0 4px 4px", background:a.color, opacity: isUsed && !lit ? 0.25 : 0.9, pointerEvents:"none" } }),
+          h("img", { src:a.img, alt:a.label, draggable:false, style:{ height:26, width:26, objectFit:"contain", opacity: isUsed && !lit ? 0.35 : 1, filter:"drop-shadow(0 2px 1px rgba(0,0,0,.45))" } }),
+          h("span", { style:{ fontSize:11, height:16, lineHeight:"16px", color: isUsed ? (lit ? "#e7e0ef" : "#777") : "#e7e0ef" } }, a.label,
+            h("span", { style:{ fontSize:8, opacity:0.5, marginLeft:2 } }, "×", a.per)),
+          h("span", { id:"actval-" + key, key:"v" + key + "_" + tv[key], className: tv[key] > 0 ? "val-pulse" : "",
+            style:{ fontSize:"1.15rem", height:24, lineHeight:"24px", fontWeight:700, fontVariantNumeric:"tabular-nums", display:"flex", alignItems:"center", justifyContent:"center",
+            color: lit ? "#ffffff" : isSel && selEff && tv[key] === 0 ? (info && info.mult > 1 ? "#ffe88a" : "#fff") : crossBonus > 0 && tv[key] === 0 ? "#ffcf5d" : isUsed ? a.color : tv[key] > 0 ? "#e0d8f0" : "#9b93a6",
+            textShadow: isSel && selEff && tv[key] === 0 && info && info.mult > 1 ? "0 0 8px #ffd54a" : "none" } }, valEl));
+      })),
+      // 盤面
+      h("div", { className:"relative rounded-2xl", style:{ padding:6, background:"rgba(19,14,28,.8)", border:"2px solid #3c3450", marginBottom:6 } },
+        h("div", { className:"grid grid-cols-6 gap-1.5", style:{ touchAction:"none" }, onContextMenu: e => e.preventDefault() },
+          board.map((cell,i) => {
+            const d = DROPS[cell.type];
+            const isPrev = preview && preview.over && preview.ids.has(cell.id);
+            const isClr = clearing.has(cell.id);
+            const it = cell.special ? ITEMS[cell.special] : null;
+            return h("button", { key:cell.id, "data-idx":i, onPointerDown: e => onDown(e,i),
+              className:"relative rounded-xl",
+              style:{ aspectRatio:"1 / 1",
+                background:`linear-gradient(180deg, ${d.c1} 0%, ${d.c2} 100%)`,
+                border:`2.5px solid ${d.c3}`,
+                animation:"dropIn .26s ease",
+                boxShadow: isClr ? "none"
+                  : isPrev ? `0 0 0 3px ${actColor}`
+                  : it ? `inset 0 0 0 2px ${it.ring}, inset 0 -4px 0 rgba(0,0,0,.18)`
+                  : "inset 0 -4px 0 rgba(0,0,0,.18)",
+                opacity: isClr ? 0 : 1,
+                transform: isClr ? "scale(1.25)" : isPrev ? "scale(1.08)" : "scale(1)",
+                transition:"transform .12s ease, opacity .2s ease, box-shadow .12s ease",
+                touchAction:"none" } },
+              cell.type === JUNK ? h("img", { src:"assets/mk_skull.png", alt:"", draggable:false, style:{ position:"absolute", left:"22%", top:"22%", width:"56%", height:"56%", objectFit:"contain", pointerEvents:"none", opacity:0.92, filter:"drop-shadow(0 1px 1px rgba(0,0,0,.5))" } })
+                 : it ? [h("img", { key:"m", src:it.img, alt:it.name, draggable:false, style:{ position:"absolute", left:"19%", top:"19%", width:"62%", height:"62%", objectFit:"contain", pointerEvents:"none", filter:"drop-shadow(0 1px 2px rgba(0,0,0,.55))", animation:"markPulse 1.6s ease-in-out infinite" } }),
+                   cell.up && h("span", { key:"u", style:{ position:"absolute", top:"-4%", right:"2%", fontSize:"0.85rem", fontWeight:900, color:"#ffd54a", textShadow:"0 1px 2px #000, 0 0 2px #000", pointerEvents:"none" } }, "＋")]
+                 : h("span", { style:{ width:"30%", height:"22%", borderRadius:"50%", background:"rgba(255,255,255,.30)", position:"absolute", top:"11%", left:"13%", pointerEvents:"none" } }));
+          }))),
+      logBox,
+      overlays));
+}
+
+  var root = RD.createRoot(document.getElementById('root'));
+  root.render(h(DropBattle));
+})();
+</script>
+</body>
+</html>

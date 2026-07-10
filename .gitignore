@@ -1,0 +1,5 @@
+assets_raw/
+v*.png
+*_check.png
+gen_new_enemies.log
+__pycache__/

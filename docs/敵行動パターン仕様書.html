@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ドロップバトル 敵行動パターン仕様書</title>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#1e192b;color:#ece7f2;font-family:'M PLUS Rounded 1c','Hiragino Kaku Gothic ProN',sans-serif;line-height:1.7}
+.wrap{max-width:860px;margin:0 auto;padding:28px 18px 80px}
+h1{font-size:1.6rem;color:#f2e6c8;text-shadow:0 2px 0 rgba(0,0,0,.5);border-bottom:3px solid #d8a848;padding-bottom:8px}
+h2{font-size:1.15rem;color:#d8a848;margin:38px 0 12px;border-left:5px solid #d8a848;padding-left:10px}
+p.meta{opacity:.6;font-size:.78rem;margin-top:-6px}
+table{width:100%;border-collapse:collapse;font-size:.82rem;background:#262130;border-radius:10px;overflow:hidden}
+th{background:#332b44;color:#e0d5b8;padding:8px 10px;text-align:left;font-size:.78rem}
+td{padding:8px 10px;border-top:1px solid #3a3348;vertical-align:middle}
+.icon{font-size:1.05rem}
+.card{display:flex;gap:16px;background:#262130;border:1px solid #4d4560;border-radius:14px;padding:14px 16px;margin-bottom:14px;align-items:center}
+.card img{width:96px;height:96px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 4px 3px rgba(0,0,0,.4))}
+.card .nm{font-weight:900;font-size:1.02rem;color:#f2e6c8}
+.card .role{font-size:.72rem;color:#b8aed0;margin-left:8px}
+.card .st{font-size:.76rem;color:#c9c2d8;margin:2px 0}
+.cyc{display:inline-flex;gap:4px;align-items:center;flex-wrap:wrap;margin:4px 0}
+.cyc span{background:#332b44;border:1px solid #4d4560;border-radius:8px;padding:2px 8px;font-size:.74rem;font-weight:800}
+.cyc .arw{background:none;border:none;opacity:.5;padding:0}
+.tip{font-size:.74rem;color:#8ce8b0;margin-top:2px}
+.warn{color:#f0a8a0}
+code{background:#332b44;border-radius:6px;padding:1px 7px;font-size:.78rem;color:#f0d9a0}
+.badge{display:inline-block;border-radius:8px;padding:1px 8px;font-size:.72rem;font-weight:800;margin-right:4px}
+ul{padding-left:20px}
+li{margin:3px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>👑 ドロップバトル — 敵行動パターン仕様書</h1>
+<p class="meta">v2.0 ／ 2026-07-10 ／ dropbattle-rogue（ローグライク版）</p>
+
+<h2>1. 行動システム概要</h2>
+<ul>
+<li>敵は種族ごとに固定の<strong>行動サイクル</strong>（配列）を持ち、ターン終了ごとに1つ進む。</li>
+<li>プレイヤーのターン中、各敵の頭上に<strong>行動予告（インテント）</strong>を常時表示する。スレイ・ザ・スパイア方式。</li>
+<li>被ダメ予測（盤面右上）は「全生存敵の今ターン与ダメ合計 − 現在の防御」で自動計算。</li>
+<li>プレイヤーの攻撃は<strong>ターゲット単体のみ</strong>。<code>貫</code>（貫通ドロップ）を消したターンだけ、撃破後の余剰ダメージが次の敵へ貫通する。</li>
+<li><strong>行動サイクルは種族ごとに2〜3バリアント</strong>あり、出現時にランダムで1つ決まる（§3のサイクル図は代表パターン）。</li>
+<li><strong>攻撃力は毎行動±15%のロール</strong>：各ターン終了時に次の行動のダメージが振り直され、予告には確定値が表示される。</li>
+<li><strong>激昂（エンレイジ）</strong>：敵ごとに2〜4ターン周期（出現時に決定）でターン終了時に激昂し、<strong>攻撃力+15%が累積</strong>。3スタックで<strong>2回行動</strong>（予告に⚡×2表示・名前に🔥n）。長期戦・回復篭城は不利になる。</li>
+<li><strong>呪撃（jamatk）</strong>：攻撃とお邪魔変換を同時に行う行動。シェイド/ピクシー/ドクガエル/ヘドロ/フレイムメイジ/マンドレイク、およびキングスライム/アルラウネ/リッチ/死神/魔王のバリアントに搭載。</li>
+<li><strong>基礎ステータス下限</strong>：雑魚はHP120以上・攻撃30以上（連撃は1発=攻撃力の60%×2）。</li>
+<li><strong>敵シールド</strong>：装甲系の敵（スネイル/タートル/ゴーレム/ガーゴイル/ナイト等と多くのボス）はシールドを持つ。プレイヤーの攻撃は<strong>シールドから先に削れる</strong>。ターン終了時に<strong>確率で張り直す</strong>（量は最大値の50〜100%でランダム・張らないターンもある）。最大値は雑魚12〜30、ボス30〜70。</li>
+<li>攻撃系の予告（⚔/💥）は<strong>赤背景チップ</strong>で強調。連撃は「⚔一発の威力×回数」表記。</li>
+<li>防御はシールドプール制：敵の全ヒットで共通消費され、<strong>砕けた瞬間に「防御崩壊！」表示</strong>＋残量🛡がリアルタイムで減る。</li>
+<li>勝利時は「🏆敵を撃破！」→「💰コイン獲得」→ 報酬選択画面 の順に演出。</li>
+</ul>
+
+<h2>2. 行動タイプ一覧</h2>
+<table>
+<tr><th>予告</th><th>タイプ</th><th>効果</th></tr>
+<tr><td class="icon">⚔<em>N</em></td><td>こうげき</td><td>毎回 N ダメージの単発攻撃。防御（シールド）で軽減可。</td></tr>
+<tr><td class="icon">⚔<em>N</em>×2</td><td>れんぞく攻撃</td><td>Nダメージ×2回（予告は「1発の威力×回数」表記）。シールドは全ヒット共通で消費。</td></tr>
+<tr><td class="icon">⏳あと<em>n</em></td><td>ためる</td><td>そのターンは何もしない。<em>n</em> ターン後に大技が来る予告。</td></tr>
+<tr><td class="icon">💥<em>N</em></td><td>おおわざ</td><td>倍率付きの大ダメージ。予告中の敵は脈動して警告。</td></tr>
+<tr><td class="icon">🌀<em>n</em></td><td>おじゃま変換</td><td>盤面のドロップ <em>n</em> 個を<strong>お邪魔ドロップ✖</strong>（灰色）に変える。ダメージなし。</td></tr>
+<tr><td class="icon">💚<em>N</em></td><td>なかま回復</td><td>最も消耗した味方を N 回復。<strong>味方がいない場合は「こうげき」に切り替わる</strong>。</td></tr>
+<tr><td class="icon">🩸<em>N</em></td><td>吸血</td><td>N ダメージ＋<strong>通ったダメージぶん自己回復</strong>。ガードで完封すれば回復もなし。</td></tr>
+</table>
+<p style="font-size:.8rem">※ お邪魔ドロップ（💀骸骨マークの灰色ドロップ）：どの色ともつながらない。消すことはできるが<strong>効果ゼロでアクションを1回消費</strong>する。新規ドロップからは湧かず、敵の変換でのみ発生。盤面の特殊ドロップ表記は全て絵アイコン（文字マーク廃止）。</p>
+
+<h2>3. 敵カタログ</h2>
+
+<div class="card"><img src="../assets/slime.png" alt="スライム">
+<div><span class="nm">スライム</span><span class="role">基本職・毎ターン攻撃</span>
+<div class="st">HP 95 ／ ATK 24 ／ 出現: バトル・群れ</div>
+<div class="cyc"><span>⚔ こうげき</span><span class="arw">↻</span></div>
+<div class="tip">最初に出会う敵。テンポよく殴ってくるだけなので防御の練習台。</div>
+</div></div>
+
+<div class="card"><img src="../assets/bat.png" alt="コウモリ">
+<div><span class="nm">コウモリ</span><span class="role">手数型・2連撃</span>
+<div class="st">HP 75 ／ ATK 17×2 ／ 出現: バトル・群れ</div>
+<div class="cyc"><span>⚔⚔ れんぞく</span><span class="arw">↻</span></div>
+<div class="tip">合計34と地味に痛い。HPが低いので先に落とすと楽。</div>
+</div></div>
+
+<div class="card"><img src="../assets/imp.png" alt="インプ">
+<div><span class="nm">インプ</span><span class="role">波状攻撃・3ターン周期</span>
+<div class="st">HP 115 ／ ATK 30（大技 ×1.9 = 57）／ 出現: バトル・精鋭</div>
+<div class="cyc"><span>⚔</span><span class="arw">→</span><span>⚔</span><span class="arw">→</span><span>💥 おおわざ</span><span class="arw">↻</span></div>
+<div class="tip">3ターン目の💥に合わせて防御を厚くするのが基本。</div>
+</div></div>
+
+<div class="card"><img src="../assets/golem.png" alt="ゴーレム">
+<div><span class="nm">ゴーレム</span><span class="role">チャージ型・2ターンため</span>
+<div class="st">HP 200 ／ ATK 26（大技 ×3.2 = 83）／ 出現: バトル(中盤以降)・精鋭</div>
+<div class="cyc"><span>⏳ ためる</span><span class="arw">→</span><span>⏳ ためる</span><span class="arw">→</span><span>💥 おおわざ</span><span class="arw">↻</span></div>
+<div class="tip">ため2ターンは完全無防備。攻め切るか、💥前に防御83を用意するか。<span class="warn">精鋭個体（×1.45）の大技は120超</span>。</div>
+</div></div>
+
+<div class="card"><img src="../assets/shade.png" alt="シェイド">
+<div><span class="nm">シェイド</span><span class="role">妨害型・お邪魔変換</span>
+<div class="st">HP 125 ／ ATK 30 ／ 変換数 3 ／ 出現: バトル・群れ</div>
+<div class="cyc"><span>🌀 おじゃま</span><span class="arw">→</span><span>⚔ こうげき</span><span class="arw">↻</span></div>
+<div class="tip">放置すると盤面が✖だらけに。長期戦になるほど不利なので優先撃破。</div>
+</div></div>
+
+<div class="card"><img src="../assets/spore.png" alt="スポア">
+<div><span class="nm">スポア</span><span class="role">支援型・ヒーラー</span>
+<div class="st">HP 85 ／ 回復 29（ATK×1.6）／ 単独時 ATK 18 ／ 出現: 群れ・複数戦</div>
+<div class="cyc"><span>💚 なかま回復</span><span class="arw">↻</span></div>
+<div class="tip">味方がいる限り回復し続ける。<strong>最優先ターゲット</strong>。1体だけ残すと攻撃してくる。</div>
+</div></div>
+
+<div class="card"><img src="../assets/wolf.png" alt="シルバウルフ">
+<div><span class="nm">シルバウルフ</span><span class="role">高速アタッカー</span>
+<div class="st">HP 90 ／ ATK 19 ／ 出現: 第1〜2章</div>
+<div class="cyc"><span>⚔/⚔⚔ 攻撃と連撃の混合サイクル</span></div>
+<div class="tip">手数が多く防御の消耗が激しい。HPは低いので速攻で。</div>
+</div></div>
+
+<div class="card"><img src="../assets/mandra.png" alt="マンドレイク">
+<div><span class="nm">マンドレイク</span><span class="role">妨害＆支援</span>
+<div class="st">HP 100 ／ ATK 22 ／ 変換数 2 ／ 出現: 第1〜2章</div>
+<div class="cyc"><span>🌀 おじゃま</span><span class="arw">/</span><span>💚 なかま回復</span><span class="arw">/</span><span>⚔</span></div>
+<div class="tip">叫び（お邪魔変換）と仲間回復をこなす厄介な根っこ。優先処理。</div>
+</div></div>
+
+<div class="card"><img src="../assets/scorp.png" alt="サソリオン">
+<div><span class="nm">サソリオン</span><span class="role">チャージ型（1ため）</span>
+<div class="st">HP 130 ／ ATK 28（大技 ×2.3）／ 出現: 第2〜3章</div>
+<div class="cyc"><span>⚔/⚔⚔</span><span class="arw">→</span><span>⏳ ためる</span><span class="arw">→</span><span>💥 おおわざ</span><span class="arw">↻</span></div>
+<div class="tip">ゴーレムより短い1ためで尻尾が飛んでくる。テンポよく防御を。</div>
+</div></div>
+
+<div class="card"><img src="../assets/gargo.png" alt="ガーゴイル">
+<div><span class="nm">ガーゴイル</span><span class="role">重チャージ型</span>
+<div class="st">HP 170 ／ ATK 26（大技 ×2.2）／ 出現: 第3章</div>
+<div class="cyc"><span>⏳ ためる</span><span class="arw">→</span><span>💥 おおわざ</span><span class="arw">↻</span>（バリアント多数）</div>
+<div class="tip">石像ゆえ耐久が高い。ため中に集中攻撃で砕きたい。</div>
+</div></div>
+
+<h2>3.2 追加雑魚 20種（v15）</h2>
+<table>
+<tr><th>章</th><th>名前</th><th>HP/ATK</th><th>行動</th></tr>
+<tr><td rowspan="6">1章</td><td>🐗 タックボア</td><td>120/24</td><td>ため→💥×2.2</td></tr>
+<tr><td>🐝 キラービー</td><td>65/15</td><td>連撃特化</td></tr>
+<tr><td>🧚 イタズラピクシー</td><td>70/18</td><td>お邪魔×2連発</td></tr>
+<tr><td>🐌 アイアンスネイル</td><td>180/16</td><td>低火力・高耐久</td></tr>
+<tr><td>🦊 妖狐コンコ</td><td>95/22</td><td>🩸吸血</td></tr>
+<tr><td>🐦 ヨルガラス</td><td>75/20</td><td>攻撃/連撃</td></tr>
+<tr><td rowspan="7">2章</td><td>🐸 ドクガエル</td><td>115/24</td><td>お邪魔＋攻撃</td></tr>
+<tr><td>🐍 ヌマウナギ</td><td>100/20</td><td>連撃</td></tr>
+<tr><td>🟤 マッドマン</td><td>150/26</td><td>ため→💥×2.5</td></tr>
+<tr><td>🔵 ウィルウィスプ</td><td>80/20</td><td>🩸吸血＋お邪魔</td></tr>
+<tr><td>🦀 シザークラブ</td><td>140/26</td><td>3ターン毎💥</td></tr>
+<tr><td>🟣 ヘドロスライム</td><td>110/22</td><td>お邪魔まき</td></tr>
+<tr><td>🐢 ロックタートル</td><td>170/18</td><td>ため型・高耐久</td></tr>
+<tr><td rowspan="7">3章</td><td>🦎 サラマンドラ</td><td>120/30</td><td>1ターンおき💥</td></tr>
+<tr><td>💣 ボムデビル</td><td>100/26</td><td>ため→💥×3.0</td></tr>
+<tr><td>⚔ ダークナイト</td><td>160/28</td><td>攻撃/連撃→💥</td></tr>
+<tr><td>🐕 ヘルハウンド</td><td>110/20</td><td>連撃→💥</td></tr>
+<tr><td>🔥 フレイムメイジ</td><td>105/28</td><td>お邪魔→ため→💥</td></tr>
+<tr><td>💀 スケルトン兵</td><td>125/24</td><td>攻撃・連撃</td></tr>
+<tr><td>👻 亡霊騎士レイス</td><td>135/28</td><td>🩸吸血→ため→💥</td></tr>
+</table>
+<p style="font-size:.78rem">雑魚は計30種・各章およそ10種の専用プール（スポアのみ全章の群れに出現）。基礎値に難度スケーリングと±15%個体差が乗る。</p>
+
+<h2>3.3 追加ボス 4種（v15・計10種）</h2>
+<table>
+<tr><th>章</th><th>名前</th><th>HP/ATK</th><th>サイクル</th></tr>
+<tr><td>1章</td><td>🌹 森妃アルラウネ</td><td>540/32</td><td>🌀→⏳→💥×2.6</td></tr>
+<tr><td>2章</td><td>👑🐸 大王ガマ</td><td>760/42</td><td>⚔⚔→🌀→⏳→💥×2.3</td></tr>
+<tr><td>3章</td><td>🔥 炎魔イフリート</td><td>1080/56</td><td>⚔→⚔⚔→⏳→💥×2.3</td></tr>
+<tr><td>3章</td><td>☠ 死神モルス</td><td>1150/60</td><td>🩸→⏳→💥×2.4→🌀</td></tr>
+</table>
+<p style="font-size:.78rem">ボスは計10種（1章:3・2章:3・3章:4）。章をまたぐ重複なし・出現時ランダム。</p>
+
+<div class="card"><img src="../assets/kslime.png" alt="キングスライム">
+<div><span class="nm">キングスライム</span><span class="role">第1章ボス</span>
+<div class="st">HP 520 ／ ATK 34（大技 ×2.0 = 68）／ 変換数 3</div>
+<div class="cyc"><span>⚔ こうげき</span><span class="arw">→</span><span>🌀 おじゃま</span><span class="arw">→</span><span>💥 おおわざ</span><span class="arw">↻</span></div>
+<div class="tip">3ターン周期の素直な王様。💥の前に防御を用意する基本を学ぶ相手。</div>
+</div></div>
+
+<div class="card"><img src="../assets/vamp.png" alt="ヴァンピール">
+<div><span class="nm">ヴァンピール</span><span class="role">第2章ボス・吸血</span>
+<div class="st">HP 780 ／ ATK 44（大技 ×2.4 = 106）</div>
+<div class="cyc"><span>🩸 吸血</span><span class="arw">→</span><span>⚔ こうげき</span><span class="arw">→</span><span>⏳ ためる</span><span class="arw">→</span><span>💥 おおわざ</span><span class="arw">↻</span></div>
+<div class="tip">🩸吸血は与えたダメージぶん自己回復する。ガードで吸血を0にすれば回復もさせない。</div>
+</div></div>
+
+<div class="card"><img src="../assets/demon.png" alt="魔王ヴァルガ">
+<div><span class="nm">魔王ヴァルガ</span><span class="role">最終章ボス・4ターンサイクル</span>
+<div class="st">HP 1200 ／ ATK 55（大技 ×2.6 = 143）／ 変換数 4 ／ 出現: 8層（固定）</div>
+<div class="cyc"><span>⚔ こうげき</span><span class="arw">→</span><span>🌀 おじゃま</span><span class="arw">→</span><span>⏳ ためる</span><span class="arw">→</span><span>💥 おおわざ</span><span class="arw">↻</span></div>
+<div class="tip">4ターン目の💥が最大の山場。ため（3ターン目）は攻撃チャンス。おじゃま4個で盤面も削ってくる。</div>
+</div></div>
+
+<div class="card"><img src="../assets/treant.png" alt="古樹トレント">
+<div><span class="nm">古樹トレント</span><span class="role">第1章ボス（もう1体）</span>
+<div class="st">HP 580 ／ ATK 30（大技 ×2.8 = 84）</div>
+<div class="cyc"><span>⏳ ためる</span><span class="arw">→</span><span>💥 おおわざ</span><span class="arw">→</span><span>⚔ こうげき</span><span class="arw">↻</span></div>
+<div class="tip">キングスライムより一撃が重い。3手サイクルなので防御のリズムを掴め。</div>
+</div></div>
+
+<div class="card"><img src="../assets/lich.png" alt="死霊王リッチ">
+<div><span class="nm">死霊王リッチ</span><span class="role">第2章ボス（もう1体）</span>
+<div class="st">HP 740 ／ ATK 40（大技 ×2.2 = 88）／ 変換数 4</div>
+<div class="cyc"><span>🌀 おじゃま</span><span class="arw">→</span><span>🩸 吸血</span><span class="arw">→</span><span>⏳ ためる</span><span class="arw">→</span><span>💥 おおわざ</span><span class="arw">↻</span></div>
+<div class="tip">盤面汚染と吸血の両刀。浄化の書が輝く相手。</div>
+</div></div>
+
+<div class="card"><img src="../assets/dragon.png" alt="黒竜ファヴニル">
+<div><span class="nm">黒竜ファヴニル</span><span class="role">最終章ボス（もう1体）</span>
+<div class="st">HP 1100 ／ ATK 58（大技 ×2.2 = 128）</div>
+<div class="cyc"><span>⚔ こうげき</span><span class="arw">→</span><span>⏳ ためる</span><span class="arw">→</span><span>💥 おおわざ</span><span class="arw">→</span><span>⚔⚔ れんぞく</span><span class="arw">↻</span></div>
+<div class="tip">大技後の連撃で息継ぎさせてくれない。回復の仕込みが鍵。</div>
+</div></div>
+
+<h2>3.5 章構成（3章制）</h2>
+<table>
+<tr><th>章</th><th>名前</th><th>ボス</th><th>雑魚プール（軽/重）</th></tr>
+<tr><td>第1章</td><td>翠緑の森</td><td>キングスライム / 古樹トレント / 森妃アルラウネ</td><td>スライム・コウモリ・ウルフ・ビー・カラス・ピクシー・妖狐・ボア・スネイル・マンドレイク 等</td></tr>
+<tr><td>第2章</td><td>毒霧の沼窟</td><td>ヴァンピール / 死霊王リッチ / 大王ガマ</td><td>シェイド・ガエル・ウナギ・ウィスプ・ヘドロ・タートル・マッドマン・クラブ・ゴーレム・サソリ 等</td></tr>
+<tr><td>第3章</td><td>灼熱の魔城</td><td>魔王ヴァルガ / 黒竜ファヴニル / 炎魔イフリート / 死神モルス</td><td>ハウンド・スケルトン・サラマンドラ・メイジ・レイス・ナイト・ボム・ガーゴイル・ゴーレム・サソリ 等</td></tr>
+</table>
+<p style="font-size:.8rem">各章8層の分岐マップ。<strong>章ボスは2種から出現時ランダム</strong>。章ボス撃破で<strong>章クリアボーナス（最大HP+50・全回復・💰+100）</strong>を得て次章へ。マップ・バトル背景も章ごとに変わる。</p>
+
+<h2>4. ステータス スケーリング</h2>
+<table>
+<tr><th>係数</th><th>式</th><th>備考</th></tr>
+<tr><td>難度D</td><td><code>D = 章×5 + 層</code></td><td>章 = 0〜2、層 = 0〜7</td></tr>
+<tr><td>HP</td><td><code>基礎HP × (1 + D×0.26) × 編成係数</code></td><td></td></tr>
+<tr><td>ATK</td><td><code>基礎ATK × (1 + D×0.13) × 編成係数 × 個体差(±15%)</code></td><td>大技倍率はこの後に乗算</td></tr>
+<tr><td>精鋭</td><td>HP ×2.2 ／ ATK ×1.45</td><td>ゴーレム or インプ。レア報酬（猛攻/鉄壁）確定枠あり</td></tr>
+<tr><td>群れ</td><td>HP ×0.62 ／ ATK ×0.72（3体）</td><td>45%でスポア混入</td></tr>
+<tr><td>ボス</td><td>スケーリングなし（固定値）</td><td></td></tr>
+</table>
+
+<h2>5. ノード別エンカウント</h2>
+<table>
+<tr><th>ノード</th><th>敵数</th><th>編成</th></tr>
+<tr><td>⚔ バトル（1〜2層）</td><td>1体</td><td>スライム / コウモリ</td></tr>
+<tr><td>⚔ バトル（3〜4層）</td><td>1〜2体</td><td>インプ/シェイド/ゴーレム 単体、または 軽量2体（×0.85）</td></tr>
+<tr><td>⚔ バトル（5層〜）</td><td>2体</td><td>軽量枠（スポア含む）＋重量枠（×0.9）</td></tr>
+<tr><td>👥 群れ</td><td>3体</td><td>スライム/コウモリ/シェイド ＋ スポア混入45%</td></tr>
+<tr><td>💀 精鋭</td><td>1体</td><td>強化ゴーレム / 強化インプ</td></tr>
+<tr><td>👑 ボス</td><td>1体</td><td>魔王ヴァルガ</td></tr>
+</table>
+
+<h2>6. 防御（シールド）仕様</h2>
+<ul>
+<li>そのターンの防御値はシールドプールとして敵の全ヒットに共通で消費される。</li>
+<li>ヒットごとに <code>通過ダメージ = max(0, ヒット値 − 残シールド)</code>。連続攻撃も1発ずつ順に消費。</li>
+<li>余ったシールドは持ち越されない。</li>
+</ul>
+
+<h2>7. アートスタイル規定</h2>
+<ul>
+<li>方向性: <strong>スレイ・ザ・スパイア × ポケモンの中間</strong>。太い暗色アウトライン＋フラットなセル塗り＋控えめなペイント質感。</li>
+<li>発光（グロー/ネオン/ブルーム）は原則禁止。強調は「色」と「形」で行い、影は落ち影のみ。</li>
+<li>生成: ComfyUI + Anima（768²・er_sde・CFG4.5）→ rembg(isnet-anime)＋四隅色キーイング → 256px透過PNG。プロンプトは <code>gen_chars.py</code> 参照。</li>
+<li>ドロップ宝石5種は <strong>seed固定（777001）で色違い生成</strong>し形状を統一（<code>gen_drops_bg.py</code>）。白抜きはフラッドフィル方式。</li>
+<li>背景: マップ=手描き風世界地図（bg_map.jpg）／バトル=ダンジョン大広間（bg_battle.jpg）。ノードは蛇行レイアウト＋点線トレイルのすごろく風。</li>
+<li>アニメーション: 待機=全体縦スケールの呼吸（疑似Live2D方式）／攻撃=突進／被弾=白フラッシュ+シェイク／死亡=縮小フェード。</li>
+</ul>
+<h2>8. コイン・消費アイテム・ショップ</h2>
+<table>
+<tr><th>要素</th><th>仕様</th></tr>
+<tr><td>💰 コイン</td><td>勝利時に入手。バトル <code>25+層×4</code> ／ 群れ <code>40+層×4</code> ／ 精鋭 <code>60+層×5</code>。ボスは対象外</td></tr>
+<tr><td>消費アイテム</td><td><strong>最大3個</strong>所持。初期装備はポーション1個。バトル中にタップで即使用（マップ上はポーションのみ可）</td></tr>
+<tr><td>🛒 ショップ（行商人）</td><td><strong>群れ勝利後</strong>（報酬選択のあと）と<strong>休憩所</strong>（40%回復とセット）で出現。ランダム3品</td></tr>
+</table>
+<table style="margin-top:10px">
+<tr><th>アイテム</th><th>価格</th><th>効果</th></tr>
+<tr><td>🧪 ポーション</td><td>45</td><td>HPを80回復（マップ上でも使用可）</td></tr>
+<tr><td>💪 剛力の薬</td><td>55</td><td>このターン、攻撃アクションの効果2倍（チップ「攻2倍」表示）</td></tr>
+<tr><td>🛡 守護の薬</td><td>55</td><td>このターン、防御アクションの効果2倍（チップ「防2倍」表示）</td></tr>
+<tr><td>🎨 変換の書</td><td>60</td><td>盤面の最少色ドロップを最多色に変換（特殊ドロップは対象外）</td></tr>
+<tr><td>🧹 浄化の書</td><td>50</td><td>お邪魔ドロップを全てランダムな通常色に戻す</td></tr>
+<tr><td>⏳ 時止めの砂</td><td>65</td><td>このターン敵は行動しない。<strong>行動パターンも進まない</strong>（純粋に1ターン遅延）</td></tr>
+<tr><td>💣 爆裂瓶</td><td>60</td><td>敵全体に即時80ダメージ。とどめで勝利も可</td></tr>
+<tr><td>🐍 弱体の毒</td><td>55</td><td>敵全体の攻撃力-25%（この戦闘中永続・予告値も更新）</td></tr>
+<tr><td>💎 星降りの粉</td><td>60</td><td>盤面に特殊ドロップを3個追加（袋から抽選）</td></tr>
+<tr><td>🪶 不死鳥の羽</td><td>80</td><td><strong>持っているだけで発動</strong>：倒れたときHP40%で自動復活（消費）</td></tr>
+</table>
+<h2>9. 焚き火（休憩所）</h2>
+<ul>
+<li>スレイ・ザ・スパイアの campfire 方式。到着時に<strong>どれか1つ</strong>を選ぶ:</li>
+<li>🔥 <strong>休む</strong> — HPを40%回復</li>
+<li>🔨 <strong>鍛える</strong> — <strong>💰50</strong>を払い、所持している特殊ドロップを<strong>1個だけ</strong>＋に強化（下表）。強化した個体のみ盤面で右上に<strong>＋</strong>表示。同じ種類を複数持っていれば繰り返し強化できる</li>
+<li>🗑 <strong>整理する</strong> — 所持している特殊ドロップを1つ選んで袋から恒久削除（抽選プールが濃くなる＝デッキ圧縮）。所持合計1個のときは選択不可</li>
+<li>選択後は 🛒行商人 が開く（買い物してから出発）</li>
+</ul>
+
+<h2>10. ドロップ強化（鍛える）一覧</h2>
+<table>
+<tr><th>特殊ドロップ</th><th>通常</th><th>強化後（＋）</th></tr>
+<tr><td>★ スター</td><td>6個以上で(★数+1)倍</td><td><strong>5個以上</strong>で発動</td></tr>
+<tr><td>＋ プラス</td><td>消した数+1</td><td>消した数<strong>+2</strong></td></tr>
+<tr><td>3 トリプル</td><td>ちょうど3個で3倍</td><td>ちょうど3個で<strong>4倍</strong></td></tr>
+<tr><td>貫 貫通</td><td>攻撃が貫通</td><td>貫通＋<strong>消した数+1</strong></td></tr>
+<tr><td>♥ ヒール</td><td>10回復</td><td><strong>25回復</strong></td></tr>
+<tr><td>盾 ガード</td><td>効果の半分を防御に</td><td><strong>同量</strong>を防御に</td></tr>
+<tr><td>剣 ソード</td><td>効果の半分を攻撃に</td><td><strong>同量</strong>を攻撃に</td></tr>
+<tr><td>攻 猛攻</td><td>攻撃で×2</td><td>攻撃で<strong>×2.5</strong></td></tr>
+<tr><td>💣 クロスボム</td><td>上下左右を巻き込んで消す</td><td><strong>周囲8マス</strong>を巻き込む</td></tr>
+<tr><td>❌ Xボム</td><td>斜め4方向を巻き込んで消す</td><td><strong>周囲8マス</strong>を巻き込む</td></tr>
+<tr><td>防 鉄壁</td><td>防御で×2</td><td>防御で<strong>×2.5</strong></td></tr>
+</table>
+<p style="font-size:.78rem">※ 爆弾の巻き込みはグループ内の爆弾のみ発動（連鎖爆発なし）。巻き込んだマスは消去数にカウントされ、<strong>お邪魔ドロップも消せる</strong>。巻き込み先の特殊効果も乗る。</p>
+<p style="font-size:.78rem">※ 袋（抽選）仕様: 特殊が消えるたび袋から1個抽選。<strong>袋が空になると「盤面に出ていない分」だけが補充される</strong>ため、袋の残り一覧（🎒ボタン）から次に落ちる特殊を推測できる。</p>
+<p style="font-size:.78rem">※ 強化は<strong>個体（1コピー）単位</strong>・コスト💰50・そのラン中は恒久。1回の焚き火で1個のみ。効果は＋付き個体がグループに含まれた場合に適用（例: 剣3個中1個が＋なら、その1個分だけ同量還元）。</p>
+
+<h2>10.5 レリック（パッシブ遺物・28種）</h2>
+<ul>
+<li><strong>入手</strong>: 💀精鋭撃破＝ランダム1個（コモン60%/レア40%）／🎉章クリア＝3択（ボス級1枠保証・スキップ可）／🛒ショップ＝1枠販売（コモン90・レア130・ボス級180、会員証で2割引）</li>
+<li>重複入手なし。ヘッダー下のレリックバーにアイコン表示、タップで効果確認</li>
+</ul>
+<table>
+<tr><th>級</th><th>レリック</th></tr>
+<tr><td>コモン(11)</td><td>🐖貯金箱(+10金) 🏷会員証(店2割引) ⚒鍛冶ハンマー(鍛え半額) 💗再生の護符(毎T+2HP) 🛌休息の毛布(焚火60%) 🍖弁当箱(勝利+8HP) 🧂清めの塩(お邪魔-1) 🌿携帯薬草(薬120) 🔨破城槌(対盾2倍) 🎲いかさまダイス(店6品) 🗺冒険者の地図(焚火+30金)</td></tr>
+<tr><td>レア(13)</td><td>⚖商人の天秤(金1.5倍) 🗡剛剣(攻1.1倍) 🛡重盾(防1.2倍) 💧聖水(回復1.5倍) 💍闘志の指輪(毎T攻+10) 🪬守護の指輪(毎T防+10) 🍎生命の果実(最大HP+40) ✨星のかけら(特殊+1) 📖星読みの書(★条件-1) 🎒大きなポーチ(道具4枠) 🌫霧のマント(初T被ダメ半減) 💀死神の刻印(雑魚HP-10%) 🧲磁石の指輪(報酬4択)</td></tr>
+<tr><td>ボス級(4)</td><td>🌟大星晶(特殊+2) 🔮プリズム(ターン開始時に盤面3色化) 👑王家の印章(章ボーナスHP+80) ⛓鉄の意志(余り防御を半分持ち越し)</td></tr>
+</table>
+
+<h2>11. サウンド・チュートリアル</h2>
+<ul>
+<li><strong>BGM</strong>: CC0（パブリックドメイン）実音源4曲を同梱（assets/bgm/）。タイトル&マップ&バトル = cynicmusic（pixelsphere.org）「Awake」「Crystal Cave」「Battle Theme A」／ボス戦 = Juhani Junkala「Epic Boss Battle」。商用利用可・クレジット不要（README に感謝表記あり）。🎵ボタンでON/OFF</li>
+<li><strong>SE</strong>: ノイズ＋ソフトトーンのレイヤー合成15種（バンドパスノイズ・ローパス・ソフトアタック）。ビープ音は不使用</li>
+<li><strong>演出</strong>: ダメージ数字ポップ（被弾/回復/BLOCK）／💥大技とボス撃破で画面シェイク＋ホワイトフラッシュ／画面遷移フェード／アクション値パルス</li>
+<li><strong>SE</strong>: 15種（タップ/消去/攻撃/被弾/回復/勝利/敗北/獲得/移動/コイン/鍛冶/防御崩壊/ため/お邪魔/モーダル開）。🔊ボタンでON/OFF</li>
+<li><strong>チュートリアル</strong>: 初回バトル開始時に3ステップ（アクション選択→ドロップ消し→敵の予告）。localStorage <code>db_tut</code> で既読管理・2回目以降は出ない</li>
+<li><strong>バランス</strong>: 魔王ヴァルガ HP 1200→1050、大技倍率 ×2.6→×2.4（=132）に調整</li>
+</ul>
+<p style="font-size:.78rem">※ ターン終了ボタンは廃止（3アクション消化で自動的に敵ターンへ）。効果が発生しないアイテム（満タン時のポーション等）は消費されない。</p>
+</div>
+</body>
+</html>
