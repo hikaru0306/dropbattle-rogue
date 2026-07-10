@@ -94,6 +94,8 @@ button:active{filter:brightness(1.12)}
 @keyframes angerPulse{0%,100%{transform:scale(1) rotate(-4deg)}50%{transform:scale(1.3) rotate(6deg)}}
 @keyframes boomFx{0%{transform:translate(-50%,-50%) scale(.25);opacity:.95}60%{opacity:.7}100%{transform:translate(-50%,-50%) scale(1.15);opacity:0}}
 .boom-fx{position:fixed;width:76px;height:76px;border-radius:50%;z-index:89;pointer-events:none;background:radial-gradient(circle, rgba(255,235,180,.95) 8%, rgba(255,150,60,.75) 34%, rgba(200,60,20,.35) 58%, transparent 72%);border:3px solid rgba(255,190,110,.8);animation:boomFx .45s ease-out forwards}
+.mark-img{position:absolute !important;left:19% !important;top:19% !important;width:62% !important;height:62% !important;object-fit:contain;pointer-events:none}
+.act-h img{width:22px !important;height:22px !important}
 .scene-h{height:176px}
 .act-h{height:62px}
 .scene-actor{transform-origin:50% 100%}
@@ -1768,7 +1770,7 @@ function DropBattle() {
       title: c ? `${c.name}：${c.desc}` : "空きスロット",
       className:"rounded-xl flex items-center justify-center",
       style:{ width:sz, height:sz, background: k ? "rgba(30,24,42,.92)" : "rgba(20,16,28,.7)",
-        border: `2px solid ${k ? "#8a6f3c" : "#2c2740"}`, fontSize: sz > 40 ? "1.25rem" : "1.05rem",
+        border: `2px solid ${k ? "#8a6f3c" : "#2c2740"}`, fontSize: sz > 40 ? 18 : 15, lineHeight:1,
         opacity: k ? 1 : 0.45, cursor: k ? "pointer" : "default" } },
       c ? c.icon : "");
   });
@@ -1783,10 +1785,10 @@ function DropBattle() {
       h("span", { style:{ color:"#ffcf5d" } }, progRow, "/", ROWS, "層")),
     h("div", { className:"flex items-center gap-2" },
       h("span", { className:"rounded-xl px-2 py-1.5 text-sm font-bold", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c", color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, "💰", coins),
-      h("button", { onClick: toggleBgm, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", fontSize:"0.9rem", opacity: bgmOnView ? 1 : 0.45 } }, "🎵"),
-      h("button", { onClick: toggleSfx, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", fontSize:"0.9rem", opacity: sfxOn ? 1 : 0.45 } }, sfxOn ? "🔊" : "🔇"),
+      h("button", { onClick: toggleBgm, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", fontSize:14, lineHeight:1, opacity: bgmOnView ? 1 : 0.45 } }, "🎵"),
+      h("button", { onClick: toggleSfx, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", fontSize:14, lineHeight:1, opacity: sfxOn ? 1 : 0.45 } }, sfxOn ? "🔊" : "🔇"),
       h("button", { onClick: () => { setBagOpen(true); SFX.open(); }, className:"relative rounded-xl px-3 py-1.5 flex items-center gap-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c" } },
-        h("span", { style:{ fontSize:"1.05rem" } }, "🎒"),
+        h("span", { style:{ fontSize:15, lineHeight:1 } }, "🎒"),
         h("span", { className:"font-bold text-sm", style:{ color:"#ffcf5d", fontVariantNumeric:"tabular-nums" } }, "残", bagLeft))));
 
   // ===== タイトル =====
@@ -2095,7 +2097,7 @@ function DropBattle() {
               border: (sv !== null ? sv : tv.def) > 0 ? "1px solid rgba(150,190,255,.7)" : "1px solid rgba(255,130,120,.7)",
               fontSize:13, color:"#e4eeff", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums",
               animation: sv === 0 ? "hitShake .45s ease" : "none", zIndex:2 } },
-              h("img", { src:"assets/icon_def.png", alt:"", draggable:false, style:{ width:15, height:15, objectFit:"contain" } }),
+              h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:15, height:15, style:{ width:15, height:15, maxWidth:15, maxHeight:15, flexShrink:0, objectFit:"contain" } }),
               sv !== null ? sv : tv.def)),
           h("div", { style:{ width:40, height:7, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-5, filter:"blur(2px)" } }),
           h("div", { className:"w-full mt-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:8 })),
@@ -2137,7 +2139,7 @@ function DropBattle() {
                 h("span", { className:"flex items-center justify-center text-[9px] font-bold", style:{ gap:4, marginTop:1 } },
                   h("span", { style:{ color:"#f0b8b0", fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000" } }, en.hp, "/", en.max),
                   (en.shd || 0) > 0 && h("span", { className:"flex items-center", style:{ gap:1, color:"#9db8e8", textShadow:"0 1px 2px #000" } },
-                    h("img", { src:"assets/icon_def.png", alt:"", draggable:false, style:{ width:10, height:10, objectFit:"contain" } }), en.shd))),
+                    h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:10, height:10, style:{ width:10, height:10, maxWidth:10, maxHeight:10, flexShrink:0, objectFit:"contain" } }), en.shd))),
               h("span", { className:"text-[9px] font-bold", style:{ marginTop:2, padding:"0 7px", borderRadius:6, background:"rgba(10,8,16,.72)", border:"1px solid rgba(255,255,255,.12)", color: en.boss ? "#ff5c7a" : en.elite ? "#d05cff" : "#d8cbe8", opacity: en.alive ? 0.95 : 0.35, textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } },
                 ((en.enr || 0) > 0 ? "🔥" + en.enr + " " : "") + (en.elite ? "💀" : "") + en.name));
           })),
@@ -2155,18 +2157,18 @@ function DropBattle() {
           tv.defBoost && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#5a8fd0", border:"1px solid #5a8fd0", padding:"1px 4px" } }, "防2倍"),
           tv.stun && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#c9a2ff", border:"1px solid #c9a2ff", padding:"1px 4px" } }, "時止め"),
           h("span", { className:"flex items-center", style:{ color:"#ff8a80", ...numCell, gap:2, justifyContent:"flex-end" } },
-            h("img", { src:"assets/icon_atk.png", alt:"攻", draggable:false, style:{ width:13, height:13, objectFit:"contain" } }), dispTv.atk),
+            h("img", { src:"assets/icon_atk.png", alt:"攻", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), dispTv.atk),
           h("span", { className:"flex items-center", style:{ color:"#9db8e8", ...numCell, gap:2, justifyContent:"flex-end" } },
-            h("img", { src:"assets/icon_def.png", alt:"防", draggable:false, style:{ width:13, height:13, objectFit:"contain" } }), dispTv.def),
+            h("img", { src:"assets/icon_def.png", alt:"防", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), dispTv.def),
           h("span", { className:"flex items-center", style:{ color:"#8ce8b0", ...numCell, gap:2, justifyContent:"flex-end" } },
-            h("img", { src:"assets/icon_heal.png", alt:"回", draggable:false, style:{ width:13, height:13, objectFit:"contain" } }), dispTv.heal))),
+            h("img", { src:"assets/icon_heal.png", alt:"回", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), dispTv.heal))),
       h("div", { className:"flex items-center justify-between mb-1" },
         h("div", { className:"flex items-center gap-1.5" }, itemSlots(38)),
         h("div", { className:"flex items-center", style:{ fontSize:11, gap:4 } },
           h("span", { style:{ opacity:0.75 } }, "被ダメ予測"),
           h("b", { style:{ color: incomingPreview > 0 ? "#ff8a80" : "#7cffb0", fontSize:15, fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000" } }, incomingPreview),
           tv.def > 0 && h("span", { className:"flex items-center", style:{ gap:2, fontSize:10, color:"#9db8e8" } },
-            "（", h("img", { src:"assets/icon_def.png", alt:"", draggable:false, style:{ width:11, height:11, objectFit:"contain" } }), tv.def, "）"))),
+            "（", h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:11, height:11, style:{ width:11, height:11, maxWidth:11, maxHeight:11, flexShrink:0, objectFit:"contain" } }), tv.def, "）"))),
       // アクション
       h("div", { className:"grid grid-cols-3 gap-2 mb-1" }, ORDER.map(key => {
         const a = ACTIONS[key];
@@ -2190,7 +2192,8 @@ function DropBattle() {
         } else valEl = String(dispTv[key]);
         const lit = fx.length > 0 && fx[fx.length-1].act === key;
         return h("button", { key, onClick: () => { if (!isUsed && !locked) { setAction(key); SFX.tap(); } }, disabled:isUsed,
-          className:"act-h relative rounded-xl flex flex-col items-center justify-center",
+          className:"act-h relative rounded-xl flex flex-col items-center justify-center overflow-hidden",
+
           style:{ 
             background: isUsed ? (lit ? a.bg : "rgba(14,11,20,.85)") : isSel ? a.bg : "rgba(30,24,42,.92)",
             border: `2px solid ${isUsed ? (lit ? a.color : "#2c2740") : isSel ? a.color : "#3c3450"}`,
@@ -2199,8 +2202,8 @@ function DropBattle() {
             opacity: isUsed ? (lit ? 1 : 0.4) : 1,
             transition:"background .25s ease, border-color .25s ease, box-shadow .25s ease, opacity .25s ease" } },
           h("span", { style:{ position:"absolute", top:0, left:"14%", right:"14%", height:3, borderRadius:"0 0 4px 4px", background:a.color, opacity: isUsed && !lit ? 0.25 : 0.9, pointerEvents:"none" } }),
-          h("img", { src:a.img, alt:a.label, draggable:false, style:{ height:22, width:22, objectFit:"contain", opacity: isUsed && !lit ? 0.35 : 1, filter:"drop-shadow(0 2px 1px rgba(0,0,0,.45))" } }),
-          h("span", { style:{ fontSize:11, height:16, lineHeight:"16px", color: isUsed ? (lit ? "#e7e0ef" : "#777") : "#e7e0ef" } }, a.label,
+          h("img", { src:a.img, alt:a.label, draggable:false, width:22, height:22, style:{ height:22, width:22, maxWidth:22, maxHeight:22, flexShrink:0, objectFit:"contain", opacity: isUsed && !lit ? 0.35 : 1, filter:"drop-shadow(0 2px 1px rgba(0,0,0,.45))" } }),
+          h("span", { style:{ fontSize:11, height:16, lineHeight:"16px", whiteSpace:"nowrap", color: isUsed ? (lit ? "#e7e0ef" : "#777") : "#e7e0ef" } }, a.label,
             h("span", { style:{ fontSize:8, opacity:0.5, marginLeft:2 } }, "×", a.per)),
           h("span", { id:"actval-" + key, key:"v" + key + "_" + tv[key], className: tv[key] > 0 ? "val-pulse" : "",
             style:{ fontSize:"1.15rem", height:24, lineHeight:"24px", fontWeight:700, fontVariantNumeric:"tabular-nums", display:"flex", alignItems:"center", justifyContent:"center",
@@ -2229,8 +2232,8 @@ function DropBattle() {
                 transform: isClr ? "scale(1.25)" : isPrev ? "scale(1.08)" : "scale(1)",
                 transition:"transform .12s ease, opacity .2s ease, box-shadow .12s ease",
                 touchAction:"none" } },
-              cell.type === JUNK ? h("img", { src:"assets/mk_skull.png", alt:"", draggable:false, style:{ position:"absolute", left:"22%", top:"22%", width:"56%", height:"56%", objectFit:"contain", pointerEvents:"none", opacity:0.92, filter:"drop-shadow(0 1px 1px rgba(0,0,0,.5))" } })
-                 : it ? [h("img", { key:"m", src:it.img, alt:it.name, draggable:false, style:{ position:"absolute", left:"19%", top:"19%", width:"62%", height:"62%", objectFit:"contain", pointerEvents:"none", filter:"drop-shadow(0 1px 2px rgba(0,0,0,.55))", animation:"markPulse 1.6s ease-in-out infinite" } }),
+              cell.type === JUNK ? h("img", { src:"assets/mk_skull.png", alt:"", draggable:false, className:"mark-img", style:{ position:"absolute", left:"22%", top:"22%", width:"56%", height:"56%", objectFit:"contain", pointerEvents:"none", opacity:0.92, filter:"drop-shadow(0 1px 1px rgba(0,0,0,.5))" } })
+                 : it ? [h("img", { key:"m", src:it.img, alt:it.name, draggable:false, className:"mark-img", style:{ position:"absolute", left:"19%", top:"19%", width:"62%", height:"62%", objectFit:"contain", pointerEvents:"none", filter:"drop-shadow(0 1px 2px rgba(0,0,0,.55))", animation:"markPulse 1.6s ease-in-out infinite" } }),
                    cell.up && h("span", { key:"u", style:{ position:"absolute", top:"-4%", right:"2%", fontSize:"0.85rem", fontWeight:900, color:"#ffd54a", textShadow:"0 1px 2px #000, 0 0 2px #000", pointerEvents:"none" } }, "＋")]
                  : h("span", { style:{ width:"30%", height:"22%", borderRadius:"50%", background:"rgba(255,255,255,.30)", position:"absolute", top:"11%", left:"13%", pointerEvents:"none" } }));
           }))),
