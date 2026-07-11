@@ -352,6 +352,9 @@ const SHIELDS = {
   vamp:{sh:25,c:0.4}, lich:{sh:35,c:0.45}, toadking:{sh:30,c:0.4},
   demon:{sh:50,c:0.45}, dragon:{sh:60,c:0.45}, ifrit:{sh:45,c:0.45}, reaper:{sh:70,c:0.4}
 };
+const Ic = (src, sz, extra) => h("img", { src, alt:"", draggable:false, width:sz, height:sz,
+  style: Object.assign({ width:sz, height:sz, maxWidth:sz, maxHeight:sz, objectFit:"contain",
+    display:"inline-block", verticalAlign:"-3px", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.45))" }, extra || {}) });
 const NODE_META = {
   battle:  { icon:"⚔",  img:"assets/node_battle.png",   label:"バトル", color:"#ff8a8a", tint:"58,32,38" },
   horde:   { icon:"👥", img:"assets/node_horde.png",    label:"群れ",   color:"#ffb35c", tint:"58,42,26" },
@@ -1918,11 +1921,13 @@ function DropBattle() {
       "第", act + 1, "章 ",
       h("span", { style:{ color:"#ffcf5d" } }, progRow, "/", ROWS, "層")),
     h("div", { className:"flex items-center gap-2" },
-      h("span", { className:"rounded-xl px-2 py-1.5 text-sm font-bold", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c", color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, "💰", coins),
-      h("button", { onClick: toggleBgm, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", fontSize:14, lineHeight:1, opacity: bgmOnView ? 1 : 0.45 } }, "🎵"),
-      h("button", { onClick: toggleSfx, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", fontSize:14, lineHeight:1, opacity: sfxOn ? 1 : 0.45 } }, sfxOn ? "🔊" : "🔇"),
+      h("span", { className:"rounded-xl px-2 py-1.5 text-sm font-bold flex items-center gap-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c", color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, Ic("assets/icon_coin.png", 15), coins),
+      h("button", { onClick: toggleBgm, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", lineHeight:1 } },
+        Ic("assets/icon_note.png", 15, bgmOnView ? null : { filter:"grayscale(1) drop-shadow(0 1px 1px rgba(0,0,0,.45))", opacity:0.4 })),
+      h("button", { onClick: toggleSfx, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", lineHeight:1 } },
+        Ic("assets/icon_speaker.png", 15, sfxOn ? null : { filter:"grayscale(1) drop-shadow(0 1px 1px rgba(0,0,0,.45))", opacity:0.4 })),
       h("button", { onClick: () => { setBagOpen(true); SFX.open(); }, className:"relative rounded-xl px-3 py-1.5 flex items-center gap-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c" } },
-        h("span", { style:{ fontSize:15, lineHeight:1 } }, "🎒"),
+        Ic("assets/icon_bag.png", 16),
         h("span", { className:"font-bold text-sm", style:{ color:"#ffcf5d", fontVariantNumeric:"tabular-nums" } }, "残", bagLeft))));
 
   // ===== タイトル =====
@@ -1939,15 +1944,15 @@ function DropBattle() {
           onClick: () => { setStatus("map"); statusRef.current = "map"; setLog(["― ルートを選んで進もう ―"]); SFX.pick(); },
           style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", borderRadius:14, padding:"clamp(13px,3.2vw,16px) clamp(48px,12vw,66px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", boxShadow:"0 4px 0 #6e4e1a, 0 6px 12px rgba(0,0,0,.4)", border:"2px solid #6e4e1a", fontFamily:"inherit", marginBottom:14 } }, "冒険に出る"),
         h("p", { style:{ fontSize:"clamp(0.66rem,1.9vw,0.74rem)", color:"#c8d2d4", textShadow:"0 1px 2px #000", lineHeight:1.8, maxWidth:340 } },
-          "⚔攻撃 / 🛡防御 / ✚回復 を選んで同色ドロップをタップ。3回消すと敵のターン。")));
+          Ic("assets/icon_atk.png", 13), "攻撃 / ", Ic("assets/icon_def.png", 13), "防御 / ", Ic("assets/icon_heal.png", 13), "回復 を選んで同色ドロップをタップ。3回消すと敵のターン。")));
   }
 
   // ===== 共通オーバーレイ =====
   const overlays = [];
   if (bagOpen) overlays.push(h("div", { key:"bag", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setBagOpen(false) },
-    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, background:"rgba(24,15,34,.98)", border:"1px solid rgba(255,221,90,.45)" }, onClick: e => e.stopPropagation() },
+    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-1" },
-        h("span", { className:"font-bold", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, "🎒 所持アイテム"),
+        h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, Ic("assets/icon_bag.png", 18), "所持アイテム"),
         h("button", { onClick: () => setBagOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
       h("div", { className:"rounded-xl px-3 py-2 mb-3 text-[11px]", style:{ background:"rgba(255,255,255,.05)", border:"1px solid #3c3450", lineHeight:1.9 } },
         h("span", { className:"font-bold", style:{ color:"#f0e4c8" } }, "所持合計 ", ownedTotal, " 個"),
@@ -2009,8 +2014,8 @@ function DropBattle() {
   if (campfire) {
     const ownedTotalCamp = ITEM_KEYS.reduce((t, k) => t + ownedView[k], 0);
     overlays.push(h("div", { key:"camp", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.87)", zIndex:58 } },
-      h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:370, background:"rgba(30,24,42,.98)", border:"2px solid #7cffb0" } },
-        h("h2", { className:"text-center font-bold mb-1", style:{ fontSize:"1.15rem", color:"#7cffb0", textShadow:"0 2px 0 rgba(0,0,0,.6)" } }, "🔥 焚き火"),
+      h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:370, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
+        h("h2", { className:"text-center font-bold mb-1 flex items-center justify-center gap-1.5", style:{ fontSize:"1.15rem", color:"#7cffb0", textShadow:"0 2px 0 rgba(0,0,0,.6)" } }, Ic("assets/node_rest.png", 20), "焚き火"),
         campfire === "menu" ? h("div", null,
           h("p", { className:"text-center text-[11px] mb-3", style:{ opacity:0.75 } }, "どれか1つを選ぼう"),
           h("button", { onClick: restHeal, className:"w-full rounded-xl px-4 py-3 flex items-center gap-3 text-left mb-2", style:{ background:"rgba(124,255,176,.08)", border:"2px solid #3c5a48" } },
@@ -2025,7 +2030,7 @@ function DropBattle() {
             h("span", { className:"flex-1" },
               h("span", { className:"font-bold", style:{ color:"#e8c06a" } }, "鍛える"),
               h("span", { className:"block text-[11px]", style:{ opacity:0.8 } }, "特殊ドロップを1つ選んで＋に強化する")),
-            h("span", { className:"text-sm font-bold", style:{ color: coins >= forgeCost() ? "#e8c06a" : "#f0a8a0" } }, "💰", forgeCost())),
+            h("span", { className:"text-sm font-bold flex items-center gap-1", style:{ color: coins >= forgeCost() ? "#e8c06a" : "#f0a8a0" } }, Ic("assets/icon_coin.png", 13), forgeCost())),
           h("button", { onClick: () => { if (ownedTotalCamp > 1) setCampfire("remove"); }, disabled: ownedTotalCamp <= 1,
             className:"w-full rounded-xl px-4 py-3 flex items-center gap-3 text-left", style:{ background:"rgba(240,168,160,.08)", border:"2px solid #5a3c48", opacity: ownedTotalCamp <= 1 ? 0.45 : 1 } },
             h("span", { style:{ fontSize:"1.5rem" } }, "🗑"),
@@ -2033,7 +2038,7 @@ function DropBattle() {
               h("span", { className:"font-bold", style:{ color:"#f0a8a0" } }, "整理する"),
               h("span", { className:"block text-[11px]", style:{ opacity:0.8 } }, "特殊ドロップを1つ選んで袋から削除する"))))
         : campfire === "forge" ? h("div", null,
-          h("p", { className:"text-center text-[11px] mb-2", style:{ opacity:0.75 } }, "鍛える特殊ドロップを1つ選ぶ（💰", forgeCost(), " ／ 所持 💰", coins, "）"),
+          h("p", { className:"text-center text-[11px] mb-2", style:{ opacity:0.75 } }, "鍛える特殊ドロップを1つ選ぶ（", Ic("assets/icon_coin.png", 11), forgeCost(), " ／ 所持 ", Ic("assets/icon_coin.png", 11), coins, "）"),
           h("div", { className:"flex flex-col gap-1.5 mb-2", style:{ maxHeight:320, overflowY:"auto" } },
             ITEM_KEYS.filter(k => ownedView[k] - ownedUpView[k] > 0).map(k => {
               const it = ITEMS[k];
@@ -2063,8 +2068,8 @@ function DropBattle() {
     overlays.push(h("div", { key:"shop", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:58 } },
       h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:370, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
         h("div", { className:"flex justify-between items-center mb-1" },
-          h("span", { className:"font-bold", style:{ color:"#e8c06a", fontSize:"1.05rem" } }, "🛒 行商人"),
-          h("span", { className:"text-sm font-bold", style:{ color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, "💰", coins)),
+          h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#e8c06a", fontSize:"1.05rem" } }, Ic("assets/node_treasure.png", 18), "行商人"),
+          h("span", { className:"text-sm font-bold flex items-center gap-1", style:{ color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, Ic("assets/icon_coin.png", 14), coins)),
         h("p", { className:"text-[10px] mb-2", style:{ opacity:0.7 } }, "コインでアイテムと交換できる（所持 ", items.length, "/", itemCap(), "）"),
         shop.relic && (() => {
           const rk = shop.relic, rc = priceOf(RELIC_PRICE[RELICS[rk].rar]);
@@ -2078,7 +2083,7 @@ function DropBattle() {
               className:"rounded-lg px-3 py-1.5 text-xs font-bold",
               style:{ background: can ? "linear-gradient(180deg,#e8c06a,#b8862e)" : "rgba(255,255,255,.08)",
                 color: can ? "#2c2030" : "#776f88",
-                border: can ? "1px solid #6e4e1a" : "1px solid #3c3450" } }, "💰", rc));
+                border: can ? "1px solid #6e4e1a" : "1px solid #3c3450" } }, Ic("assets/icon_coin.png", 12), " ", rc));
         })(),
         h("div", { className:"flex flex-col gap-2 mb-3" }, shop.offers.map(k => {
           const c = CONSUM[k];
@@ -2092,19 +2097,20 @@ function DropBattle() {
               className:"rounded-lg px-3 py-1.5 text-xs font-bold",
               style:{ background: can ? "linear-gradient(180deg,#e8c06a,#b8862e)" : "rgba(255,255,255,.08)",
                 color: can ? "#2c2030" : "#776f88",
-                border: can ? "1px solid #6e4e1a" : "1px solid #3c3450" } }, "💰", priceOf(c.price)));
+                border: can ? "1px solid #6e4e1a" : "1px solid #3c3450" } }, Ic("assets/icon_coin.png", 12), " ", priceOf(c.price)));
         })),
         items.length >= itemCap() && h("p", { className:"text-[10px] mb-2 text-center", style:{ color:"#f0a8a0" } }, "持ち物がいっぱい（", itemCap(), "個まで）"),
         h("button", { onClick: closeShop, className:"w-full rounded-xl py-2.5 font-bold", style:{ background:"rgba(255,255,255,.1)", border:"2px solid #453b5c", color:"#d8cfe8" } }, "先へ進む ▶"))));
   }
   if (rewards) {
-    const rTitle = rewards.kind === "treasure" ? "🎁 宝箱発見！" : rewards.kind === "elite" ? "💀 精鋭撃破！" : "🏆 勝利！";
+    const rIcon = rewards.kind === "treasure" ? "assets/node_treasure.png" : rewards.kind === "elite" ? "assets/node_elite.png" : "assets/node_battle.png";
+    const rTitle = rewards.kind === "treasure" ? "宝箱発見！" : rewards.kind === "elite" ? "精鋭撃破！" : "勝利！";
     overlays.push(h("div", { key:"reward", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:50 } },
       h("div", { className:"w-full pop-in rounded-2xl", style:{ maxWidth:380, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", padding:"16px 14px" } },
-        h("h2", { className:"text-center font-bold mb-1", style:{ fontSize:"1.25rem", color:"#e0b45c", textShadow:"0 2px 0 rgba(0,0,0,.6)" } }, rTitle),
+        h("h2", { className:"text-center font-bold mb-1 flex items-center justify-center gap-2", style:{ fontSize:"1.25rem", color:"#e0b45c", textShadow:"0 2px 0 rgba(0,0,0,.6)" } }, Ic(rIcon, 22), rTitle),
         h("p", { className:"text-center text-xs mb-1", style:{ opacity:0.8 } },
           rewards.kind === "treasure" ? "好きなアイテムを1つ持っていこう" : "戦利品を1つ選んで先へ進もう"),
-        rewards.coins > 0 && h("p", { className:"text-center text-xs mb-1", style:{ color:"#e8c06a", fontWeight:800 } }, "💰 コイン +", rewards.coins),
+        rewards.coins > 0 && h("p", { className:"text-center text-xs mb-1", style:{ color:"#e8c06a", fontWeight:800 } }, Ic("assets/icon_coin.png", 13), " コイン +", rewards.coins),
         rewards.relic && h("div", { className:"flex items-center gap-2 rounded-xl px-3 py-2 mb-2", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.5)" } },
           h("span", { style:{ fontSize:"1.4rem" } }, RELICS[rewards.relic].icon),
           h("span", null,
@@ -2122,7 +2128,7 @@ function DropBattle() {
               h("span", { className:"block text-[10px]", style:{ opacity:0.6 } }, "所持 ", ownedView[k], " → ", ownedView[k] + 1)));
         })))));
   }
-  if (restMsg) overlays.push(h("div", { key:"rest", className:"fixed pop-in", style:{ top:18, left:"50%", transform:"translateX(-50%)", zIndex:70, background:"rgba(20,40,26,.95)", border:"1px solid rgba(124,255,176,.6)", color:"#c8ffdd", borderRadius:12, padding:"10px 18px", fontSize:"0.85rem", fontWeight:800, boxShadow:"0 3px 8px rgba(0,0,0,.5)" } }, restMsg));
+  if (restMsg) overlays.push(h("div", { key:"rest", className:"fixed pop-in", style:{ top:18, left:"50%", transform:"translateX(-50%)", zIndex:70, background:"rgba(30,24,42,.97)", border:"2px solid #3c5a48", color:"#c8ffdd", borderRadius:12, padding:"10px 18px", fontSize:"0.85rem", fontWeight:800, boxShadow:"0 3px 8px rgba(0,0,0,.5)" } }, restMsg));
 
   if (actClear) {
     overlays.push(h("div", { key:"actclear", className:"fixed inset-0 flex items-center justify-center px-6 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:56 } },
@@ -2130,7 +2136,7 @@ function DropBattle() {
         h("div", { className:"font-bold", style:{ fontSize:"1.6rem", color:"#f2e6c8", textShadow:"0 3px 0 rgba(0,0,0,.55)" } }, "🎉 第", act + 1, "章 クリア！"),
         h("p", { className:"my-2 text-sm", style:{ opacity:0.85 } }, "「", ACT_NAMES[act], "」を制覇した！"),
         h("div", { className:"rounded-xl py-2 px-3 mb-2 text-xs", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.4)", color:"#e8d8a8", lineHeight:1.9 } },
-          "🎁 章クリアボーナス", h("br"), "最大HP +", hasR("crown") ? 80 : 50, " ／ HP全回復 ／ 💰 +100"),
+          "章クリアボーナス", h("br"), "最大HP +", hasR("crown") ? 80 : 50, " ／ HP全回復 ／ ", Ic("assets/icon_coin.png", 12), " +100"),
         actClear.picks && actClear.picks.length > 0 && h("div", { className:"mb-2" },
           h("p", { className:"text-[11px] mb-1 font-bold", style:{ color:"#e8c06a" } }, "🏺 レリックを1つ選んで進む"),
           h("div", { className:"flex flex-col gap-1.5" }, actClear.picks.map(k =>
@@ -2168,7 +2174,7 @@ function DropBattle() {
         header,
         relicBarEl,
         h("div", { className:"flex items-center gap-2 rounded-xl px-3 py-1.5 mb-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c5a48" } },
-          h("span", { style:{ fontSize:"0.9rem" } }, "🧙"),
+          Ic("assets/hero.png", 20),
           h("div", { className:"flex-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:9 })),
           h("span", { className:"text-xs font-bold", style:{ color:"#7CFFB0", fontVariantNumeric:"tabular-nums" } }, pHP, "/", pMax)),
         itemBarEl,

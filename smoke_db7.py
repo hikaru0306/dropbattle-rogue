@@ -29,7 +29,7 @@ with sync_playwright() as pw:
     assert p.evaluate("window.__test.tutVal()") is None
     assert p.evaluate("localStorage.getItem('db_tut')") == "1"
     print("T1 tutorial 3steps + persist OK")
-    p.click("text=🎵"); time.sleep(0.3); p.click("text=🎵"); time.sleep(0.4)
+    p.click('css=img[src*="icon_note"]'); time.sleep(0.3); p.click('css=img[src*="icon_note"]'); time.sleep(0.4)
     print("T2 bgm toggle OK")
     b.close()
 
