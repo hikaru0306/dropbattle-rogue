@@ -21,7 +21,10 @@ with sync_playwright() as pw:
     page.click("text=冒険に出る")
     time.sleep(0.6)
     s = st(page)
-    assert s["items"] == ["potion", "potion"], f"initial items: {s['items']}"
+    assert s["items"] == [], f"initial items: {s['items']}"
+    page.evaluate("window.__test.giveItem('potion')"); page.evaluate("window.__test.giveItem('potion')")
+    import time as _t; _t.sleep(0.2)
+    s = st(page)
     assert s["coins"] == 0
     print("C1 initial state OK (potion x1, 0 coins)")
 

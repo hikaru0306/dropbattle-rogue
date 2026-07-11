@@ -42,7 +42,11 @@ with sync_playwright() as pw:
     assert s["rewardPicks"] == 4, f"magnet picks: {s['rewardPicks']}"
     print("R2 magnet 4 picks OK")
     page.click("css=[class*=pop-in] button >> nth=0")
-    time.sleep(0.6)
+    for _ in range(20):  # reward→map遷移をポーリング（fx遅延でのフレーク対策）
+        time.sleep(0.3)
+        if st(page)["status"] == "map":
+            break
+    assert st(page)["status"] == "map", st(page)["status"]
 
     # 2) 星のかけら: 次の戦闘で特殊6個
     page.evaluate("window.__test.giveRelic('stardust')")

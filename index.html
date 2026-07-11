@@ -828,8 +828,8 @@ function DropBattle() {
   const [coins, setCoins] = useState(0);
   const coinsRef = useRef(0);
   const setCoinsBoth = v => { coinsRef.current = v; setCoins(v); };
-  const [items, setItems] = useState(["potion", "potion"]); // 初期アイテム
-  const itemsRef = useRef(["potion", "potion"]);
+  const [items, setItems] = useState([]); // 初期アイテムなし
+  const itemsRef = useRef([]);
   const setItemsBoth = a => { itemsRef.current = a; setItems(a); };
   const [armed, setArmed] = useState(null); // アイテム確認中スロット
   const armedTimer = useRef(null);
@@ -865,6 +865,7 @@ function DropBattle() {
   const [campfire, setCampfire] = useState(null); // null | "menu" | "remove" | "forge"
   const campfireRef = useRef(null); campfireRef.current = campfire;
   const [bagOpen, setBagOpen] = useState(false);
+  const [relicOpen, setRelicOpen] = useState(false);
   const [sfxOn, setSfxOn] = useState(true);
   const [bgmOnView, setBgmOnView] = useState(true);
   const [tut, setTut] = useState(null); // チュートリアル 0..2
@@ -1820,7 +1821,7 @@ function DropBattle() {
     setLocked(false); lockedRef.current = false;
     setTurn(1);
     setRewards(null); setRestMsg(null); setAnims({});
-    setCoinsBoth(0); setItemsBoth(["potion", "potion"]); setShop(null); setCampfire(null);
+    setCoinsBoth(0); setItemsBoth([]); setShop(null); setCampfire(null);
     ownedUpRef.current = initZero(); bagUpRef.current = initZero();
     setAct(0); setPMax(P_MAX); setActClear(null);
     relicsRef.current = []; RELICSET = new Set(); setRelicsView([]);
@@ -1958,8 +1959,10 @@ function DropBattle() {
 
   const relicBarEl = relicsView.length > 0 && h("div", { className:"flex items-center gap-1 mb-1", style:{ flexWrap:"wrap" } },
     relicsView.map(k => h("button", { key:k, title:`${RELICS[k].name}: ${RELICS[k].desc}`,
-      onClick: () => { setRestMsg(`${RELICS[k].icon} ${RELICS[k].name}：${RELICS[k].desc}`); setTimeout(() => setRestMsg(null), 2200); },
-      className:"rounded-lg", style:{ width:26, height:26, fontSize:"0.85rem", background:"rgba(30,24,42,.92)", border:"1px solid #6e5a3c", lineHeight:"24px" } }, RELICS[k].icon)));
+      onClick: () => { setRelicOpen(true); SFX.open(); },
+      className:"rounded-lg", style:{ width:26, height:26, fontSize:"0.85rem", background:"rgba(30,24,42,.92)", border:"1px solid #6e5a3c", lineHeight:"24px" } }, RELICS[k].icon)),
+    h("button", { onClick: () => { setRelicOpen(true); SFX.open(); },
+      className:"rounded-lg px-2 text-[9px] font-bold", style:{ height:26, background:"rgba(30,24,42,.92)", border:"1px solid #3c3450", color:"#c9bfe0" } }, "効果一覧"));
 
   const tapItem = i => {
     const k = itemsRef.current[i];
@@ -2025,6 +2028,17 @@ function DropBattle() {
 
   // ===== 共通オーバーレイ =====
   const overlays = [];
+  if (relicOpen) overlays.push(h("div", { key:"relics", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setRelicOpen(false) },
+    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, maxHeight:"78vh", overflowY:"auto", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+      h("div", { className:"flex justify-between items-center mb-2" },
+        h("span", { className:"font-bold", style:{ color:"#e8c06a", fontSize:"1.05rem" } }, "🏺 所持レリック（", relicsView.length, "）"),
+        h("button", { onClick: () => setRelicOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
+      h("div", { className:"flex flex-col gap-2" }, relicsView.map(k =>
+        h("div", { key:k, className:"flex items-center gap-3 rounded-xl px-3 py-2", style:{ background:"rgba(255,255,255,.05)", border:"1px solid #6e5a3c" } },
+          h("span", { style:{ fontSize:"1.4rem", minWidth:30, textAlign:"center" } }, RELICS[k].icon),
+          h("span", { className:"flex-1" },
+            h("span", { className:"font-bold text-sm block", style:{ color:"#e8c06a" } }, RELICS[k].name),
+            h("span", { className:"block text-[11px]", style:{ opacity:0.85, lineHeight:1.5 } }, RELICS[k].desc))))))));
   if (bagOpen) overlays.push(h("div", { key:"bag", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setBagOpen(false) },
     h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-1" },
