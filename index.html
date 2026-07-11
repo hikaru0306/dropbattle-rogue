@@ -822,6 +822,8 @@ function DropBattle() {
   const [log, setLog] = useState([]);
   const [fx, setFx] = useState([]);
   const [rewards, setRewards] = useState(null); // {picks, kind:'battle'|'elite'|'treasure'|'horde', healed}
+  const [puzzle, setPuzzle] = useState(null); // {target, moves, cleared, relics:[3], done}
+  const puzzleRef = useRef(null);
   const [restMsg, setRestMsg] = useState(null);
   const [coins, setCoins] = useState(0);
   const coinsRef = useRef(0);
@@ -908,6 +910,7 @@ function DropBattle() {
   const pressingRef = useRef(false);
   const startGroupRef = useRef(null);
   const commitRef = useRef(() => {});
+  const puzzleTapRef = useRef(() => {});
   actionRef.current = action; usedRef.current = used; lockedRef.current = locked;
   statusRef.current = status; turnNumRef.current = turn;
 
@@ -1494,6 +1497,74 @@ function DropBattle() {
     else SFX.tap();
   };
 
+  // ===== 宝箱パズル =====
+  const startPuzzle = () => {
+    const bd = Array.from({ length: 36 }, () => ({ id: UID++, type: Math.floor(Math.random() * 4), special: false }));
+    commitBoard(bd);
+    // 盤面から目標を算出: 上位3グループ合計から2〜4引く（＝最大消しではぴったりにならない）
+    const seen = new Set(); const sizes = [];
+    bd.forEach((c, i) => {
+      if (seen.has(c.id)) return;
+      const g = findGroup(bd, i);
+      g.forEach(id => seen.add(id));
+      sizes.push(g.size);
+    });
+    sizes.sort((a, b) => b - a);
+    const maxSum = (sizes[0] || 0) + (sizes[1] || 0) + (sizes[2] || 0);
+    const target = Math.max(10, maxSum - 2 - Math.floor(Math.random() * 3));
+    const relics = pickRelics(3);
+    const pz = { target, moves: 3, cleared: 0, relics, done: null };
+    setPuzzle(pz); puzzleRef.current = pz;
+    setClearing(new Set()); setPreview(null); setPops({}); setArmed(null);
+    setStatus("puzzle"); statusRef.current = "puzzle";
+    setLocked(false); lockedRef.current = false;
+    SFX.open();
+  };
+  const puzzleTap = idx => {
+    const pz = puzzleRef.current;
+    if (!pz || pz.moves <= 0 || pz.done) return;
+    const ids = findGroup(boardRef.current, idx);
+    const count = ids.size;
+    const next = boardRef.current.map(c => ids.has(c.id) ? { id: UID++, type: Math.floor(Math.random() * 4), special: false } : c);
+    SFX.clear();
+    setClearing(new Set(ids));
+    setLocked(true); lockedRef.current = true;
+    const cleared = pz.cleared + count, moves = pz.moves - 1;
+    setTimeout(() => {
+      commitBoard(next);
+      setClearing(new Set());
+      let done = null;
+      if (moves <= 0) {
+        const diff = cleared - pz.target;
+        const rk = Math.abs(diff) <= 1 ? pz.relics[diff + 1] : null;
+        if (rk) {
+          addRelic(rk);
+          done = { kind: "relic", relic: rk, cleared };
+          SFX.coin();
+        } else {
+          const k = pick(Object.keys(CONSUM));
+          if (itemsRef.current.length < itemCap()) {
+            setItemsBoth([...itemsRef.current, k]);
+            done = { kind: "item", item: k, cleared };
+          } else {
+            setCoinsBoth(coinsRef.current + 40);
+            done = { kind: "coins", coins: 40, cleared };
+          }
+          SFX.pick();
+        }
+      }
+      const npz = { ...pz, cleared, moves, done };
+      setPuzzle(npz); puzzleRef.current = npz;
+      setLocked(false); lockedRef.current = false;
+    }, FAST ? 40 : 240);
+  };
+  puzzleTapRef.current = puzzleTap;
+  const closePuzzle = () => {
+    setPuzzle(null); puzzleRef.current = null;
+    SFX.step();
+    finishNode();
+  };
+
   // ===== ノード進入 =====
   const selectableIds = () => {
     const m = mapRef.current;
@@ -1512,6 +1583,7 @@ function DropBattle() {
       return;
     }
     if (node.type === "treasure") {
+      if (!TEST_MODE && Math.random() < 0.45) { startPuzzle(); return; } // 不思議な宝箱（パズル）
       const picks = shuffle(ITEM_KEYS.slice()).slice(0, hasR("magnet") ? 4 : 3);
       setRewards({ picks, kind:"treasure", healed:0 });
       setStatus("reward"); statusRef.current = "reward";
@@ -1543,7 +1615,9 @@ function DropBattle() {
 
   // ===== 盤面操作 =====
   const commit = useCallback(idx => {
-    if (lockedRef.current || statusRef.current !== "battle") return;
+    if (lockedRef.current) return;
+    if (statusRef.current === "puzzle") { puzzleTapRef.current(idx); return; }
+    if (statusRef.current !== "battle") return;
     const act = actionRef.current;
     if (!act || usedRef.current.has(act)) return;
     const seedJunk = boardRef.current[idx].type === JUNK;
@@ -1715,8 +1789,8 @@ function DropBattle() {
     };
   }, []);
   const onDown = (e, idx) => {
-    if (lockedRef.current || statusRef.current !== "battle") return;
-    if (!actionRef.current || usedRef.current.has(actionRef.current)) return;
+    if (lockedRef.current || (statusRef.current !== "battle" && statusRef.current !== "puzzle")) return;
+    if (statusRef.current === "battle" && (!actionRef.current || usedRef.current.has(actionRef.current))) return;
     e.preventDefault();
     pressingRef.current = true;
     startGroupRef.current = findGroup(boardRef.current, idx);
@@ -1795,6 +1869,7 @@ function DropBattle() {
         intents: enemiesRef.current.map(e => { if (!e.alive) return null;
           const iv = intentOf(e, enemiesRef.current);
           return { act: iv.act, dmg: iv.dmg * ((e.enr || 0) >= 3 ? 2 : 1) }; }),
+        puzzle: puzzleRef.current ? { target: puzzleRef.current.target, moves: puzzleRef.current.moves, cleared: puzzleRef.current.cleared, done: puzzleRef.current.done ? puzzleRef.current.done.kind : null } : null,
         selectable: statusRef.current === "map" ? selectableIds() : [],
         edges: mapRef.current.edges,
         map: mapRef.current.nodes.map(n => ({ id:n.id, row:n.row, type:n.type })) }),
@@ -1840,6 +1915,7 @@ function DropBattle() {
         setStatus("map"); statusRef.current = "map";
       },
       setCur: id => { setVisited(v => new Set(v).add(id)); setCurNodeId(id); curNodeRef.current = id; },
+      startPuzzle: () => startPuzzle(),
       restart: () => restart(false),
       resolve: () => resolveTurn(),
       commit: i => commitRef.current(i)
@@ -2128,6 +2204,24 @@ function DropBattle() {
               h("span", { className:"block text-[10px]", style:{ opacity:0.6 } }, "所持 ", ownedView[k], " → ", ownedView[k] + 1)));
         })))));
   }
+  if (puzzle && puzzle.done) {
+    const d = puzzle.done;
+    const hit = d.kind === "relic";
+    overlays.push(h("div", { key:"pzdone", className:"fixed inset-0 flex items-center justify-center px-6 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:56 } },
+      h("div", { className:"text-center pop-in rounded-2xl p-4 w-full", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
+        h("div", { className:"font-bold", style:{ fontSize:"1.3rem", color: hit ? "#ffd95c" : "#c9bfe0", textShadow:"0 2px 0 rgba(0,0,0,.55)" } },
+          hit ? "ぴったり！" : "おしい…"),
+        h("p", { className:"my-1 text-sm", style:{ opacity:0.85 } }, "合計 ", h("b", { style:{ color:"#7cffb0" } }, d.cleared), " 個（目標 ", puzzle.target, " 個）"),
+        hit && h("div", { className:"flex items-center justify-center gap-2 rounded-xl px-3 py-2 my-2", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.5)" } },
+          h("span", { style:{ fontSize:"1.5rem" } }, RELICS[d.relic].icon),
+          h("span", { className:"text-left" },
+            h("span", { className:"font-bold text-sm block", style:{ color:"#e8c06a" } }, "レリック獲得: ", RELICS[d.relic].name),
+            h("span", { className:"block text-[10px]", style:{ opacity:0.8 } }, RELICS[d.relic].desc))),
+        d.kind === "item" && h("p", { className:"my-2 text-sm font-bold", style:{ color:"#8ce8b0" } }, CONSUM[d.item].icon, " ", CONSUM[d.item].name, " を獲得"),
+        d.kind === "coins" && h("p", { className:"my-2 text-sm font-bold flex items-center justify-center gap-1", style:{ color:"#e8c06a" } }, Ic("assets/icon_coin.png", 14), "+", d.coins),
+        h("button", { onClick: closePuzzle, className:"w-full rounded-xl py-2.5 font-bold mt-1",
+          style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } }, "先へ進む ▶"))));
+  }
   if (restMsg) overlays.push(h("div", { key:"rest", className:"fixed pop-in", style:{ top:18, left:"50%", transform:"translateX(-50%)", zIndex:70, background:"rgba(30,24,42,.97)", border:"2px solid #3c5a48", color:"#c8ffdd", borderRadius:12, padding:"10px 18px", fontSize:"0.85rem", fontWeight:800, boxShadow:"0 3px 8px rgba(0,0,0,.5)" } }, restMsg));
 
   if (actClear) {
@@ -2164,6 +2258,53 @@ function DropBattle() {
   }
 
   // ===== マップ画面 =====
+  const boardEl = h("div", { className:"relative rounded-2xl board-wrap", style:{ padding:5, background:"rgba(19,14,28,.8)", border:"2px solid #3c3450", marginBottom:4 } },
+        h("div", { className:"grid grid-cols-6 gap-1.5", style:{ touchAction:"none" }, onContextMenu: e => e.preventDefault() },
+          board.map((cell,i) => {
+            const d = DROPS[cell.type];
+            const isPrev = preview && preview.over && preview.ids.has(cell.id);
+            const isClr = clearing.has(cell.id);
+            const it = cell.special ? ITEMS[cell.special] : null;
+            return h("button", { key:cell.id, "data-idx":i, onPointerDown: e => onDown(e,i),
+              className:"relative rounded-xl",
+              style:{ aspectRatio:"1 / 1",
+                background:`linear-gradient(180deg, ${d.c1} 0%, ${d.c2} 100%)`,
+                border:`2.5px solid ${d.c3}`,
+                animation:"dropIn .26s ease",
+                boxShadow: isClr ? "none"
+                  : isPrev ? `0 0 0 3px ${actColor}`
+                  : it ? `inset 0 0 0 2px ${it.ring}, inset 0 -4px 0 rgba(0,0,0,.18)`
+                  : "inset 0 -4px 0 rgba(0,0,0,.18)",
+                opacity: isClr ? 0 : 1,
+                transform: isClr ? "scale(1.25)" : isPrev ? "scale(1.08)" : "scale(1)",
+                transition:"transform .12s ease, opacity .2s ease, box-shadow .12s ease",
+                touchAction:"none" } },
+              cell.type === JUNK ? h("img", { src:"assets/mk_skull.png", alt:"", draggable:false, className:"mark-img", style:{ position:"absolute", left:"22%", top:"22%", width:"56%", height:"56%", objectFit:"contain", pointerEvents:"none", opacity:0.92, filter:"drop-shadow(0 1px 1px rgba(0,0,0,.5))" } })
+                 : it ? [h("img", { key:"m", src:it.img, alt:it.name, draggable:false, className:"mark-img", style:{ position:"absolute", left:"19%", top:"19%", width:"62%", height:"62%", objectFit:"contain", pointerEvents:"none", filter:"drop-shadow(0 1px 2px rgba(0,0,0,.55))", animation:"markPulse 1.6s ease-in-out infinite" } }),
+                   cell.up && h("span", { key:"u", style:{ position:"absolute", top:"-4%", right:"2%", fontSize:"0.85rem", fontWeight:900, color:"#ffd54a", textShadow:"0 1px 2px #000, 0 0 2px #000", pointerEvents:"none" } }, "＋")]
+                 : h("span", { style:{ width:"30%", height:"22%", borderRadius:"50%", background:"rgba(255,255,255,.30)", position:"absolute", top:"11%", left:"13%", pointerEvents:"none" } }));
+          })));
+
+  // ===== 宝箱パズル画面 =====
+  if (status === "puzzle" && puzzle) {
+    return h("div", { style: rootStyle, className:"w-full flex justify-center px-3 py-2" },
+      h("div", { key:"scr-puzzle", className:"w-full fade-in", style:{ maxWidth:440 } },
+        header,
+        h("div", { className:"rounded-2xl px-3 py-2 mb-1 text-center", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c" } },
+          h("div", { className:"flex items-center justify-center gap-2 font-bold", style:{ color:"#ffd95c", fontSize:"1.02rem" } }, Ic("assets/node_treasure.png", 20), "不思議な宝箱"),
+          h("p", { className:"text-[11px] mt-0.5", style:{ opacity:0.85 } },
+            "3回の消去で 合計ぴったり ", h("b", { style:{ color:"#ffd95c", fontSize:"0.9rem" } }, puzzle.target), " 個（±1個OK）消すと…"),
+          h("div", { className:"flex justify-center gap-1.5 mt-1 text-[10px]", style:{ flexWrap:"wrap" } },
+            [-1, 0, 1].map(d => h("span", { key:d, className:"rounded-full px-2 py-0.5", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.4)", color:"#e8d8a8" } },
+              (puzzle.target + d) + "個 → " + (puzzle.relics[d + 1] ? RELICS[puzzle.relics[d + 1]].icon + RELICS[puzzle.relics[d + 1]].name : "アイテム")))),
+          h("div", { className:"flex justify-center mt-1.5 text-sm font-bold", style:{ gap:20 } },
+            h("span", { style:{ color:"#c9bfe0" } }, "消した数 ", h("span", { style:{ color:"#7cffb0", fontSize:"1.1rem", fontVariantNumeric:"tabular-nums" } }, puzzle.cleared)),
+            h("span", { style:{ color:"#c9bfe0" } }, "残り ", h("span", { style:{ color:"#e8c06a", letterSpacing:2 } }, "●".repeat(puzzle.moves) + "○".repeat(3 - puzzle.moves))))),
+        boardEl,
+        h("p", { className:"text-center text-[10px]", style:{ opacity:0.6 } }, "外れても アイテム or コインは貰える"),
+        overlays));
+  }
+
   if (status === "map" || (status === "reward" && pendingNodeRef.current && pendingNodeRef.current.type === "treasure")) {
     const selIds = selectableIds();
     const CENTERS = [50, 28, 70, 30, 71, 33, 66, 50]; // 蛇行する道の中心
@@ -2369,32 +2510,7 @@ function DropBattle() {
             textShadow: isSel && selEff && tv[key] === 0 && info && info.mult > 1 ? "0 0 8px #ffd54a" : "none" } }, valEl));
       })),
       // 盤面
-      h("div", { className:"relative rounded-2xl board-wrap", style:{ padding:5, background:"rgba(19,14,28,.8)", border:"2px solid #3c3450", marginBottom:4 } },
-        h("div", { className:"grid grid-cols-6 gap-1.5", style:{ touchAction:"none" }, onContextMenu: e => e.preventDefault() },
-          board.map((cell,i) => {
-            const d = DROPS[cell.type];
-            const isPrev = preview && preview.over && preview.ids.has(cell.id);
-            const isClr = clearing.has(cell.id);
-            const it = cell.special ? ITEMS[cell.special] : null;
-            return h("button", { key:cell.id, "data-idx":i, onPointerDown: e => onDown(e,i),
-              className:"relative rounded-xl",
-              style:{ aspectRatio:"1 / 1",
-                background:`linear-gradient(180deg, ${d.c1} 0%, ${d.c2} 100%)`,
-                border:`2.5px solid ${d.c3}`,
-                animation:"dropIn .26s ease",
-                boxShadow: isClr ? "none"
-                  : isPrev ? `0 0 0 3px ${actColor}`
-                  : it ? `inset 0 0 0 2px ${it.ring}, inset 0 -4px 0 rgba(0,0,0,.18)`
-                  : "inset 0 -4px 0 rgba(0,0,0,.18)",
-                opacity: isClr ? 0 : 1,
-                transform: isClr ? "scale(1.25)" : isPrev ? "scale(1.08)" : "scale(1)",
-                transition:"transform .12s ease, opacity .2s ease, box-shadow .12s ease",
-                touchAction:"none" } },
-              cell.type === JUNK ? h("img", { src:"assets/mk_skull.png", alt:"", draggable:false, className:"mark-img", style:{ position:"absolute", left:"22%", top:"22%", width:"56%", height:"56%", objectFit:"contain", pointerEvents:"none", opacity:0.92, filter:"drop-shadow(0 1px 1px rgba(0,0,0,.5))" } })
-                 : it ? [h("img", { key:"m", src:it.img, alt:it.name, draggable:false, className:"mark-img", style:{ position:"absolute", left:"19%", top:"19%", width:"62%", height:"62%", objectFit:"contain", pointerEvents:"none", filter:"drop-shadow(0 1px 2px rgba(0,0,0,.55))", animation:"markPulse 1.6s ease-in-out infinite" } }),
-                   cell.up && h("span", { key:"u", style:{ position:"absolute", top:"-4%", right:"2%", fontSize:"0.85rem", fontWeight:900, color:"#ffd54a", textShadow:"0 1px 2px #000, 0 0 2px #000", pointerEvents:"none" } }, "＋")]
-                 : h("span", { style:{ width:"30%", height:"22%", borderRadius:"50%", background:"rgba(255,255,255,.30)", position:"absolute", top:"11%", left:"13%", pointerEvents:"none" } }));
-          }))),
+      boardEl,
       overlays));
 }
 
