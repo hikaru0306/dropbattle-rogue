@@ -43,7 +43,25 @@ with sync_playwright() as pw:
     assert s["tv"]["atk"] == 90, f"blastcore 3x3: atk {s['tv']['atk']} != 90"
     print("K1 blastcore 3x3 -> atk90 OK")
 
+    # 1b) 同一ターン2回目の単発消しは爆破しない（1ターン1回制限）
+    fill_board(page)
+    page.evaluate("window.__test.setCellType(21, 0)")
+    time.sleep(0.3)
+    page.evaluate("window.__test.setAct('def')")
+    page.evaluate("window.__test.commit(21)")
+    time.sleep(0.6)
+    s = st(page)
+    assert s["tv"]["def"] == 10, f"blast once/turn: def {s['tv']['def']} != 10"
+    print("K1b blastcore limited to once per turn OK")
+
     # 2) 十字晶: ちょうど4個消しで十字1列（4 + 行残2 + 列残5 = 11個）
+    page.evaluate("window.__test.spawn(['slime'])")
+    time.sleep(0.4)
+    page.evaluate("window.__test.restart()")
+    time.sleep(0.8)
+    if st(page)["status"] != "map":
+        page.click("text=冒険に出る"); time.sleep(0.5)
+    enter_battle(page)
     page.evaluate("window.__test.giveRelic('crossgem')")
     fill_board(page)
     for i in (0, 1, 2, 3):
