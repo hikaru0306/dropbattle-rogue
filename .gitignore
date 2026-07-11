@@ -1,5 +1,5 @@
 assets_raw/
-v*.png
+v[0-9]*.png
 *_check.png
 gen_new_enemies.log
 __pycache__/
