@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""難易度検証ボット: グリーディ戦略で通しプレイし勝率・到達点を測定"""
+"""無心ボット: 何も考えず大きいグループを消すだけ（アイテム/ルート/予告 無視）"""
 import sys, time, json
 from playwright.sync_api import sync_playwright
 
@@ -63,25 +63,10 @@ def run_one(page):
         if st == "lose":
             return {"result": "LOSE", "act": s["act"] + 1, "hp": 0}
         if s.get("campfire"):
-            if s["php"] < s["pmax"] * 0.7 or s["coins"] < 50:
-                page.evaluate("window.__test.restHeal()")
-            else:
-                page.evaluate("window.__test.forge('atk')")
-                time.sleep(0.3)
-                if page.evaluate("window.__test.state()").get("campfire"):
-                    page.evaluate("window.__test.restHeal()")
+            page.evaluate("window.__test.restHeal()")
             time.sleep(0.3)
             continue
         if s.get("shop"):
-            # HP半分以下でポーションが売ってたら買う
-            offers = s["shop"] or []
-            if s["items"].count("potion") < 2 and s["coins"] >= 45 and len(s["items"]) < 3 and "potion" in offers:
-                page.evaluate("window.__test.buy('potion')")
-                time.sleep(0.2)
-                s = page.evaluate("window.__test.state()")
-            if s["coins"] >= 120 and len(s["items"]) < 3 and "bomb" in offers:
-                page.evaluate("window.__test.buy('bomb')")
-                time.sleep(0.2)
             page.evaluate("window.__test.closeShop()")
             time.sleep(0.3)
             continue
@@ -96,18 +81,7 @@ def run_one(page):
             sel = s["selectable"]
             if not sel:
                 return {"result": "STUCK", "act": s["act"] + 1, "hp": s["php"]}
-            nodes = {x["id"]: x for x in s["map"]}
-            # HP低なら休憩優先、次に宝箱、それ以外は先頭
-            def score(i):
-                t = nodes[i]["type"]
-                hp_ratio = s["php"] / s["pmax"]
-                if t == "rest": return 0 if hp_ratio < 0.6 else 3
-                if t == "treasure": return 1
-                if t == "battle": return 2
-                if t == "horde": return 4 if hp_ratio > 0.7 else 6
-                if t == "elite": return 5 if hp_ratio > 0.8 else 9
-                return 4
-            chosen = min(sel, key=score)
+            chosen = sel[0]  # 何も考えず先頭
             page.evaluate(f"window.__test.enter({chosen})")
             time.sleep(0.5)
             continue
@@ -115,25 +89,6 @@ def run_one(page):
             if s.get("locked"):
                 time.sleep(0.25)
                 continue
-            # ポーション使用
-            if s["php"] < s["pmax"] * 0.4 and "potion" in s["items"]:
-                page.evaluate(f"window.__test.useItem({s['items'].index('potion')})")
-                time.sleep(0.2)
-            # 敵2体以上なら爆弾
-            alive_n = sum(1 for e in s["enemies"] if e["alive"])
-            if alive_n >= 2 and "bomb" in s["items"]:
-                page.evaluate(f"window.__test.useItem({s['items'].index('bomb')})")
-                time.sleep(0.4)
-            # ターゲット: ヒーラー系 > HP最低の敵
-            tgt = None
-            for i, e in enumerate(s["enemies"]):
-                if e["alive"] and e["kind"] in ("spore", "mandra"):
-                    tgt = i; break
-            if tgt is None:
-                aliveIdx = [(e["hp"], i) for i, e in enumerate(s["enemies"]) if e["alive"]]
-                if aliveIdx: tgt = min(aliveIdx)[1]
-            if tgt is not None:
-                page.evaluate(f"window.__test.setTargetIdx({tgt})")
             gs = [g for g in groups(s["board"]) if not g["junk"]]
             if not gs:
                 gs = groups(s["board"])

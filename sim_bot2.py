@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""難易度検証ボット: グリーディ戦略で通しプレイし勝率・到達点を測定"""
+"""スマートボット: 敵の予告ダメージに合わせて防御量を調整して通しプレイ"""
 import sys, time, json
 from playwright.sync_api import sync_playwright
 
@@ -101,7 +101,7 @@ def run_one(page):
             def score(i):
                 t = nodes[i]["type"]
                 hp_ratio = s["php"] / s["pmax"]
-                if t == "rest": return 0 if hp_ratio < 0.6 else 3
+                if t == "rest": return 0 if hp_ratio < 0.7 else 3
                 if t == "treasure": return 1
                 if t == "battle": return 2
                 if t == "horde": return 4 if hp_ratio > 0.7 else 6
@@ -115,8 +115,11 @@ def run_one(page):
             if s.get("locked"):
                 time.sleep(0.25)
                 continue
-            # ポーション使用
-            if s["php"] < s["pmax"] * 0.4 and "potion" in s["items"]:
+            # ポーション使用: 予告ダメージで落ちる圏内なら合わせて飲む
+            incoming_now = sum(iv["dmg"] for iv in (s.get("intents") or []) if iv)
+            danger = s["php"] - max(0, incoming_now - s["tv"]["def"]) < s["pmax"] * 0.15
+            enr_threat = any(e["alive"] and e["enr"] >= 2 for e in s["enemies"])
+            if (s["php"] < s["pmax"] * (0.6 if enr_threat else 0.45) or danger) and "potion" in s["items"]:
                 page.evaluate(f"window.__test.useItem({s['items'].index('potion')})")
                 time.sleep(0.2)
             # 敵2体以上なら爆弾
@@ -142,12 +145,38 @@ def run_one(page):
             if not remaining:
                 time.sleep(0.3)
                 continue
-            act = remaining[0]
-            # 大きいグループ→攻撃、次→防御、最後→回復（HP高なら防御寄せの順で消化）
-            gi = 3 - len(remaining)  # 0,1,2番目のグループ
-            g = gs[min(gi, len(gs) - 1)]
-            order = ["atk", "def", "heal"] if s["php"] > s["pmax"] * 0.5 else ["atk", "heal", "def"]
-            act = [a for a in order if a in remaining][0]
+            # 攻め主体+致死ターンだけ大防御（人間的な受け）: 普段は凡と同配分でテンポ維持
+            incoming = sum(iv["dmg"] for iv in (s.get("intents") or []) if iv)
+            need = max(0, incoming - s["tv"]["def"])
+            dper = (s.get("per") or {}).get("def", 10)
+            need_drops = (need + dper - 1) // dper
+            plan = {}
+            pool = list(range(len(gs)))
+            hp_after_leak = s["php"] - max(0, need - (len(gs) > 1 and gs[1]["size"] or 0) * dper)
+            danger_turn = need > 0 and (hp_after_leak < s["pmax"] * 0.25)
+            if danger_turn and "def" in remaining and pool:
+                cand = [i for i in pool if gs[i]["size"] * dper >= need]
+                plain = [i for i in cand if not gs[i]["sps"]]
+                di = min(plain or cand, key=lambda i: gs[i]["size"]) if cand else max(pool, key=lambda i: gs[i]["size"])
+                plan["def"] = di; pool.remove(di)
+            if "atk" in remaining and pool:
+                BONUS = {"aoe": 5, "bolt": 4, "bombx": 3, "bombd": 3, "star": 3, "atkx": 4, "atk": 2, "plus": 2, "pierce": 2}
+                ai = max(pool, key=lambda i: (gs[i]["size"], sum(BONUS.get(sp, 1) for sp in gs[i]["sps"])))
+                plan["atk"] = ai; pool.remove(ai)
+            if "def" in remaining and "def" not in plan and pool:
+                if need_drops > 0:
+                    cand = [i for i in pool if gs[i]["size"] >= need_drops]
+                    plain = [i for i in cand if not gs[i]["sps"]]
+                    di = min(plain or cand, key=lambda i: gs[i]["size"]) if cand else max(pool, key=lambda i: gs[i]["size"])
+                else:
+                    plain = [i for i in pool if not gs[i]["sps"]] or pool
+                    di = min(plain, key=lambda i: gs[i]["size"])
+                plan["def"] = di; pool.remove(di)
+            if "heal" in remaining and pool:
+                hi = min(pool, key=lambda i: gs[i]["size"])
+                plan["heal"] = hi; pool.remove(hi)
+            act = next(a for a in ["def", "atk", "heal"] if a in remaining)
+            g = gs[plan.get(act, 0)] if act in plan else gs[0]
             page.evaluate(f"window.__test.setAct('{act}')")
             time.sleep(0.05)
             page.evaluate(f"window.__test.commit({g['idx']})")

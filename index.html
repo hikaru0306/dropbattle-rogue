@@ -129,7 +129,7 @@ const TOTAL = SIZE * SIZE;
 const P_MAX = 300;
 const NUM_SPECIAL = 5;
 const STAR_THRESHOLD = 6;
-const ATK_PER = 12, DEF_PER = 13, HEAL_PER = 4;
+const ATK_PER = 10, DEF_PER = 10, HEAL_PER = 1;
 const ROWS = 8;
 const ACTS = 3;
 const ACT_NAMES = ["翠緑の森", "毒霧の沼窟", "灼熱の魔城"];
@@ -194,7 +194,7 @@ const RELICS = {
   member:     { icon:"🏷", name:"会員証", desc:"ショップの価格が20%安くなる", rar:1 },
   hammer:     { icon:"⚒", name:"鍛冶ハンマー", desc:"鍛える費用が半額（25）になる", rar:1 },
   regen:      { icon:"💗", name:"再生の護符", desc:"ターン終了時にHP+2", rar:1 },
-  blanket:    { icon:"🛌", name:"休息の毛布", desc:"焚き火の回復が60%になる", rar:1 },
+  blanket:    { icon:"🛌", name:"休息の毛布", desc:"焚き火の回復が70%になる", rar:1 },
   bento:      { icon:"🍖", name:"弁当箱", desc:"勝利時にHP+8回復", rar:1 },
   salt:       { icon:"🧂", name:"清めの塩", desc:"敵のお邪魔変換数-1", rar:1 },
   herb:       { icon:"🌿", name:"携帯薬草", desc:"ポーションの回復が120になる", rar:1 },
@@ -202,6 +202,16 @@ const RELICS = {
   dice:       { icon:"🎲", name:"いかさまダイス", desc:"ショップの品揃えが6品になる", rar:1 },
   adventmap:  { icon:"🗺", name:"冒険者の地図", desc:"焚き火に着くとコイン+30", rar:1 },
   scale:      { icon:"⚖", name:"商人の天秤", desc:"コイン獲得が1.5倍になる", rar:2 },
+  blastcore:  { icon:"💥", name:"爆心の石", desc:"1個だけで消すと、周囲3×3も爆破する", rar:2 },
+  crossgem:   { icon:"✚", name:"十字晶", desc:"ちょうど4個で消すと、タップ位置から十字1列を爆破", rar:2 },
+  xgem:       { icon:"❌", name:"X字晶", desc:"ちょうど5個で消すと、タップ位置から斜め4方向を爆破", rar:3 },
+  redcore:    { icon:"🌋", name:"紅蓮の核", desc:"赤ドロップを消すと、消した各赤の上下も爆破", rar:2 },
+  swordbook:  { icon:"⚔", name:"剣術指南書", desc:"攻撃ドロップ1個の効果+2", rar:1 },
+  guardbook:  { icon:"🧱", name:"守護の心得", desc:"防御ドロップ1個の効果+2", rar:1 },
+  healbook:   { icon:"🌱", name:"薬草学の書", desc:"回復ドロップ1個の効果+2", rar:1 },
+  dragonblade:{ icon:"🐉", name:"竜牙の剣", desc:"攻撃ドロップ1個の効果+3", rar:3 },
+  aegis_gr:   { icon:"🏰", name:"イージスの大盾", desc:"防御ドロップ1個の効果+3", rar:3 },
+  saintprayer:{ icon:"👼", name:"聖女の祈り", desc:"回復ドロップ1個の効果+3", rar:3 },
   swordcrest: { icon:"🗡", name:"剛剣の紋章", desc:"攻撃の効果が1.1倍", rar:2 },
   shieldcrest:{ icon:"🛡", name:"重盾の紋章", desc:"防御の効果が1.2倍", rar:2 },
   holywater:  { icon:"💧", name:"聖水", desc:"回復の効果が1.5倍", rar:2 },
@@ -410,27 +420,27 @@ const genMap = () => {
 const encounterFor = (node, act) => {
   const r = node.row;
   const D = act * 4 + r; // 章をまたいで難度が伸びる
-  const hpS = 1 + D * 0.24, atkS = 1 + D * 0.08;
+  const hpS = 1 + D * 0.12, atkS = 1 + D * 0.05;
   const pool = ACT_POOLS[act] || ACT_POOLS[0];
   let list;
   if (node.type === "boss") {
-    list = [{ kind: pick(BOSS_BY_ACT[act] || ["demon"]), hpM:1, atkM:1, boss:true, noScale:true }];
+    list = [{ kind: pick(BOSS_BY_ACT[act] || ["demon"]), hpM:0.72, atkM:0.72, boss:true, noScale:true }];
     const minions = act >= 2 ? 2 : 1 + (act >= 1 && Math.random() < 0.5 ? 1 : 0);
     for (let m = 0; m < minions; m++) list.push({ kind: pick(pool.light), hpM:0.55, atkM:0.7 });
   }
-  else if (node.type === "elite") list = [{ kind:pick(pool.heavy), hpM:2.2, atkM:1.25, elite:true }];
+  else if (node.type === "elite") list = [{ kind:pick(pool.heavy), hpM:1.6, atkM:1.3, elite:true }];
   else if (node.type === "horde") {
-    list = [0,1].map(() => ({ kind:pick(pool.light), hpM:0.62, atkM:0.62 }));
-    list.push({ kind: Math.random() < 0.45 ? "spore" : pick(pool.light), hpM:0.62, atkM:0.62 });
+    list = [0,1].map(() => ({ kind:pick(pool.light), hpM:0.62, atkM:0.65 }));
+    list.push({ kind: Math.random() < 0.45 ? "spore" : pick(pool.light), hpM:0.62, atkM:0.65 });
   }
   else {
     if (r <= 1) list = [{ kind:pick(pool.light), hpM:1, atkM:1 }];
     else if (r <= 3) list = Math.random() < 0.5
       ? [{ kind:pick(pool.heavy), hpM:1, atkM:1 }]
-      : [0,1].map(() => ({ kind:pick(pool.light), hpM:0.85, atkM:0.72 }));
+      : [0,1].map(() => ({ kind:pick(pool.light), hpM:0.8, atkM:0.68 }));
     else list = [
-      { kind:pick(pool.mid), hpM:0.9, atkM:0.78 },
-      { kind:pick(pool.heavy), hpM:0.9, atkM:0.78 }
+      { kind:pick(pool.mid), hpM:0.9, atkM:0.8 },
+      { kind:pick(pool.heavy), hpM:0.9, atkM:0.8 }
     ];
   }
   return list.map((e,i) => {
@@ -440,7 +450,7 @@ const encounterFor = (node, act) => {
     const si = SHIELDS[e.kind];
     const shd = (!SIM_MODE && si && Math.random() < si.c) ? Math.round(si.sh * (0.5 + Math.random() * 0.5)) : 0;
     return { id:"e"+(UID++), kind:e.kind, name:k.name, hp, max:hp,
-      atk: Math.max(1, Math.round(k.atk * as * e.atkM * (act >= 1 ? 1.15 : 1) * (act >= 2 ? 1.1 : 1))), bigX: 1, alive:true, pi:0,
+      atk: Math.max(1, Math.round(k.atk * as * e.atkM * (act === 0 ? 0.9 : 1) * (act >= 2 ? 1.1 : 1))), bigX: e.boss ? 1 : (act >= 1 ? 1.25 : 1.1), alive:true, pi:0,
       pat: pick(k.pats), rollMul: rollDmg(),
       enr: 0, enrEvery: SIM_MODE ? 0 : 4 + Math.floor(Math.random() * 3),
       shd, shdMax: si ? si.sh : 0, shdC: si ? si.c : 0,
@@ -569,6 +579,54 @@ const groupInfo = (cells, ids) => {
   if (sp.three > 0 && threeOn) mult *= spu.three > 0 ? 4 : 3;
   return { count:ids.size, base, sp, spu, mult, starOn, threeOn: threeOn && sp.three > 0, junk };
 };
+const perOf = act =>
+  ACTIONS[act].per
+  + (act === "atk" ? (hasR("swordbook") ? 2 : 0) + (hasR("dragonblade") ? 3 : 0) : 0)
+  + (act === "def" ? (hasR("guardbook") ? 2 : 0) + (hasR("aegis_gr") ? 3 : 0) : 0)
+  + (act === "heal" ? (hasR("healbook") ? 2 : 0) + (hasR("saintprayer") ? 3 : 0) : 0);
+// タップ起点の消去範囲を確定する。パターン系レリックの追加爆破と、
+// 爆破に巻き込まれた特殊ドロップ（爆弾連鎖・雷）の再帰発動まで含む
+const expandClear = (b, idx) => {
+  const seedJunk = b[idx].type === JUNK;
+  const ids0 = findGroup(b, idx);
+  if (seedJunk) return { ids: ids0, seedJunk };
+  const N = SIZE * SIZE;
+  const addIdx = i => { if (i >= 0 && i < N) ids0.add(b[i].id); };
+  const r0 = Math.floor(idx / SIZE), c0 = idx % SIZE;
+  if (hasR("blastcore") && ids0.size === 1) {
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const r = r0 + dr, c = c0 + dc;
+      if (r >= 0 && r < SIZE && c >= 0 && c < SIZE) addIdx(r * SIZE + c);
+    }
+  }
+  if (hasR("crossgem") && ids0.size === 4) {
+    for (let i = 0; i < SIZE; i++) { addIdx(r0 * SIZE + i); addIdx(i * SIZE + c0); }
+  }
+  if (hasR("xgem") && ids0.size === 5) {
+    for (let d = 1; d < SIZE; d++) {
+      [[r0 + d, c0 + d], [r0 + d, c0 - d], [r0 - d, c0 + d], [r0 - d, c0 - d]].forEach(rc => {
+        if (rc[0] >= 0 && rc[0] < SIZE && rc[1] >= 0 && rc[1] < SIZE) addIdx(rc[0] * SIZE + rc[1]);
+      });
+    }
+  }
+  if (hasR("redcore") && b[idx].type === 0) {
+    const redIdx = b.map((c, i) => (ids0.has(c.id) && c.type === 0) ? i : -1).filter(i => i >= 0);
+    redIdx.forEach(i => { addIdx(i - SIZE); addIdx(i + SIZE); });
+  }
+  let ids = expandIds(b, ids0);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const c of b) {
+      if (!ids.has(c.id) || c.special !== "bolt") continue;
+      for (const c2 of b) {
+        if (c2.type === c.type && c2.type !== JUNK && !ids.has(c2.id)) { ids.add(c2.id); changed = true; }
+      }
+    }
+    if (changed) ids = expandIds(b, ids);
+  }
+  return { ids, seedJunk };
+};
 const computeEffect = (act, info) => {
   if (info.junk) return { main:0, splitAtk:0, splitDef:0, healBonus:0 };
   let actBoost = 1;
@@ -578,7 +636,7 @@ const computeEffect = (act, info) => {
   if (act === "atk" && hasR("swordcrest")) relicMul = 1.1;
   if (act === "def" && hasR("shieldcrest")) relicMul = 1.2;
   if (act === "heal" && hasR("holywater")) relicMul = 1.5;
-  const main = Math.round(info.base * ACTIONS[act].per * info.mult * actBoost * relicMul);
+  const main = Math.round(info.base * perOf(act) * info.mult * actBoost * relicMul);
   const healMult = act === "heal" ? 10 : 1;
   const splitAtk = Math.round(main * ((info.sp.atk - info.spu.atk) * 0.5 + info.spu.atk) * healMult);
   const splitDef = Math.round(main * ((info.sp.def - info.spu.def) * 0.5 + info.spu.def) * healMult);
@@ -1282,7 +1340,7 @@ function DropBattle() {
     if (hasR("scale")) gain = Math.round(gain * 1.5);
     setCoinsBoth(coinsRef.current + gain);
     addLog([`💰 コイン +${gain}`]);
-    setPHP(Math.min(pMaxRef.current, pRef.current + Math.round(pMaxRef.current * 0.09))); // 勝利時の小休止回復(9%)
+    setPHP(Math.min(pMaxRef.current, pRef.current + Math.round(pMaxRef.current * 0.07))); // 勝利時の小休止回復(7%)
     if (hasR("bento")) setPHP(Math.min(pMaxRef.current, pRef.current + 8));
     let relicDrop = null;
     if (node && node.type === "elite") { relicDrop = pickRelics(1)[0] || null; if (relicDrop) addRelic(relicDrop); }
@@ -1621,16 +1679,7 @@ function DropBattle() {
     if (statusRef.current !== "battle") return;
     const act = actionRef.current;
     if (!act || usedRef.current.has(act)) return;
-    const seedJunk = boardRef.current[idx].type === JUNK;
-    let ids0 = findGroup(boardRef.current, idx);
-    if (!seedJunk) {
-      const hasBolt = boardRef.current.some(c => ids0.has(c.id) && c.special === "bolt");
-      if (hasBolt) {
-        const t = boardRef.current[idx].type;
-        boardRef.current.forEach(c => { if (c.type === t) ids0.add(c.id); });
-      }
-    }
-    const ids = seedJunk ? ids0 : expandIds(boardRef.current, ids0);
+    const { ids, seedJunk } = expandClear(boardRef.current, idx);
     const info = groupInfo(boardRef.current, ids);
     const eff = computeEffect(act, info);
     const next = refill(boardRef.current, ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
@@ -1746,16 +1795,7 @@ function DropBattle() {
     return b ? parseInt(b.getAttribute("data-idx"), 10) : null;
   };
   const makePreview = (b, idx) => {
-    const seedJunk = b[idx].type === JUNK;
-    let ids0 = findGroup(b, idx);
-    if (!seedJunk) {
-      const hasBolt = b.some(c => ids0.has(c.id) && c.special === "bolt");
-      if (hasBolt) {
-        const t = b[idx].type;
-        b.forEach(c => { if (c.type === t) ids0.add(c.id); });
-      }
-    }
-    const ids = seedJunk ? ids0 : expandIds(b, ids0);
+    const { ids } = expandClear(b, idx);
     return { ids, over:true, info: groupInfo(b, ids) };
   };
   useEffect(() => {
@@ -1851,6 +1891,7 @@ function DropBattle() {
     window.__test = {
       state: () => ({ status: statusRef.current, cur: curNodeRef.current, php: pRef.current,
         turn: turnNumRef.current, tv: { ...turnRef.current },
+        per: { atk: perOf("atk"), def: perOf("def"), heal: perOf("heal") },
         enemies: enemiesRef.current.map(e => ({ kind:e.kind, hp:e.hp, alive:e.alive, pi:e.pi, shd:e.shd || 0, enr:e.enr || 0, atk:e.atk })),
         junk: boardRef.current.filter(c => c.type === JUNK).length,
         bagLeft: ITEM_KEYS.reduce((t, k) => t + bagRef.current[k], 0),
@@ -2347,6 +2388,10 @@ function DropBattle() {
                 strokeWidth: active ? 5 : 3.5, strokeDasharray:"0.1 7", strokeLinecap:"round",
                 vectorEffect:"non-scaling-stroke" });
             })),
+          Array.from({ length: ROWS }, (_, r) => h("span", { key:"fl" + r, className:"absolute font-bold pointer-events-none", style:{
+            left:6, top: (7 + (ROWS - 1 - r) * (86 / (ROWS - 1))) + "%", transform:"translateY(-50%)",
+            fontSize:10, color: r === ROWS - 1 ? "#ff8a9a" : "#cfc4e0", background:"rgba(19,14,28,.78)", border:"1px solid #453b5c",
+            borderRadius:8, padding:"1px 7px", textShadow:"0 1px 2px #000" } }, r === ROWS - 1 ? "魔王" : (r + 1) + "層")),
           map.nodes.map(n => {
             const meta = NODE_META[n.type];
             const sel = status === "map" && selIds.includes(n.id);
@@ -2517,7 +2562,7 @@ function DropBattle() {
           h("span", { style:{ position:"absolute", top:0, left:"14%", right:"14%", height:3, borderRadius:"0 0 4px 4px", background:a.color, opacity: isUsed && !lit ? 0.25 : 0.9, pointerEvents:"none" } }),
           h("img", { src:a.img, alt:a.label, draggable:false, width:20, height:20, style:{ height:20, width:20, maxWidth:20, maxHeight:20, flexShrink:0, marginTop:5, objectFit:"contain", opacity: isUsed && !lit ? 0.35 : 1, filter:"drop-shadow(0 2px 1px rgba(0,0,0,.45))" } }),
           h("span", { style:{ fontSize:11, height:15, lineHeight:"15px", whiteSpace:"nowrap", color: isUsed ? (lit ? "#e7e0ef" : "#777") : "#e7e0ef" } }, a.label,
-            h("span", { style:{ fontSize:8, opacity:0.5, marginLeft:2 } }, "×", a.per)),
+            h("span", { style:{ fontSize:8, opacity:0.5, marginLeft:2 } }, "×", perOf(key))),
           h("span", { id:"actval-" + key, key:"v" + key + "_" + tv[key], className: tv[key] > 0 ? "val-pulse" : "",
             style:{ fontSize:"1.05rem", height:20, lineHeight:"20px", fontWeight:700, fontVariantNumeric:"tabular-nums", display:"flex", alignItems:"center", justifyContent:"center",
             color: lit ? "#ffffff" : isSel && selEff && tv[key] === 0 ? (info && info.mult > 1 ? "#ffe88a" : "#fff") : crossBonus > 0 && tv[key] === 0 ? "#ffcf5d" : isUsed ? a.color : tv[key] > 0 ? "#e0d8f0" : "#9b93a6",

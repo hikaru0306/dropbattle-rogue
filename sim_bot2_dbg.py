@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""難易度検証ボット: グリーディ戦略で通しプレイし勝率・到達点を測定"""
+"""スマートボット: 敵の予告ダメージに合わせて防御量を調整して通しプレイ"""
 import sys, time, json
 from playwright.sync_api import sync_playwright
 
@@ -61,6 +61,7 @@ def run_one(page):
         if st == "clear":
             return {"result": "CLEAR", "act": s["act"] + 1, "hp": s["php"]}
         if st == "lose":
+            print(f"  DEAD act{s['act']+1}", flush=True)
             return {"result": "LOSE", "act": s["act"] + 1, "hp": 0}
         if s.get("campfire"):
             if s["php"] < s["pmax"] * 0.7 or s["coins"] < 50:
@@ -101,11 +102,11 @@ def run_one(page):
             def score(i):
                 t = nodes[i]["type"]
                 hp_ratio = s["php"] / s["pmax"]
-                if t == "rest": return 0 if hp_ratio < 0.6 else 3
+                if t == "rest": return 0 if hp_ratio < 0.7 else 3
                 if t == "treasure": return 1
                 if t == "battle": return 2
                 if t == "horde": return 4 if hp_ratio > 0.7 else 6
-                if t == "elite": return 5 if hp_ratio > 0.8 else 9
+                if t == "elite": return 5 if (hp_ratio > 0.85 and "potion" in s["items"]) else 9
                 return 4
             chosen = min(sel, key=score)
             page.evaluate(f"window.__test.enter({chosen})")
@@ -115,8 +116,16 @@ def run_one(page):
             if s.get("locked"):
                 time.sleep(0.25)
                 continue
-            # ポーション使用
-            if s["php"] < s["pmax"] * 0.4 and "potion" in s["items"]:
+            if s["turn"] != getattr(run_one, "_lt", None):
+                run_one._lt = s["turn"]
+                inc = sum(iv["dmg"] for iv in (s.get("intents") or []) if iv)
+                ens = [(e["kind"], e["hp"], "enr" + str(e["enr"]) if e["enr"] else "", "shd" + str(e["shd"]) if e["shd"] else "") for e in s["enemies"] if e["alive"]]
+                print(f"  T{s['turn']} php={s['php']} inc={inc} ens={ens}", flush=True)
+            # ポーション使用: 予告ダメージで落ちる圏内なら合わせて飲む
+            incoming_now = sum(iv["dmg"] for iv in (s.get("intents") or []) if iv)
+            danger = s["php"] - max(0, incoming_now - s["tv"]["def"]) < s["pmax"] * 0.15
+            enr_threat = any(e["alive"] and e["enr"] >= 2 for e in s["enemies"])
+            if (s["php"] < s["pmax"] * (0.6 if enr_threat else 0.45) or danger) and "potion" in s["items"]:
                 page.evaluate(f"window.__test.useItem({s['items'].index('potion')})")
                 time.sleep(0.2)
             # 敵2体以上なら爆弾
@@ -142,12 +151,39 @@ def run_one(page):
             if not remaining:
                 time.sleep(0.3)
                 continue
-            act = remaining[0]
-            # 大きいグループ→攻撃、次→防御、最後→回復（HP高なら防御寄せの順で消化）
-            gi = 3 - len(remaining)  # 0,1,2番目のグループ
-            g = gs[min(gi, len(gs) - 1)]
-            order = ["atk", "def", "heal"] if s["php"] > s["pmax"] * 0.5 else ["atk", "heal", "def"]
-            act = [a for a in order if a in remaining][0]
+            # 予告合わせ防御: 来ないターンは防御を捨て、来るターンは必要量ちょうどのグループを選ぶ
+            incoming = sum(iv["dmg"] for iv in (s.get("intents") or []) if iv)
+            need = max(0, incoming - s["tv"]["def"])
+            need_drops = (need + 11) // 12  # DEF_PER=12
+            plan = {}
+            pool = list(range(len(gs)))
+            if "def" in remaining:
+                if need_drops > 0:
+                    cand = [i for i in pool if gs[i]["size"] >= need_drops]
+                    # 足りるグループのうち特殊ドロップを含まない最小を優先（特殊は攻撃に温存）
+                    if cand:
+                        plain = [i for i in cand if not gs[i]["sps"]]
+                        di = min(plain or cand, key=lambda i: gs[i]["size"])
+                    else:
+                        big = [i for i in pool if not gs[i]["sps"]] or pool
+                        di = max(big, key=lambda i: gs[i]["size"])
+                else:
+                    plain = [i for i in pool if not gs[i]["sps"]] or pool
+                    di = min(plain, key=lambda i: gs[i]["size"])  # 攻撃が来ないなら特殊なし最小を捨てる
+                plan["def"] = di; pool.remove(di)
+            if "atk" in remaining and pool:
+                # サイズ最優先・特殊ドロップ入りはタイブレークで優遇
+                BONUS = {"aoe": 5, "bolt": 4, "bombx": 3, "bombd": 3, "star": 3, "atkx": 4, "atk": 2, "plus": 2, "pierce": 2}
+                ai = max(pool, key=lambda i: (gs[i]["size"], sum(BONUS.get(sp, 1) for sp in gs[i]["sps"])))
+                plan["atk"] = ai; pool.remove(ai)
+            if "heal" in remaining and pool:
+                hi = min(pool, key=lambda i: gs[i]["size"])  # 回復1/個なのでヒールは常に捨て枠
+                plan["heal"] = hi; pool.remove(hi)
+            # HP低いときは回復を攻撃より大きいグループに
+            if "atk" in plan and "heal" in plan and s["php"] < s["pmax"] * 0.4 and gs[plan["atk"]]["size"] > gs[plan["heal"]]["size"]:
+                plan["atk"], plan["heal"] = plan["heal"], plan["atk"]
+            act = next(a for a in ["def", "atk", "heal"] if a in remaining)
+            g = gs[plan.get(act, 0)] if act in plan else gs[0]
             page.evaluate(f"window.__test.setAct('{act}')")
             time.sleep(0.05)
             page.evaluate(f"window.__test.commit({g['idx']})")
