@@ -337,7 +337,7 @@ const intentOf = (en, allies) => {
   const hit = act === "double" ? Math.max(1, Math.round(en.atk * 0.6 * roll)) : Math.max(1, Math.round(en.atk * roll));
   const dmg = act === "attack" || act === "drain" || act === "jamatk" ? hit
     : act === "double" ? hit * 2
-    : act === "bigatk" ? Math.max(1, Math.round(en.atk * (k.bigMul || 2) * (en.bigX || 1) * roll)) : 0;
+    : act === "bigatk" ? Math.max(1, Math.round(en.atk * (en.boss ? (k.bigMul || 2) : Math.min(k.bigMul || 2, 2.4)) * (en.bigX || 1) * roll)) : 0;
   return { act, dmg, hit, hits: act === "double" ? 2 : 1,
     jamN: Math.max(1, (k.jamN || 3) - (hasR("salt") ? 1 : 0)), heal: Math.round(en.atk * (k.healMul || 1.5)) };
 };
@@ -450,7 +450,7 @@ const encounterFor = (node, act) => {
     const si = SHIELDS[e.kind];
     const shd = (!SIM_MODE && si && Math.random() < si.c) ? Math.round(si.sh * (0.5 + Math.random() * 0.5)) : 0;
     return { id:"e"+(UID++), kind:e.kind, name:k.name, hp, max:hp,
-      atk: Math.max(1, Math.round(k.atk * as * e.atkM * (e.boss ? (act >= 2 ? 1.5 : 1) : 1.6 * (act === 0 ? 0.9 : 1) * (act >= 2 ? 1.75 : 1)))), bigX: e.boss ? 1 : (act >= 1 ? 1.25 : 1.1), alive:true, pi:0,
+      atk: Math.max(1, Math.round(k.atk * as * e.atkM * (e.boss ? (act >= 2 ? 1.5 : 1) : (act === 0 ? 1.44 : act === 1 ? 1.35 : 1.6)))), bigX: e.boss ? 1 : (act >= 1 ? 1.0 : 1.1), alive:true, pi:0,
       pat: pick(k.pats), rollMul: rollDmg(),
       enr: 0, enrEvery: SIM_MODE ? 0 : 4 + Math.floor(Math.random() * 3),
       shd, shdMax: si ? si.sh : 0, shdC: si ? si.c : 0,
@@ -680,6 +680,23 @@ const refill = (cells, removeIds, bagRef, ownedRef, bagUpRef, ownedUpRef) => {
       const d = drawFromBag(bagRef, ownedRef, bagUpRef, ownedUpRef, next);
       next[np[k]] = { ...next[np[k]], special: d.k, up: d.up };
     }
+  }
+  return next;
+};
+
+// パズル用: 袋・特殊なしの重力補充（残ったドロップが下に落ち、新規は上から降る）
+const refillPlain = (cells, removeIds) => {
+  const next = cells.slice();
+  for (let c = 0; c < SIZE; c++) {
+    const survivors = [];
+    for (let r = 0; r < SIZE; r++) {
+      const cell = cells[r*SIZE+c];
+      if (!removeIds.has(cell.id)) survivors.push(cell);
+    }
+    const col = [];
+    for (let k = 0; k < SIZE - survivors.length; k++) col.push(makeDrop(false));
+    for (const s of survivors) col.push(s);
+    for (let r = 0; r < SIZE; r++) next[r*SIZE+c] = col[r];
   }
   return next;
 };
@@ -1603,7 +1620,7 @@ function DropBattle() {
     if (!pz || pz.moves <= 0 || pz.done) return;
     const ids = findGroup(boardRef.current, idx);
     const count = ids.size;
-    const next = boardRef.current.map(c => ids.has(c.id) ? { id: UID++, type: Math.floor(Math.random() * 4), special: false } : c);
+    const next = refillPlain(boardRef.current, ids);
     SFX.clear();
     setClearing(new Set(ids));
     setLocked(true); lockedRef.current = true;
