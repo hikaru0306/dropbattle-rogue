@@ -761,7 +761,7 @@ const SFX = {
   don:  () => { softTone(130, 0.3, "sine", 0.24, 0, 42); noise(0.16, 200, 0.16, 0, 0.6, "lowpass"); noise(0.05, 1300, 0.09, 0, 1); },
   kiin: () => { ringTone(1980, 0.55, 0.09); ringTone(3060, 0.45, 0.05, 0.004); ringTone(5170, 0.3, 0.03, 0.008); noise(0.04, 6500, 0.05, 0, 2); },
   cure: () => { softTone(620, 0.16, "sine", 0.1, 0, 1350); softTone(760, 0.2, "sine", 0.1, 0.15, 1680); softTone(930, 0.3, "sine", 0.08, 0.32, 2050); noise(0.35, 6800, 0.025, 0.12, 2); },
-  clear:() => { softTone(784, 0.16, "sine", 0.07); softTone(1175, 0.2, "sine", 0.05, 0.03); noise(0.12, 5200, 0.03, 0.02, 1.4); },
+  clear:() => { softTone(784, 0.18, "sine", 0.18); softTone(1175, 0.22, "sine", 0.13, 0.03); noise(0.14, 5200, 0.08, 0.02, 1.4); noise(0.05, 2400, 0.06); },
   atk:  () => { noise(0.12, 900, 0.12, 0, 0.6); softTone(150, 0.16, "sine", 0.14, 0.01, 55); },
   hurt: () => { softTone(110, 0.22, "sine", 0.16, 0, 45); noise(0.18, 350, 0.1, 0, 0.7, "lowpass"); },
   crack:() => { noise(0.2, 2400, 0.16, 0, 0.5); noise(0.25, 700, 0.12, 0.03, 0.6); softTone(80, 0.22, "sine", 0.12, 0.02, 40); },
@@ -801,6 +801,16 @@ const bgmPlay = name => {
     if (p && p.catch) p.catch(() => {});
   } catch (e) {}
 };
+// バックグラウンド（タブ非表示・ホーム画面）でBGMを止め、復帰で再開
+const bgmOnHide = () => { if (bgmAudio) { try { bgmAudio.pause(); } catch (e) {} } };
+const bgmOnShow = () => {
+  if (bgmTrack && bgmOn && bgmAudio) {
+    try { const p = bgmAudio.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+  }
+};
+document.addEventListener("visibilitychange", () => { document.hidden ? bgmOnHide() : bgmOnShow(); });
+window.addEventListener("pagehide", bgmOnHide);
+window.addEventListener("pageshow", bgmOnShow);
 
 // ===== キャラ画像スプライト（ComfyUI生成・透過PNG） =====
 const CharImg = ({ kind, size }) => h("img", {
@@ -2085,7 +2095,7 @@ function DropBattle() {
             h("span", { className:"font-bold text-sm block", style:{ color:"#e8c06a" } }, RELICS[k].name),
             h("span", { className:"block text-[11px]", style:{ opacity:0.85, lineHeight:1.5 } }, RELICS[k].desc))))))));
   if (bagOpen) overlays.push(h("div", { key:"bag", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setBagOpen(false) },
-    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, maxHeight:"82vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-1" },
         h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, Ic("assets/icon_bag.png", 18), "所持アイテム"),
         h("button", { onClick: () => setBagOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
