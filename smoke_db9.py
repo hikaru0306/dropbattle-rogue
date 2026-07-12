@@ -102,7 +102,7 @@ with sync_playwright() as pw:
         time.sleep(0.4)
         s = st(page)
         assert s["coins"] == 30 - 25, f"hammer cost: {s['coins']}"
-        assert s["shop"], "shop after forge"
+        assert not s["shop"], "campfire forge should not open shop"
         print("R7 hammer 25G forge OK")
     else:
         print("R7 skipped (no rest node)")

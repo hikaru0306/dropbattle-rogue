@@ -161,7 +161,7 @@ const ITEMS = {
   bombd: { mark:"斜", img:"assets/mk_bombd.png", color:"#e8d8ff", ring:"rgba(180,120,255,.95)", glowc:"#a86aff", name:"Xボム", desc:"消すと斜め4方向のドロップも巻き込んで消す" },
   aoe:   { mark:"全", img:"assets/mk_aoe.png", color:"#ffe2c8", ring:"rgba(255,170,80,.95)", glowc:"#ff9a3c", name:"乱れ斬り", desc:"攻撃で消すと、このターンの攻撃が敵全体に当たる" },
   gold:  { mark:"金", img:"assets/mk_gold.png", color:"#fff2c8", ring:"rgba(240,200,80,.95)", glowc:"#e8c04a", name:"金貨", desc:"消すとコイン+5" },
-  bolt:  { mark:"雷", img:"assets/mk_bolt.png", color:"#fffbc8", ring:"rgba(255,230,90,.95)", glowc:"#ffd83c", name:"サンダー", desc:"消すと同じ色のドロップが盤面全体から消える" },
+  bolt:  { mark:"雷", img:"assets/mk_bolt.png", color:"#fffbc8", ring:"rgba(255,230,90,.95)", glowc:"#ffd83c", name:"サンダー", desc:"6個以上の消去に含めて消すと、同じ色が盤面全体から消える" },
   heal: { mark:"♥", img:"assets/mk_heart.png", color:"#d6ffe4", ring:"rgba(80,230,140,.95)", glowc:"#48e890", name:"ヒール", desc:"消すと10回復" },
   def:  { mark:"盾", img:"assets/icon_def.png", color:"#d6e8ff", ring:"rgba(90,160,255,.95)", glowc:"#5aa0ff", name:"ガード", desc:"消した効果の半分を防御に追加" },
   atk:  { mark:"剣", img:"assets/icon_atk.png", color:"#ffd9d9", ring:"rgba(255,90,90,.95)", glowc:"#ff5a5a", name:"ソード", desc:"消した効果の半分を攻撃に追加" },
@@ -226,7 +226,7 @@ const RELICS = {
   magnet:     { icon:"🧲", name:"磁石の指輪", desc:"勝利報酬の選択肢が4つになる", rar:2 },
   bigstar:    { icon:"🌟", name:"大星晶", desc:"盤面の特殊ドロップ+2", rar:3 },
   prism:      { icon:"🔮", name:"プリズム", desc:"ターン開始時、盤面の最少色が他の色に変わる（3色になる）", rar:3 },
-  crown:      { icon:"👑", name:"王家の印章", desc:"章クリアの最大HPボーナスが+80になる", rar:3 },
+  crown:      { icon:"👑", name:"王家の印章", desc:"章クリア時に最大HP+50（通常はボーナスなし）", rar:3 },
   ironwill:   { icon:"⛓", name:"鉄の意志", desc:"余った防御の半分を次のターンに持ち越す", rar:3 }
 };
 const RELIC_KEYS = Object.keys(RELICS);
@@ -446,11 +446,11 @@ const encounterFor = (node, act) => {
   return list.map((e,i) => {
     const k = KINDS[e.kind];
     const hs = e.noScale ? 1 : hpS, as = e.noScale ? 1 : atkS;
-    const hp = Math.round(k.hp * hs * e.hpM * (!e.boss && hasR("deathmark") ? 0.9 : 1));
+    const hp = Math.round(k.hp * hs * e.hpM * (act >= 2 ? (e.boss ? 2.5 : 1.7) : 1) * (!e.boss && hasR("deathmark") ? 0.9 : 1));
     const si = SHIELDS[e.kind];
     const shd = (!SIM_MODE && si && Math.random() < si.c) ? Math.round(si.sh * (0.5 + Math.random() * 0.5)) : 0;
     return { id:"e"+(UID++), kind:e.kind, name:k.name, hp, max:hp,
-      atk: Math.max(1, Math.round(k.atk * as * e.atkM * (e.boss ? 1 : 1.6 * (act === 0 ? 0.9 : 1) * (act >= 2 ? 1.1 : 1)))), bigX: e.boss ? 1 : (act >= 1 ? 1.25 : 1.1), alive:true, pi:0,
+      atk: Math.max(1, Math.round(k.atk * as * e.atkM * (e.boss ? (act >= 2 ? 1.5 : 1) : 1.6 * (act === 0 ? 0.9 : 1) * (act >= 2 ? 1.75 : 1)))), bigX: e.boss ? 1 : (act >= 1 ? 1.25 : 1.1), alive:true, pi:0,
       pat: pick(k.pats), rollMul: rollDmg(),
       enr: 0, enrEvery: SIM_MODE ? 0 : 4 + Math.floor(Math.random() * 3),
       shd, shdMax: si ? si.sh : 0, shdC: si ? si.c : 0,
@@ -619,6 +619,7 @@ const expandClear = (b, idx, blastOk) => {
   let changed = true;
   while (changed) {
     changed = false;
+    if (ids.size < 6) break; // 雷は6個以上の消去に含まれた時のみ発動
     for (const c of b) {
       if (!ids.has(c.id) || c.special !== "bolt") continue;
       for (const c2 of b) {
@@ -1380,7 +1381,9 @@ function DropBattle() {
     SFX.pick();
     addLog([`🎁 ${ITEMS[key].name}を獲得`]);
     setRewards(null);
-    if (pendingNodeRef.current && pendingNodeRef.current.type === "horde") openShop();
+    const pnode = pendingNodeRef.current;
+    if (pnode && pnode.type === "horde" && (TEST_MODE || Math.random() < 0.5)) openShop();
+    else if (pnode && pnode.type === "treasure" && !TEST_MODE && Math.random() < 0.35) openShop();
     else finishNode();
   };
 
@@ -1388,7 +1391,7 @@ function DropBattle() {
   const nextAct = () => {
     const na = actRef.current + 1;
     setAct(na);
-    setPMax(pMaxRef.current + (hasR("crown") ? 80 : 50));
+    if (hasR("crown")) setPMax(pMaxRef.current + 50);
     setPHP(pMaxRef.current);
     setCoinsBoth(coinsRef.current + 100);
     const m = genMap();
@@ -1435,7 +1438,7 @@ function DropBattle() {
     setRestMsg(`🔥 焚き火で休んだ　HP +${healAmt}`);
     setTimeout(() => { setRestMsg(null); }, 1500);
     setCampfire(null);
-    openShop();
+    finishNode();
   };
   const forgeCost = () => hasR("hammer") ? 25 : FORGE_COST;
   const forgeUpgrade = k => {
@@ -1449,7 +1452,7 @@ function DropBattle() {
     addLog([`🔨 ${ITEMS[k].name}を1つ鍛えた（-${forgeCost()}💰）→ ${DESC_UP[k]}`]);
     SFX.forge();
     setCampfire(null);
-    openShop();
+    finishNode();
   };
   const removeOwned = k => {
     if (ownedRef.current[k] <= 0) return;
@@ -1464,7 +1467,7 @@ function DropBattle() {
     addLog([`🗑 ${ITEMS[k].name}を袋から1つ削除した`]);
     SFX.hurt();
     setCampfire(null);
-    openShop();
+    finishNode();
   };
 
   // ===== 消費アイテム使用 =====
@@ -1572,9 +1575,13 @@ function DropBattle() {
     });
     sizes.sort((a, b) => b - a);
     const maxSum = (sizes[0] || 0) + (sizes[1] || 0) + (sizes[2] || 0);
-    const target = Math.max(10, maxSum - 2 - Math.floor(Math.random() * 3));
+    // 飛び飛びの3目標（例 5・8・12）。それぞれに別レリック
+    const t3 = Math.max(12, maxSum - Math.floor(Math.random() * 3));
+    const t2 = t3 - (2 + Math.floor(Math.random() * 3));
+    const t1 = Math.max(3, t2 - (2 + Math.floor(Math.random() * 3)));
+    const targets = [t1, t2, t3];
     const relics = pickRelics(3);
-    const pz = { target, moves: 3, cleared: 0, relics, done: null };
+    const pz = { targets, moves: 3, cleared: 0, relics, done: null };
     setPuzzle(pz); puzzleRef.current = pz;
     setClearing(new Set()); setPreview(null); setPops({}); setArmed(null);
     setStatus("puzzle"); statusRef.current = "puzzle";
@@ -1596,22 +1603,15 @@ function DropBattle() {
       setClearing(new Set());
       let done = null;
       if (moves <= 0) {
-        const diff = cleared - pz.target;
-        const rk = Math.abs(diff) <= 1 ? pz.relics[diff + 1] : null;
+        const hitIdx = pz.targets.indexOf(cleared);
+        const rk = hitIdx >= 0 ? pz.relics[hitIdx] : null;
         if (rk) {
           addRelic(rk);
           done = { kind: "relic", relic: rk, cleared };
           SFX.coin();
         } else {
-          const k = pick(Object.keys(CONSUM));
-          if (itemsRef.current.length < itemCap()) {
-            setItemsBoth([...itemsRef.current, k]);
-            done = { kind: "item", item: k, cleared };
-          } else {
-            setCoinsBoth(coinsRef.current + 40);
-            done = { kind: "coins", coins: 40, cleared };
-          }
-          SFX.pick();
+          done = { kind: "none", cleared };
+          SFX.hurt();
         }
       }
       const npz = { ...pz, cleared, moves, done };
@@ -1914,7 +1914,7 @@ function DropBattle() {
         intents: enemiesRef.current.map(e => { if (!e.alive) return null;
           const iv = intentOf(e, enemiesRef.current);
           return { act: iv.act, dmg: iv.dmg * ((e.enr || 0) >= 3 ? 2 : 1) }; }),
-        puzzle: puzzleRef.current ? { target: puzzleRef.current.target, moves: puzzleRef.current.moves, cleared: puzzleRef.current.cleared, done: puzzleRef.current.done ? puzzleRef.current.done.kind : null } : null,
+        puzzle: puzzleRef.current ? { targets: puzzleRef.current.targets.slice(), moves: puzzleRef.current.moves, cleared: puzzleRef.current.cleared, done: puzzleRef.current.done ? puzzleRef.current.done.kind : null } : null,
         selectable: statusRef.current === "map" ? selectableIds() : [],
         edges: mapRef.current.edges,
         map: mapRef.current.nodes.map(n => ({ id:n.id, row:n.row, type:n.type })) }),
@@ -1940,6 +1940,7 @@ function DropBattle() {
       giveItem: k => setItemsBoth([...itemsRef.current, k].slice(0, itemCap())),
       useItem: i => useItem(i),
       buy: k => buyItem(k),
+      openShop: () => openShop(),
       closeShop: () => closeShop(),
       restHeal: () => restHeal(),
       restRemove: k => removeOwned(k),
@@ -2268,15 +2269,14 @@ function DropBattle() {
     overlays.push(h("div", { key:"pzdone", className:"fixed inset-0 flex items-center justify-center px-6 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:56 } },
       h("div", { className:"text-center pop-in rounded-2xl p-4 w-full", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
         h("div", { className:"font-bold", style:{ fontSize:"1.3rem", color: hit ? "#ffd95c" : "#c9bfe0", textShadow:"0 2px 0 rgba(0,0,0,.55)" } },
-          hit ? "ぴったり！" : "おしい…"),
-        h("p", { className:"my-1 text-sm", style:{ opacity:0.85 } }, "合計 ", h("b", { style:{ color:"#7cffb0" } }, d.cleared), " 個（目標 ", puzzle.target, " 個）"),
+          hit ? "ぴったり！" : "はずれ…"),
+        h("p", { className:"my-1 text-sm", style:{ opacity:0.85 } }, "合計 ", h("b", { style:{ color:"#7cffb0" } }, d.cleared), " 個（目標 ", puzzle.targets.join("・"), " 個）"),
         hit && h("div", { className:"flex items-center justify-center gap-2 rounded-xl px-3 py-2 my-2", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.5)" } },
           h("span", { style:{ fontSize:"1.5rem" } }, RELICS[d.relic].icon),
           h("span", { className:"text-left" },
             h("span", { className:"font-bold text-sm block", style:{ color:"#e8c06a" } }, "レリック獲得: ", RELICS[d.relic].name),
             h("span", { className:"block text-[10px]", style:{ opacity:0.8 } }, RELICS[d.relic].desc))),
-        d.kind === "item" && h("p", { className:"my-2 text-sm font-bold", style:{ color:"#8ce8b0" } }, CONSUM[d.item].icon, " ", CONSUM[d.item].name, " を獲得"),
-        d.kind === "coins" && h("p", { className:"my-2 text-sm font-bold flex items-center justify-center gap-1", style:{ color:"#e8c06a" } }, Ic("assets/icon_coin.png", 14), "+", d.coins),
+        d.kind === "none" && h("p", { className:"my-2 text-xs", style:{ opacity:0.7 } }, "どの目標にも合わず、宝箱は静かに閉じてしまった…"),
         h("button", { onClick: closePuzzle, className:"w-full rounded-xl py-2.5 font-bold mt-1",
           style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } }, "先へ進む ▶"))));
   }
@@ -2288,7 +2288,7 @@ function DropBattle() {
         h("div", { className:"font-bold", style:{ fontSize:"1.6rem", color:"#f2e6c8", textShadow:"0 3px 0 rgba(0,0,0,.55)" } }, "🎉 第", act + 1, "章 クリア！"),
         h("p", { className:"my-2 text-sm", style:{ opacity:0.85 } }, "「", ACT_NAMES[act], "」を制覇した！"),
         h("div", { className:"rounded-xl py-2 px-3 mb-2 text-xs", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.4)", color:"#e8d8a8", lineHeight:1.9 } },
-          "章クリアボーナス", h("br"), "最大HP +", hasR("crown") ? 80 : 50, " ／ HP全回復 ／ ", Ic("assets/icon_coin.png", 12), " +100"),
+          "章クリアボーナス", h("br"), hasR("crown") ? "最大HP +50 ／ " : "", "HP全回復 ／ ", Ic("assets/icon_coin.png", 12), " +100"),
         actClear.picks && actClear.picks.length > 0 && h("div", { className:"mb-2" },
           h("p", { className:"text-[11px] mb-1 font-bold", style:{ color:"#e8c06a" } }, "🏺 レリックを1つ選んで進む"),
           h("div", { className:"flex flex-col gap-1.5" }, actClear.picks.map(k =>
@@ -2359,15 +2359,20 @@ function DropBattle() {
         h("div", { className:"rounded-2xl px-3 py-2 mb-1 text-center", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c" } },
           h("div", { className:"flex items-center justify-center gap-2 font-bold", style:{ color:"#ffd95c", fontSize:"1.02rem" } }, Ic("assets/node_treasure.png", 20), "不思議な宝箱"),
           h("p", { className:"text-[11px] mt-0.5", style:{ opacity:0.85 } },
-            "3回の消去で 合計ぴったり ", h("b", { style:{ color:"#ffd95c", fontSize:"0.9rem" } }, puzzle.target), " 個（±1個OK）消すと…"),
-          h("div", { className:"flex justify-center gap-1.5 mt-1 text-[10px]", style:{ flexWrap:"wrap" } },
-            [-1, 0, 1].map(d => h("span", { key:d, className:"rounded-full px-2 py-0.5", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.4)", color:"#e8d8a8" } },
-              (puzzle.target + d) + "個 → " + (puzzle.relics[d + 1] ? RELICS[puzzle.relics[d + 1]].icon + RELICS[puzzle.relics[d + 1]].name : "アイテム")))),
+            "3回の消去で 合計を ", h("b", { style:{ color:"#ffd95c", fontSize:"0.9rem" } }, puzzle.targets.join("・")), " 個のどれかにぴったり合わせろ！"),
+          h("div", { className:"flex flex-col mt-1 text-left", style:{ gap:3 } },
+            puzzle.targets.map((t, i) => h("div", { key:i, className:"flex items-center rounded-lg px-2 py-1", style:{ gap:6, background:"rgba(232,192,106,.08)", border:"1px solid rgba(216,168,72,.35)" } },
+              h("span", { className:"font-bold text-[11px]", style:{ color:"#ffd95c", minWidth:34, textAlign:"right" } }, t, "個"),
+              puzzle.relics[i]
+                ? h("span", { className:"text-[10px]", style:{ lineHeight:1.4 } },
+                    h("span", { className:"font-bold", style:{ color:"#e8c06a" } }, RELICS[puzzle.relics[i]].icon, " ", RELICS[puzzle.relics[i]].name, "："),
+                    h("span", { style:{ opacity:0.8 } }, RELICS[puzzle.relics[i]].desc))
+                : h("span", { className:"text-[10px]", style:{ opacity:0.6 } }, "（在庫なし）")))),
           h("div", { className:"flex justify-center mt-1.5 text-sm font-bold", style:{ gap:20 } },
             h("span", { style:{ color:"#c9bfe0" } }, "消した数 ", h("span", { style:{ color:"#7cffb0", fontSize:"1.1rem", fontVariantNumeric:"tabular-nums" } }, puzzle.cleared)),
             h("span", { style:{ color:"#c9bfe0" } }, "残り ", h("span", { style:{ color:"#e8c06a", letterSpacing:2 } }, "●".repeat(puzzle.moves) + "○".repeat(3 - puzzle.moves))))),
         boardEl,
-        h("p", { className:"text-center text-[10px]", style:{ opacity:0.6 } }, "外れても アイテム or コインは貰える"),
+        h("p", { className:"text-center text-[10px]", style:{ opacity:0.6 } }, "ぴったり合わなければ 何も貰えない…"),
         overlays));
   }
 

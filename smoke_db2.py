@@ -97,10 +97,9 @@ with sync_playwright() as p:
     time.sleep(0.4)
     hp2=st(page)["php"]
     assert hp2>hp1, f"rest heal failed {hp1}->{hp2}"
-    assert st(page)["shop"], "rest shop should open"
-    page.evaluate("window.__test.closeShop()")
-    time.sleep(0.3)
-    print("R1 campfire heal + shop OK:", hp1,"->",hp2)
+    assert not st(page)["shop"], "campfire should not open shop anymore"
+    assert st(page)["status"] == "map", "should return to map after rest"
+    print("R1 campfire heal (no shop) OK:", hp1,"->",hp2)
     page.screenshot(path=SHOT+r"\s9_rest.png")
 
     # 敗北フロー（ボスの攻撃を受け続ける）

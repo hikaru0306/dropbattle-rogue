@@ -99,8 +99,11 @@ with sync_playwright() as pw:
     assert s["campfire"] == "menu", "campfire not open"
     page.evaluate("window.__test.restHeal()")
     time.sleep(0.5)
+    assert not st(page)["shop"], "campfire should not open shop"
+    page.evaluate("window.__test.openShop()")
+    time.sleep(0.4)
     s = st(page)
-    assert s["shop"], "rest shop not open"
+    assert s["shop"], "hook shop not open"
     page.evaluate("window.__test.addCoins(300)")
     k = s["shop"][0]
     c0 = st(page)["coins"]

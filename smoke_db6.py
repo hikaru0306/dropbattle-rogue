@@ -46,10 +46,8 @@ with sync_playwright() as pw:
     ups = page.evaluate("window.__test.ups()")
     assert ups["heal"] == 1, f"forge count: {ups}"
     assert s["coins"] == c0 - 50, f"cost: {c0} -> {s['coins']}"
-    assert s["shop"], "shop should open after forge"
+    assert not s["shop"], "campfire forge should not open shop"
     print("F2 forge 1 copy for 50G OK (heal x1, coins", c0, "->", s["coins"], ")")
-    page.evaluate("window.__test.closeShop()")
-    time.sleep(0.4)
 
     # 2個目も強化できる（heal所持3個）
     page.evaluate(f"window.__test.setCur({eds[0]['from']})")

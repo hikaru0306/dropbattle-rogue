@@ -113,6 +113,28 @@ with sync_playwright() as pw:
     assert s["tv"]["atk"] == 360, f"bolt-in-blast: atk {s['tv']['atk']} != 360"
     print("K4 bolt swept by blast fires -> full board atk360 OK")
 
+    # 5) 雷は6個未満の消去では発動しない
+    page.evaluate("window.__test.spawn(['slime'])")
+    time.sleep(0.4)
+    page.evaluate("window.__test.restart()")
+    time.sleep(0.8)
+    if st(page)["status"] != "map":
+        page.click("text=冒険に出る"); time.sleep(0.5)
+    enter_battle(page)
+    fill_board(page)  # 全部黄(1)
+    for i in (0, 1, 2):
+        page.evaluate(f"window.__test.setCellType({i}, 0)")
+    for i in (14, 20, 30):
+        page.evaluate(f"window.__test.setCellType({i}, 0)")  # 非隣接の赤
+    page.evaluate("window.__test.setCellSpecial(1, 'bolt')")
+    time.sleep(0.3)
+    page.evaluate("window.__test.setAct('atk')")
+    page.evaluate("window.__test.commit(0)")
+    time.sleep(0.6)
+    s = st(page)
+    assert s["tv"]["atk"] == 30, f"bolt under 6: atk {s['tv']['atk']} != 30"
+    print("K5 bolt inert under 6-clear OK")
+
     assert not errors, errors
     print("ALL CLEAR-RELIC TESTS OK")
     b.close()

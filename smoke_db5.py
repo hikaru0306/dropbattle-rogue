@@ -120,10 +120,8 @@ with sync_playwright() as pw:
     time.sleep(0.4)
     s = st(page)
     assert s["ownedTotal"] == t0 - 1, f"remove failed {t0} -> {s['ownedTotal']}"
-    assert s["shop"], "shop should open after remove"
+    assert not s["shop"], "campfire remove should not open shop"
     print("N7 campfire remove OK owned:", t0, "->", s["ownedTotal"])
-    page.evaluate("window.__test.closeShop()")
-    time.sleep(0.3)
     assert st(page)["status"] == "map"
     print("N8 back to map OK")
     b.close()

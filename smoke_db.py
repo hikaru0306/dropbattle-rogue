@@ -103,7 +103,7 @@ with sync_playwright() as p:
             time.sleep(0.6)
             s = st(page)
             assert s["act"] == a + 1, f"act not advanced: {s['act']}"
-            assert s["php"] == s["pmax"] == 300 + 50 * (a + 1), f"act bonus wrong php={s['php']} pmax={s['pmax']}"
+            assert s["php"] == s["pmax"] == 300, f"act bonus wrong php={s['php']} pmax={s['pmax']}"
             print(f"9-{a} nextAct OK act={s['act']+1} pmax={s['pmax']}")
         else:
             s = wait_status(page, "clear", 20)
