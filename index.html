@@ -334,10 +334,12 @@ const intentOf = (en, allies) => {
   let act = pat[en.pi % pat.length];
   if (act === "healally" && !(allies || []).some(a => a.alive && a.id !== en.id)) act = "attack";
   const roll = en.rollMul || 1; // 1行動ごとに振り直されるダメージロール
-  const hit = act === "double" ? Math.max(1, Math.round(en.atk * 0.6 * roll)) : Math.max(1, Math.round(en.atk * roll));
-  const dmg = act === "attack" || act === "drain" || act === "jamatk" ? hit
+  let hit = act === "double" ? Math.max(1, Math.round(en.atk * 0.6 * roll)) : Math.max(1, Math.round(en.atk * roll));
+  if (en.atkFloor && act !== "double") hit = Math.max(hit, en.atkFloor); // 弱エリートの通常攻撃下限
+  let dmg = act === "attack" || act === "drain" || act === "jamatk" ? hit
     : act === "double" ? hit * 2
     : act === "bigatk" ? Math.max(1, Math.round(en.atk * (en.boss ? (k.bigMul || 2) : Math.min(k.bigMul || 2, 2.4)) * (en.bigX || 1) * roll)) : 0;
+  if (act === "bigatk" && en.bigFloor) dmg = Math.max(dmg, en.bigFloor); // 弱エリートの溜め攻撃下限
   return { act, dmg, hit, hits: act === "double" ? 2 : 1,
     jamN: Math.max(1, (k.jamN || 3) - (hasR("salt") ? 1 : 0)), heal: Math.round(en.atk * (k.healMul || 1.5)) };
 };
@@ -452,11 +454,16 @@ const encounterFor = (node, act) => {
     return { id:"e"+(UID++), kind:e.kind, name:k.name, hp, max:hp,
       atk: Math.max(1, Math.round(k.atk * as * e.atkM * (e.boss ? (act >= 2 ? 1.5 : 1) : (act === 0 ? 1.44 : act === 1 ? 1.35 : 1.6)))), bigX: e.boss ? 1 : (act >= 1 ? 1.0 : 1.1), alive:true, pi:0,
       pat: pick(k.pats), rollMul: rollDmg(),
+      atkFloor: (act >= 1 && e.elite) ? 60 : 0, bigFloor: (act >= 1 && e.elite) ? 120 : 0, // 2章以降エリートの火力下限
       enr: 0, enrEvery: SIM_MODE ? 0 : 4 + Math.floor(Math.random() * 3),
       shd, shdMax: si ? si.sh : 0, shdC: si ? si.c : 0,
       elite:!!e.elite, boss:!!e.boss, idx:i };
   });
 };
+
+// 2戦目チュートリアル用の敵（必ず通常攻撃を予告する弱スライム1体・攻撃50固定）
+const makeTutorialEnemy = () => { const k = KINDS.slime; return [{ id:"e"+(UID++), kind:"slime", name:k.name, hp:k.hp, max:k.hp, atk:50,
+  alive:true, pi:0, pat:["attack"], rollMul:1, atkFloor:0, bigFloor:0, enr:0, enrEvery:0, shd:0, shdMax:0, shdC:0, elite:false, boss:false, idx:0 }]; };
 
 // ===== 袋（抽選プール）=====
 const initOwned = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:3, def:3, atk:3, atkx:0, defx:0 });
@@ -506,6 +513,16 @@ const makeBoard = (bagRef, ownedRef, bagUpRef, ownedUpRef) => {
     const d = drawFromBag(bagRef, ownedRef, bagUpRef, ownedUpRef, cells);
     cells[idxs[k]].special = d.k; cells[idxs[k]].up = d.up;
   }
+  return cells;
+};
+// 2戦目チュートリアル用: 5個以上つながった同色グループを必ず含む盤面（特殊なし）。seed=グループ内の代表マス
+const TUT_SEED = 26;
+const makeTutorialBoard = () => {
+  const cells = Array.from({length:TOTAL}, () => makeDrop(false));
+  const cluster = [19, 20, 21, 25, 26]; // r3c1-c3 + r4c1-c2 の連結5マス
+  for (const i of cluster) cells[i] = { id:UID++, type:0, special:false, up:false };
+  // 隣接マスが偶然同色だと形が崩れて分かりにくいので、周囲は別色に寄せる
+  for (const i of [13, 14, 15, 18, 22, 24, 27, 31, 32]) if (cells[i].type === 0) cells[i].type = 1;
   return cells;
 };
 const findGroup = (cells, idx) => {
@@ -702,7 +719,8 @@ const refillPlain = (cells, removeIds) => {
 };
 
 // ===== SFX（WebAudio 簡易シンセ）=====
-let AC = null, sfxEnabled = true;
+let AC = null, sfxEnabled = true, sfxVol = 1;
+try { const v = parseFloat(localStorage.getItem("db_sfxvol")); if (v >= 0 && v <= 1) sfxVol = v; } catch (e) {}
 const ac = () => {
   if (!AC) { try { AC = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){} }
   if (AC && AC.state === "suspended") AC.resume();
@@ -715,7 +733,7 @@ const tone = (f, dur, type, vol, delay, slide) => {
     const o = c.createOscillator(), g = c.createGain();
     o.type = type||"sine"; o.frequency.setValueAtTime(f, t);
     if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f+slide), t+dur);
-    g.gain.setValueAtTime(vol||0.1, t);
+    g.gain.setValueAtTime((vol||0.1) * sfxVol, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
     o.connect(g); g.connect(c.destination);
     o.start(t); o.stop(t+dur+0.02);
@@ -738,7 +756,7 @@ const noise = (dur, freq, vol, delay, q, type) => {
     const src = noiseSrc(c), f = c.createBiquadFilter(), g = c.createGain();
     f.type = type || "bandpass"; f.frequency.value = freq; f.Q.value = q || 0.8;
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(vol, t + 0.008);
+    g.gain.linearRampToValueAtTime(vol * sfxVol, t + 0.008);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(f); f.connect(g); g.connect(c.destination);
     src.start(t); src.stop(t + dur + 0.02);
@@ -753,7 +771,7 @@ const softTone = (f0, dur, type, vol, delay, f1) => {
     o.type = type || "sine"; o.frequency.setValueAtTime(f0, t);
     if (f1) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(vol, t + 0.012);
+    g.gain.linearRampToValueAtTime(vol * sfxVol, t + 0.012);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(fl); fl.connect(g); g.connect(c.destination);
     o.start(t); o.stop(t + dur + 0.03);
@@ -766,7 +784,7 @@ const ringTone = (f0, dur, vol, delay) => {
     const o = c.createOscillator(), g = c.createGain();
     o.type = "sine"; o.frequency.setValueAtTime(f0, t);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(vol, t + 0.006);
+    g.gain.linearRampToValueAtTime(vol * sfxVol, t + 0.006);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g); g.connect(c.destination);
     o.start(t); o.stop(t + dur + 0.03);
@@ -801,7 +819,10 @@ const SFX = {
 
 // ===== BGM（CC0実音源: cynicmusic / Juhani Junkala）=====
 const BGM_FILES = { title:"assets/bgm/title.mp3", map:"assets/bgm/map.mp3", battle:"assets/bgm/battle.mp3", boss:"assets/bgm/boss.mp3" };
-let bgmOn = true, bgmAudio = null, bgmTrack = null;
+let bgmOn = true, bgmVol = 1, bgmAudio = null, bgmTrack = null;
+try { const v = parseFloat(localStorage.getItem("db_bgmvol")); if (v >= 0 && v <= 1) bgmVol = v; } catch (e) {}
+const bgmBase = name => (name === "battle" ? 0.26 : 0.3);
+const bgmApplyVol = () => { if (bgmAudio && bgmTrack) bgmAudio.volume = bgmBase(bgmTrack) * bgmVol; };
 const bgmStop = () => {
   bgmTrack = null;
   if (bgmAudio) { try { bgmAudio.pause(); } catch (e) {} }
@@ -813,7 +834,7 @@ const bgmPlay = name => {
   try {
     if (!bgmAudio) { bgmAudio = new Audio(); bgmAudio.loop = true; bgmAudio.preload = "auto"; }
     bgmAudio.src = BGM_FILES[name];
-    bgmAudio.volume = name === "battle" ? 0.26 : 0.3;
+    bgmAudio.volume = bgmBase(name) * bgmVol;
     const p = bgmAudio.play();
     if (p && p.catch) p.catch(() => {});
   } catch (e) {}
@@ -954,10 +975,19 @@ function DropBattle() {
   const campfireRef = useRef(null); campfireRef.current = campfire;
   const [bagOpen, setBagOpen] = useState(false);
   const [relicOpen, setRelicOpen] = useState(false);
-  const [sfxOn, setSfxOn] = useState(true);
-  const [bgmOnView, setBgmOnView] = useState(true);
+  const [sfxOn, setSfxOn] = useState(sfxEnabled);
+  const [bgmOnView, setBgmOnView] = useState(bgmOn);
+  const [soundOpen, setSoundOpen] = useState(false);
+  const [sfxVolView, setSfxVolView] = useState(sfxVol);
+  const [bgmVolView, setBgmVolView] = useState(bgmVol);
   const [tut, setTut] = useState(null); // チュートリアル 0..2
   const tutRef = useRef(null); tutRef.current = tut;
+  // 2戦目ガイド付きチュートリアル: null | "warn"(敵の攻撃予告を見せる) | "def"(防御を押させる) | "clear"(5+グループを消させる) | "done"(締めテキスト)
+  const [gtut, setGtutState] = useState(null);
+  const gtutRef = useRef(null);
+  const gtutSeedRef = useRef(TUT_SEED);
+  const battleNumRef = useRef(0);
+  const setGuide = v => { gtutRef.current = v; setGtutState(v); };
 
   const [tv, setTv] = useState({ atk:0, def:0, heal:0 });
   const [dispTv, setDispTv] = useState({ atk:0, def:0, heal:0 });
@@ -1401,17 +1431,25 @@ function DropBattle() {
     setLocked(false); lockedRef.current = false;
   };
 
+  const afterReward = () => {
+    setRewards(null);
+    const pnode = pendingNodeRef.current;
+    if (pnode && pnode.type === "horde" && (TEST_MODE || Math.random() < 0.5)) openShop();
+    else if (pnode && pnode.type === "treasure" && !TEST_MODE && Math.random() < 0.35) openShop();
+    else finishNode();
+  };
+  const declineReward = () => {
+    SFX.tap();
+    addLog(["特殊ドロップは受け取らなかった（袋はそのまま）"]);
+    afterReward();
+  };
   const chooseReward = key => {
     ownedRef.current = { ...ownedRef.current, [key]: ownedRef.current[key] + 1 };
     bagRef.current = { ...bagRef.current, [key]: bagRef.current[key] + 1 };
     syncOwned();
     SFX.pick();
     addLog([`🎁 ${ITEMS[key].name}を獲得`]);
-    setRewards(null);
-    const pnode = pendingNodeRef.current;
-    if (pnode && pnode.type === "horde" && (TEST_MODE || Math.random() < 0.5)) openShop();
-    else if (pnode && pnode.type === "treasure" && !TEST_MODE && Math.random() < 0.35) openShop();
-    else finishNode();
+    afterReward();
   };
 
   // ===== 章クリア → 次章 =====
@@ -1678,11 +1716,15 @@ function DropBattle() {
       return;
     }
     // バトル系
-    const ens = encounterFor(node, actRef.current);
+    battleNumRef.current += 1;
+    let gtutDone = "1";
+    try { gtutDone = localStorage.getItem("db_gtut") || ""; } catch (e) {}
+    const guided = battleNumRef.current === 2 && !gtutDone && !TEST_MODE; // 2戦目のガイド付きチュートリアル
+    const ens = guided ? makeTutorialEnemy() : encounterFor(node, actRef.current);
     setEnemiesBoth(ens);
     setTargetId(ens[0].id); targetRef.current = ens[0].id;
-    let bd0 = makeBoard(bagRef, ownedRef, bagUpRef, ownedUpRef);
-    if (hasR("prism")) bd0 = prismBoard(bd0);
+    let bd0 = guided ? makeTutorialBoard() : makeBoard(bagRef, ownedRef, bagUpRef, ownedUpRef);
+    if (!guided && hasR("prism")) bd0 = prismBoard(bd0);
     commitBoard(bd0);
     syncBag(); // 盤面生成で袋から引いた分を表示に反映
     setPops({}); // 前バトルのダメージポップを掃除
@@ -1696,9 +1738,12 @@ function DropBattle() {
     addLog([`― ${node.row + 1}層 ${NODE_META[node.type].label}戦 開始 ―`]);
     setStatus("battle"); statusRef.current = "battle";
     setLocked(false); lockedRef.current = false;
-    let tutDone = "1";
-    try { tutDone = localStorage.getItem("db_tut") || ""; } catch (e) {}
-    if (!tutDone && !TEST_MODE) setTut(0);
+    if (guided) { gtutSeedRef.current = TUT_SEED; setGuide("warn"); }
+    else {
+      let tutDone = "1";
+      try { tutDone = localStorage.getItem("db_tut") || ""; } catch (e) {}
+      if (!tutDone && !TEST_MODE) setTut(0);
+    }
   };
 
   // ===== 盤面操作 =====
@@ -1706,6 +1751,9 @@ function DropBattle() {
     if (lockedRef.current) return;
     if (statusRef.current === "puzzle") { puzzleTapRef.current(idx); return; }
     if (statusRef.current !== "battle") return;
+    // ガイド付きチュートリアルの盤面入力制限
+    if (gtutRef.current === "warn" || gtutRef.current === "def" || gtutRef.current === "done") return;
+    if (gtutRef.current === "clear" && !findGroup(boardRef.current, gtutSeedRef.current).has(boardRef.current[idx].id)) return;
     const act = actionRef.current;
     if (!act || usedRef.current.has(act)) return;
     const { ids, seedJunk, blast } = expandClear(boardRef.current, idx, !turnRef.current.blastUsed);
@@ -1763,6 +1811,7 @@ function DropBattle() {
       commitBoard(next);
       setClearing(new Set());
       syncBag();
+      if (gtutRef.current === "clear") { setGuide("done"); } // 5+グループを防御で消したら締めテキストへ
       if (newUsed.size >= 3) {
         setTimeout(() => resolveTurn(), FAST ? 60 : 350);
       } else {
@@ -1825,6 +1874,8 @@ function DropBattle() {
     return b ? parseInt(b.getAttribute("data-idx"), 10) : null;
   };
   const makePreview = (b, idx) => {
+    // 宝箱パズルはレリックの消し方拡張を無効化（プレーンな同色グループのみ）＝実消去(puzzleTap)と一致
+    if (statusRef.current === "puzzle") { const ids = findGroup(b, idx); return { ids, over:true, info: groupInfo(b, ids) }; }
     const { ids } = expandClear(b, idx, !turnRef.current.blastUsed);
     return { ids, over:true, info: groupInfo(b, ids) };
   };
@@ -1862,6 +1913,9 @@ function DropBattle() {
   const onDown = (e, idx) => {
     if (lockedRef.current || (statusRef.current !== "battle" && statusRef.current !== "puzzle")) return;
     if (statusRef.current === "battle" && (!actionRef.current || usedRef.current.has(actionRef.current))) return;
+    // ガイド付きチュートリアル中の入力制限
+    if (gtutRef.current === "warn" || gtutRef.current === "def" || gtutRef.current === "done") return; // 攻撃予告/防御ボタン/締めテキスト段階では盤面タップ不可
+    if (gtutRef.current === "clear" && !findGroup(boardRef.current, gtutSeedRef.current).has(boardRef.current[idx].id)) return; // 対象グループ以外はタップ不可
     e.preventDefault();
     pressingRef.current = true;
     startGroupRef.current = findGroup(boardRef.current, idx);
@@ -1895,14 +1949,21 @@ function DropBattle() {
     ownedUpRef.current = initZero(); bagUpRef.current = initZero();
     setAct(0); setPMax(P_MAX); setActClear(null);
     relicsRef.current = []; RELICSET = new Set(); setRelicsView([]);
+    battleNumRef.current = 0; setGuide(null);
     setStatus(toTitle ? "title" : "map"); statusRef.current = toTitle ? "title" : "map";
     setLog(toTitle ? [] : ["― ルートを選んで進もう ―"]);
     setFx([]);
     turnRef.current = freshTurn(); syncTurn();
   };
 
-  const toggleSfx = () => { sfxEnabled = !sfxEnabled; setSfxOn(sfxEnabled); };
-  const toggleBgm = () => { bgmOn = !bgmOn; setBgmOnView(bgmOn); if (!bgmOn) bgmStop(); };
+  const toggleSfx = () => { sfxEnabled = !sfxEnabled; setSfxOn(sfxEnabled); if (sfxEnabled) SFX.tap(); };
+  const toggleBgm = () => {
+    bgmOn = !bgmOn; setBgmOnView(bgmOn);
+    if (!bgmOn) bgmStop();
+    else { const s = statusRef.current; bgmPlay(s === "map" ? "map" : s === "battle" ? (enemiesRef.current.some(e => e.boss && e.alive) ? "boss" : "battle") : "title"); }
+  };
+  const changeSfxVol = v => { sfxVol = v; setSfxVolView(v); try { localStorage.setItem("db_sfxvol", v); } catch (e) {} };
+  const changeBgmVol = v => { bgmVol = v; setBgmVolView(v); bgmApplyVol(); try { localStorage.setItem("db_bgmvol", v); } catch (e) {} };
 
   // 画面に応じてBGMを切り替え
   useEffect(() => {
@@ -1991,7 +2052,40 @@ function DropBattle() {
       startPuzzle: () => startPuzzle(),
       restart: () => restart(false),
       resolve: () => resolveTurn(),
-      commit: i => commitRef.current(i)
+      commit: i => commitRef.current(i),
+      sound: () => ({ sfxOn: sfxEnabled, bgmOn, sfxVol, bgmVol }),
+      previewSize: idx => makePreview(boardRef.current, idx).ids.size,
+      groupSize: idx => findGroup(boardRef.current, idx).size,
+      gtut: () => gtutRef.current,
+      gtutSeedGroup: () => [...findGroup(boardRef.current, gtutSeedRef.current)].map(id => boardRef.current.findIndex(c => c.id === id)),
+      battleNum: () => battleNumRef.current,
+      // ガイド付きチュートリアルを決定的に開始（本来は2戦目・localStorage未設定・非TESTで発火）
+      startGuide: () => {
+        const ens = makeTutorialEnemy();
+        setEnemiesBoth(ens); setTargetId(ens[0].id); targetRef.current = ens[0].id;
+        commitBoard(makeTutorialBoard()); syncBag();
+        setPops({}); setArmed(null);
+        setAction("atk"); actionRef.current = "atk";
+        setUsed(new Set()); usedRef.current = new Set();
+        setPreview(null); setClearing(new Set());
+        turnRef.current = freshTurn(); syncTurn();
+        setTurn(1); turnNumRef.current = 1; setAnims({});
+        setStatus("battle"); statusRef.current = "battle";
+        setLocked(false); lockedRef.current = false;
+        gtutSeedRef.current = TUT_SEED; setGuide("warn");
+      },
+      nextGuide: () => { if (gtutRef.current === "warn") setGuide("def"); },
+      declineReward: () => declineReward(),
+      chooseReward: k => chooseReward(k),
+      tapAct: key => { if (gtutRef.current === "def") { if (key === "def") { setAction("def"); actionRef.current = "def"; setGuide("clear"); } } else if (!gtutRef.current) { setAction(key); actionRef.current = key; } },
+      dismissGuide: () => { setGuide(null); try { localStorage.setItem("db_gtut", "1"); } catch (e) {} },
+      encPreview: (a, nodeType) => encounterFor({ row: 1, type: nodeType }, a).map(e => ({
+        kind: e.kind, atk: e.atk, atkFloor: e.atkFloor, bigFloor: e.bigFloor,
+        normalDmg: intentOf({ ...e, pat: ["attack"], pi: 0, rollMul: 1 }, []).dmg,
+        bigDmg: intentOf({ ...e, pat: ["bigatk"], pi: 0, rollMul: 1 }, []).dmg })),
+      setSfxVol: v => changeSfxVol(v),
+      setBgmVol: v => changeBgmVol(v),
+      openSound: () => setSoundOpen(true)
     };
   }, []);
 
@@ -2073,10 +2167,8 @@ function DropBattle() {
       h("span", { style:{ color:"#ffcf5d" } }, progRow, "/", ROWS, "層")),
     h("div", { className:"flex items-center gap-2" },
       h("span", { className:"rounded-xl px-2 py-1.5 text-sm font-bold flex items-center gap-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c", color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, Ic("assets/icon_coin.png", 15), coins),
-      h("button", { onClick: toggleBgm, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", lineHeight:1 } },
-        Ic("assets/icon_note.png", 15, bgmOnView ? null : { filter:"grayscale(1) drop-shadow(0 1px 1px rgba(0,0,0,.45))", opacity:0.4 })),
-      h("button", { onClick: toggleSfx, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", lineHeight:1 } },
-        Ic("assets/icon_speaker.png", 15, sfxOn ? null : { filter:"grayscale(1) drop-shadow(0 1px 1px rgba(0,0,0,.45))", opacity:0.4 })),
+      h("button", { onClick: () => { setSoundOpen(true); SFX.open(); }, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", lineHeight:1 } },
+        Ic("assets/icon_speaker.png", 15, (bgmOnView || sfxOn) ? null : { filter:"grayscale(1) drop-shadow(0 1px 1px rgba(0,0,0,.45))", opacity:0.4 })),
       h("button", { onClick: () => { setBagOpen(true); SFX.open(); }, className:"relative rounded-xl px-3 py-1.5 flex items-center gap-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c" } },
         Ic("assets/icon_bag.png", 16),
         h("span", { className:"font-bold text-sm", style:{ color:"#ffcf5d", fontVariantNumeric:"tabular-nums" } }, "残", bagLeft))));
@@ -2100,6 +2192,24 @@ function DropBattle() {
 
   // ===== 共通オーバーレイ =====
   const overlays = [];
+  const soundRow = (label, icon, on, toggle, vol, change, preview) => h("div", { key:label, className:"rounded-xl px-3 py-3 mb-2", style:{ background:"rgba(255,255,255,.05)", border:"1px solid #3c3450" } },
+    h("div", { className:"flex items-center gap-2 mb-2" },
+      h("button", { onClick: toggle, className:"rounded-lg px-2 py-1", style:{ background: on ? "rgba(232,192,106,.18)" : "rgba(255,255,255,.06)", border:`1.5px solid ${on ? "#8a6f3c" : "#3c3450"}`, lineHeight:1 } },
+        Ic(icon, 16, on ? null : { filter:"grayscale(1)", opacity:0.4 })),
+      h("span", { className:"font-bold text-sm flex-1", style:{ color: on ? "#f0e4c8" : "#776f88" } }, label, on ? "" : "（OFF）"),
+      h("span", { className:"text-xs font-bold", style:{ color:"#8ce8b0", fontVariantNumeric:"tabular-nums", minWidth:40, textAlign:"right" } }, Math.round(vol * 100), "%")),
+    h("input", { type:"range", min:0, max:100, value:Math.round(vol * 100), disabled: !on,
+      onInput: e => change(parseInt(e.target.value, 10) / 100),
+      onChange: e => { change(parseInt(e.target.value, 10) / 100); if (on && preview) preview(); },
+      style:{ width:"100%", accentColor:"#e8c06a", height:24, opacity: on ? 1 : 0.4, cursor: on ? "pointer" : "default" } }));
+  if (soundOpen) overlays.push(h("div", { key:"sound", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setSoundOpen(false) },
+    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+      h("div", { className:"flex justify-between items-center mb-3" },
+        h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, Ic("assets/icon_speaker.png", 18), "サウンド設定"),
+        h("button", { onClick: () => setSoundOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
+      soundRow("BGM", "assets/icon_note.png", bgmOnView, toggleBgm, bgmVolView, changeBgmVol, null),
+      soundRow("効果音", "assets/icon_speaker.png", sfxOn, toggleSfx, sfxVolView, changeSfxVol, () => SFX.tap()),
+      h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } }, "アイコンでON/OFF・スライダーで音量。設定は端末に保存されます。"))));
   if (relicOpen) overlays.push(h("div", { key:"relics", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setRelicOpen(false) },
     h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, maxHeight:"78vh", overflowY:"auto", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-2" },
@@ -2164,6 +2274,39 @@ function DropBattle() {
           className:"w-full rounded-xl py-2.5 font-bold",
           style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } },
           tut >= TUT.length - 1 ? "はじめる！" : "次へ ▶"))));
+  }
+  // 2戦目ガイド: ① 敵の攻撃が来る！（攻撃値を見せる・敵の下に表示）
+  if (gtut === "warn") {
+    const tutAtk = enemies[0] && enemies[0].alive ? intentOf(enemies[0], enemies).dmg : 0;
+    overlays.push(h("div", { key:"gwarn", className:"fixed pop-in", style:{ top:"35%", left:"50%", transform:"translateX(-50%)", zIndex:62,
+      background:"rgba(30,24,42,.98)", border:"2px solid #ff6b6b", borderRadius:14, padding:"12px 18px", maxWidth:"92%", width:"max-content", textAlign:"center", boxShadow:"0 6px 22px rgba(0,0,0,.6)" } },
+      h("span", { className:"font-bold block", style:{ color:"#ff9a90", fontSize:"1.05rem", textShadow:"0 1px 2px #000" } }, "⚠️ 敵の攻撃が来る！"),
+      h("div", { className:"flex items-center justify-center flex-wrap gap-1.5 my-1.5" },
+        h("span", { className:"text-[11px]", style:{ opacity:0.9 } }, "このスライムの攻撃は"),
+        h("span", { className:"flex items-center font-bold", style:{ gap:3, padding:"2px 10px", borderRadius:9, background:"rgba(120,32,32,.9)", border:"1px solid rgba(255,130,120,.75)", color:"#ffd9d4", fontSize:"1.2rem" } },
+          Ic("assets/icon_atk.png", 16), tutAtk),
+        h("span", { className:"text-[11px]", style:{ opacity:0.9 } }, "ダメージ！")),
+      h("p", { className:"text-[11px] mb-2", style:{ opacity:0.85, lineHeight:1.5 } }, "まともに受けるとピンチ。防御で受け止めよう。"),
+      h("button", { onClick: () => { SFX.tap(); setGuide("def"); }, className:"rounded-xl py-2 px-6 font-bold text-sm",
+        style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } }, "防御で防ぐ ▶")));
+  }
+  // 2戦目ガイド: ② 防御を押す / ③ 5+グループを消す（敵の下に表示）
+  if (gtut === "def" || gtut === "clear") {
+    const txt = gtut === "def" ? "🛡 防御で受け止めよう！" : "5個以上つながったドロップをタップ！";
+    const sub = gtut === "def" ? "▼ 光っている「防御」をタップ" : "▼ 光っているドロップをタップ";
+    overlays.push(h("div", { key:"gbanner", className:"fixed pop-in", style:{ top:"35%", left:"50%", transform:"translateX(-50%)", zIndex:62,
+      background:"rgba(30,24,42,.97)", border:"2px solid #e8c06a", borderRadius:14, padding:"10px 18px", maxWidth:"90%", width:"max-content", textAlign:"center", pointerEvents:"none", boxShadow:"0 4px 18px rgba(0,0,0,.55)" } },
+      h("span", { className:"font-bold block", style:{ color:"#ffe08a", fontSize:"0.98rem", lineHeight:1.5, textShadow:"0 1px 2px #000" } }, txt),
+      h("span", { className:"block text-[10px] mt-1", style:{ color:"#8ce8b0", fontWeight:700 } }, sub)));
+  }
+  // 2戦目ガイド付きチュートリアル: 締めテキスト
+  if (gtut === "done") {
+    overlays.push(h("div", { key:"gdone", className:"fixed inset-0 flex items-end justify-center fade-in", style:{ background:"rgba(8,4,14,.5)", zIndex:80, paddingBottom:"16vh" } },
+      h("div", { className:"rounded-2xl p-4 pop-in", style:{ maxWidth:340, width:"92%", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", textAlign:"center" } },
+        h("span", { className:"font-bold block mb-1", style:{ color:"#7cffb0", fontSize:"1.05rem" } }, "🛡 これで敵の攻撃は防げるね！"),
+        h("p", { className:"text-[12px] leading-relaxed mb-3", style:{ opacity:0.9 } }, "あとは同じ要領で ⚔攻撃 して敵を倒そう！つながりが大きいほど強力だ。"),
+        h("button", { onClick: () => { SFX.tap(); setGuide(null); try { localStorage.setItem("db_gtut", "1"); } catch (e) {} },
+          className:"w-full rounded-xl py-2.5 font-bold", style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } }, "⚔ 攻撃だ！"))));
   }
   if (armed !== null && items[armed]) {
     const c = CONSUM[items[armed]];
@@ -2271,7 +2414,7 @@ function DropBattle() {
       h("div", { className:"w-full pop-in rounded-2xl", style:{ maxWidth:380, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", padding:"16px 14px" } },
         h("h2", { className:"text-center font-bold mb-1 flex items-center justify-center gap-2", style:{ fontSize:"1.25rem", color:"#e0b45c", textShadow:"0 2px 0 rgba(0,0,0,.6)" } }, Ic(rIcon, 22), rTitle),
         h("p", { className:"text-center text-xs mb-1", style:{ opacity:0.8 } },
-          rewards.kind === "treasure" ? "好きなアイテムを1つ持っていこう" : "戦利品を1つ選んで先へ進もう"),
+          rewards.kind === "treasure" ? "好きなアイテムを1つ持っていこう（不要ならスキップ可）" : "戦利品を1つ選ぼう（不要ならスキップ可）"),
         rewards.coins > 0 && h("p", { className:"text-center text-xs mb-1", style:{ color:"#e8c06a", fontWeight:800 } }, Ic("assets/icon_coin.png", 13), " コイン +", rewards.coins),
         rewards.relic && h("div", { className:"flex items-center gap-2 rounded-xl px-3 py-2 mb-2", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.5)" } },
           h("span", { style:{ fontSize:"1.4rem" } }, RELICS[rewards.relic].icon),
@@ -2288,7 +2431,9 @@ function DropBattle() {
               h("span", { className:"font-bold", style:{ color:it.glowc } }, itemName(k)),
               h("span", { className:"block text-[11px]", style:{ opacity:0.85 } }, itemDesc(k)),
               h("span", { className:"block text-[10px]", style:{ opacity:0.6 } }, "所持 ", ownedView[k], " → ", ownedView[k] + 1)));
-        })))));
+        })),
+        h("button", { onClick: declineReward, className:"w-full rounded-xl py-2 font-bold text-sm mt-2", style:{ background:"rgba(255,255,255,.07)", border:"2px solid #453b5c", color:"#c9bfe0" } },
+          "受け取らない（袋をそのままにする）"))));
   }
   if (puzzle && puzzle.done) {
     const d = puzzle.done;
@@ -2351,6 +2496,9 @@ function DropBattle() {
   }
 
   // ===== マップ画面 =====
+  const gActive = gtut === "warn" || gtut === "def" || gtut === "clear"; // 誘導中は周囲を暗くする
+  const gSceneDim = gtut === "def" || gtut === "clear"; // 敵シーンは warn 中は明るく（攻撃予告を見せる）
+  const guideIds = gtut === "clear" ? findGroup(board, gtutSeedRef.current) : null; // 消させる対象グループ
   const boardEl = h("div", { className:"relative rounded-2xl board-wrap", style:{ padding:5, background:"rgba(19,14,28,.8)", border:"2px solid #3c3450", marginBottom:4 } },
         h("div", { className:"grid grid-cols-6 gap-1.5", style:{ touchAction:"none" }, onContextMenu: e => e.preventDefault() },
           board.map((cell,i) => {
@@ -2358,18 +2506,23 @@ function DropBattle() {
             const isPrev = preview && preview.over && preview.ids.has(cell.id);
             const isClr = clearing.has(cell.id);
             const it = cell.special ? ITEMS[cell.special] : null;
+            const gTarget = guideIds && guideIds.has(cell.id);
+            const gDim = gtut === "warn" || gtut === "def" || (gtut === "clear" && !gTarget); // 誘導中の対象外は暗く
+            const gHi = gtut === "clear" && gTarget;                        // 消させるグループを光らせる
             return h("button", { key:cell.id, "data-idx":i, onPointerDown: e => onDown(e,i),
               className:"relative rounded-xl",
               style:{ aspectRatio:"1 / 1",
                 background:`linear-gradient(180deg, ${d.c1} 0%, ${d.c2} 100%)`,
                 border:`2.5px solid ${d.c3}`,
-                animation:"dropIn .26s ease",
+                animation: gHi ? "actPulse .8s ease-in-out infinite" : "dropIn .26s ease",
                 boxShadow: isClr ? "none"
+                  : gHi ? "0 0 0 3px #7cffb0, 0 0 16px #7cffb0"
                   : isPrev ? `0 0 0 3px ${actColor}`
                   : it ? `inset 0 0 0 2px ${it.ring}, inset 0 -4px 0 rgba(0,0,0,.18)`
                   : "inset 0 -4px 0 rgba(0,0,0,.18)",
-                opacity: isClr ? 0 : 1,
-                transform: isClr ? "scale(1.25)" : isPrev ? "scale(1.08)" : "scale(1)",
+                opacity: isClr ? 0 : gDim ? 0.26 : 1,
+                transform: isClr ? "scale(1.25)" : (isPrev || gHi) ? "scale(1.06)" : "scale(1)",
+                zIndex: gHi ? 46 : "auto",
                 transition:"transform .12s ease, opacity .2s ease, box-shadow .12s ease",
                 touchAction:"none" } },
               cell.type === JUNK ? h("img", { src:"assets/mk_skull.png", alt:"", draggable:false, className:"mark-img", style:{ position:"absolute", left:"22%", top:"22%", width:"56%", height:"56%", objectFit:"contain", pointerEvents:"none", opacity:0.92, filter:"drop-shadow(0 1px 1px rgba(0,0,0,.5))" } })
@@ -2479,10 +2632,12 @@ function DropBattle() {
       header,
       relicBarEl,
       // 戦闘シーン
-      h("div", { key:"scn" + shakeSeq, className:"relative w-full mb-1 scene-h" + (shakeSeq > 0 ? " scene-shake" : ""), style:{ borderRadius:16, overflow:"hidden", border:"2px solid #453b5c", background:"#191424" } },
+      h("div", { key:"scn" + shakeSeq, className:"relative w-full mb-1 scene-h" + (shakeSeq > 0 ? " scene-shake" : ""), style:{ borderRadius:16, overflow:"hidden", border: gtut === "warn" ? "2px solid #ff6b6b" : "2px solid #453b5c", background:"#191424", opacity: gSceneDim ? 0.34 : 1, transition:"opacity .3s ease, border-color .3s ease" } },
         flashSeq > 0 && h("div", { key:"fl" + flashSeq, className:"absolute inset-0 pointer-events-none impact-flash" }),
-        h("img", { src:BATTLE_BGS[act] || BATTLE_BGS[0], alt:"", draggable:false, className:"absolute pointer-events-none", style:{ left:0, top:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center bottom", opacity:.92 } }),
+        h("img", { src:BATTLE_BGS[act] || BATTLE_BGS[0], alt:"", draggable:false, className:"absolute pointer-events-none", style:{ left:0, top:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center bottom", opacity: gtut === "warn" ? 0.28 : .92, transition:"opacity .3s ease" } }),
         h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"linear-gradient(180deg, rgba(15,11,22,.5) 0%, rgba(15,11,22,.08) 45%, rgba(15,11,22,.42) 100%)" } }),
+        // 攻撃予告チュートリアル: 敵と予告以外を暗くする暗幕（敵ボタンは zIndex を上げて明るく残す）
+        gtut === "warn" && h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"rgba(6,4,12,.55)", zIndex:2 } }),
         // ヒーロー
         h("div", { className:"absolute flex flex-col items-center scene-actor", style:{ left:10, bottom:8, width:88, zIndex:1 } },
           h("div", { style:{ position:"relative" } },
@@ -2499,7 +2654,7 @@ function DropBattle() {
           h("div", { className:"w-full mt-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:8 })),
           h("span", { className:"text-[10px] font-bold mt-1", style:{ color: hit === "player" ? "#ff9a9a" : hit === "heal" ? "#7cffb0" : "#cfe9d8", fontVariantNumeric:"tabular-nums", transition:"color .3s" } }, pHP, "/", pMax)),
         // 敵
-        h("div", { className:"absolute flex items-end scene-actor", style:{ right:30, bottom:4, gap:4, zIndex:1 } },
+        h("div", { className:"absolute flex items-end scene-actor", style:{ right:30, bottom:4, gap:4, zIndex: gtut === "warn" ? 3 : 1 } },
           enemies.map(en => {
             const k = KINDS[en.kind];
             const sz = en.boss ? 84 : enemies.length >= 3 ? Math.min(k.size, 58) : Math.min(k.size, 66);
@@ -2518,14 +2673,20 @@ function DropBattle() {
             const isDmgIntent = iv.act === "attack" || iv.act === "double" || iv.act === "bigatk" || iv.act === "drain" || iv.act === "jamatk";
             return h("button", { key:en.id,
               onClick: () => { if (en.alive && !locked && status === "battle") { setTargetId(en.id); targetRef.current = en.id; SFX.tap(); } },
-              className:"relative flex flex-col items-center", style:{ width:Math.max(sz + 4, 58), cursor: en.alive ? "pointer" : "default" } },
+              className:"relative flex flex-col items-center", style:{ width:Math.max(sz + 4, 58), cursor: en.alive ? "pointer" : "default",
+                filter: gtut === "warn" && en.alive ? "drop-shadow(0 0 12px rgba(255,190,90,.95)) drop-shadow(0 0 5px rgba(255,120,60,.85))" : "none",
+                transition:"filter .3s ease" } },
               h("span", { className:"text-[10px] font-bold", style:{ height:18, lineHeight:"16px", padding:"0 7px", borderRadius:9,
                 background: isDmgIntent ? (iv.act === "bigatk" ? "rgba(150,26,40,.9)" : "rgba(120,32,32,.8)") : "rgba(0,0,0,.55)",
                 border: isDmgIntent ? "1px solid rgba(255,130,120,.65)" : "1px solid rgba(255,255,255,.22)",
                 color: isDmgIntent ? "#ffd9d4" : pm.color,
-                fontSize: iv.act === "bigatk" ? 11 : 10,
-                opacity: en.alive ? 1 : 0, animation: charging ? "intentBlink .9s ease-in-out infinite" : "none", textShadow:"0 1px 2px #000" } },
+                fontSize: gtut === "warn" && isDmgIntent ? 14 : iv.act === "bigatk" ? 11 : 10,
+                transform: gtut === "warn" && isDmgIntent ? "scale(1.15)" : "none",
+                boxShadow: gtut === "warn" && isDmgIntent ? "0 0 0 2px #ff6b6b, 0 0 14px rgba(255,107,107,.8)" : "none",
+                opacity: en.alive ? 1 : 0, animation: (charging || (gtut === "warn" && isDmgIntent)) ? "intentBlink .9s ease-in-out infinite" : "none", textShadow:"0 1px 2px #000" } },
                 en.alive ? intentTxt : ""),
+              // 攻撃予告チュートリアル: 予告チップを指す矢印
+              gtut === "warn" && isDmgIntent && en.alive && h("span", { className:"absolute pointer-events-none", style:{ top:-20, left:"50%", transform:"translateX(-50%)", fontSize:"1.1rem", animation:"targetBob 1s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)", zIndex:4 } }, "⚠️"),
               en.alive && enrLeft(en, turn) === 0 && h("span", { className:"absolute pointer-events-none", style:{ top:16, right:0, fontSize:"1.2rem", zIndex:3, animation:"angerPulse .6s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)" } }, "💪"),
               isT && h("span", { className:"absolute pointer-events-none", style:{ top:14, left:"50%", animation:"targetBob 1s ease-in-out infinite", color:"#e8c05a", fontSize:12, textShadow:"0 1px 2px #000", zIndex:2 } }, "▼"),
               pops[en.id] && h("span", { key:pops[en.id].seq, className:"dmg-pop", style:{ color:pops[en.id].color } }, pops[en.id].text),
@@ -2546,7 +2707,7 @@ function DropBattle() {
         fx.length > 0 && h("div", { className:"absolute inset-0 flex flex-col items-center justify-center pointer-events-none", style:{ gap:6, zIndex:3 } },
           fx.filter(Boolean).map((f,i) => h("div", { key:i, style:{ fontSize:"1.35rem", fontWeight:900, color:f.color, textShadow:"0 2px 0 #000", animation:"fxPop .7s ease forwards" } }, f.text)))),
       // ターン情報
-      h("div", { className:"flex items-center justify-between rounded-lg px-3 py-1 mb-1 text-xs", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450" } },
+      h("div", { className:"flex items-center justify-between rounded-lg px-3 py-1 mb-1 text-xs", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", opacity: gActive ? 0.34 : 1, transition:"opacity .3s ease" } },
         h("span", { className:"font-bold", style:{ color:"#e8c06a" } }, "ターン ", turn),
         h("span", { className:"flex items-center gap-1" }, "残り",
           Array.from({ length:3 }).map((_,i) => h("span", { key:i, className:"inline-block rounded-full", style:{ width:9, height:9, background: i < remaining ? "#d8a848" : "rgba(255,255,255,.18)" } }))),
@@ -2562,7 +2723,7 @@ function DropBattle() {
             h("img", { src:"assets/icon_def.png", alt:"防", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), dispTv.def),
           h("span", { className:"flex items-center", style:{ color:"#8ce8b0", ...numCell, gap:2, justifyContent:"flex-end" } },
             h("img", { src:"assets/icon_heal.png", alt:"回", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), dispTv.heal))),
-      h("div", { className:"flex items-center justify-between mb-1" },
+      h("div", { className:"flex items-center justify-between mb-1", style:{ opacity: gActive ? 0.34 : 1, transition:"opacity .3s ease", pointerEvents: gActive ? "none" : "auto" } },
         h("div", { className:"flex items-center gap-1.5" }, itemSlots(38)),
         h("div", { className:"flex items-center", style:{ fontSize:11, gap:4 } },
           h("span", { style:{ opacity:0.75 } }, "被ダメ予測"),
@@ -2591,16 +2752,28 @@ function DropBattle() {
           valEl = base > 0 ? mkBreakdown(base + crossBonus, base, crossBonus, "#ffcf5d") : `+${crossBonus}`;
         } else valEl = String(dispTv[key]);
         const lit = fx.length > 0 && fx[fx.length-1].act === key;
-        return h("button", { key, onClick: () => { if (!isUsed && !locked) { setAction(key); SFX.tap(); } }, disabled:isUsed,
+        const gWarn = gtut === "warn", gDef = gtut === "def", gClear = gtut === "clear";
+        const guideTgt = gDef && key === "def";        // 「防御」を光らせて誘導
+        const guideOff = gWarn || (gDef && key !== "def") || gClear; // 誘導中の対象外ボタンは暗く
+        const disabledBtn = isUsed || gWarn || gClear || (gDef && key !== "def");
+        return h("button", { key,
+          onClick: () => {
+            if (isUsed || locked) return;
+            if (gWarn) return;
+            if (gDef) { if (key === "def") { setAction("def"); actionRef.current = "def"; SFX.tap(); setGuide("clear"); } return; }
+            if (gClear) return;
+            setAction(key); SFX.tap();
+          }, disabled:disabledBtn,
           className:"act-h relative rounded-xl flex flex-col items-center justify-center overflow-hidden",
 
 
-          style:{ 
-            background: isUsed ? (lit ? a.bg : "rgba(14,11,20,.85)") : isSel ? a.bg : "rgba(30,24,42,.92)",
-            border: `2px solid ${isUsed ? (lit ? a.color : "#2c2740") : isSel ? a.color : "#3c3450"}`,
-            boxShadow: lit ? `0 0 0 3px ${a.color}` : "none",
-            animation: lit ? "actPulse .55s ease" : "none",
-            opacity: isUsed ? (lit ? 1 : 0.4) : 1,
+          style:{
+            background: isUsed ? (lit ? a.bg : "rgba(14,11,20,.85)") : (isSel || guideTgt) ? a.bg : "rgba(30,24,42,.92)",
+            border: `2px solid ${isUsed ? (lit ? a.color : "#2c2740") : (isSel || guideTgt) ? a.color : "#3c3450"}`,
+            boxShadow: guideTgt ? `0 0 0 3px ${a.color}, 0 0 18px ${a.color}` : lit ? `0 0 0 3px ${a.color}` : "none",
+            animation: guideTgt ? "actPulse .8s ease-in-out infinite" : lit ? "actPulse .55s ease" : "none",
+            opacity: guideOff ? 0.26 : isUsed ? (lit ? 1 : 0.4) : 1,
+            zIndex: guideTgt ? 46 : "auto",
             transition:"background .25s ease, border-color .25s ease, box-shadow .25s ease, opacity .25s ease" } },
           h("span", { style:{ position:"absolute", top:0, left:"14%", right:"14%", height:3, borderRadius:"0 0 4px 4px", background:a.color, opacity: isUsed && !lit ? 0.25 : 0.9, pointerEvents:"none" } }),
           h("img", { src:a.img, alt:a.label, draggable:false, width:20, height:20, style:{ height:20, width:20, maxWidth:20, maxHeight:20, flexShrink:0, marginTop:5, objectFit:"contain", opacity: isUsed && !lit ? 0.35 : 1, filter:"drop-shadow(0 2px 1px rgba(0,0,0,.45))" } }),
