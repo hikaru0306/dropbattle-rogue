@@ -226,7 +226,15 @@ const RELICS = {
   bigstar:    { icon:"🌟", name:"大星晶", desc:"盤面の特殊ドロップ+2", rar:3 },
   prism:      { icon:"🔮", name:"プリズム", desc:"ターン開始時、盤面の最少色が他の色に変わる（3色になる）", rar:3 },
   crown:      { icon:"👑", name:"王家の印章", desc:"章クリア時に最大HP+50（通常はボーナスなし）", rar:3 },
-  ironwill:   { icon:"⛓", name:"鉄の意志", desc:"余った防御の半分を次のターンに持ち越す", rar:3 }
+  ironwill:   { icon:"⛓", name:"鉄の意志", desc:"余った防御の半分を次のターンに持ち越す", rar:3 },
+  linegem:    { icon:"↕️", name:"縦裂の宝珠", desc:"同じ色を5個以上消すと、消した所に虹ドロップ（消すと縦1列消し）が生まれる。どの色とも繋がるがお邪魔とは繋がらない", rar:2 },
+  linegemh:   { icon:"↔️", name:"横薙の宝珠", desc:"同じ色を5個以上消すと、消した所に虹ドロップ（消すと横1列消し）が生まれる。どの色とも繋がるがお邪魔とは繋がらない", rar:2 },
+  gachagem:   { icon:"🌈", name:"虹福の玉", desc:"同じ色を6個以上消すと、所持中の特殊から1つが虹ドロップになって生まれる。どの色とも繋がる", rar:3 }
+};
+// レリック生成の虹（ワイルド）特殊ドロップ。ITEM_KEYS(袋)には含めない＝袋からは出ない
+const RGEM = {
+  linev: { glyph:"↕", name:"縦裂の虹", desc:"消すと縦1列をまとめて消す。どの色とも繋がる" },
+  lineh: { glyph:"↔", name:"横薙の虹", desc:"消すと横1列をまとめて消す。どの色とも繋がる" }
 };
 const RELIC_KEYS = Object.keys(RELICS);
 const RELIC_PRICE = { 1:90, 2:130, 3:180 };
@@ -529,19 +537,32 @@ const makeTutorialBoard = () => {
   return cells;
 };
 const findGroup = (cells, idx) => {
-  const t = cells[idx].type;
+  const start = cells[idx];
   const seen = new Set(), ids = new Set(), stack = [idx];
+  const push = i => { const r = Math.floor(i/SIZE), c = i%SIZE;
+    if (r > 0) stack.push(i-SIZE); if (r < SIZE-1) stack.push(i+SIZE);
+    if (c > 0) stack.push(i-1); if (c < SIZE-1) stack.push(i+1); };
+  if (start.type === JUNK) { // お邪魔グループ（虹とは繋がらない）
+    while (stack.length) {
+      const i = stack.pop();
+      if (seen.has(i)) continue; seen.add(i);
+      if (cells[i].type !== JUNK) continue;
+      ids.add(cells[i].id); push(i);
+    }
+    return ids;
+  }
+  // 色グループ。虹(wild)はどの色とも繋がるが、異なる実色同士は橋渡ししない（最初の実色を基準色に固定）
+  let base = start.wild ? -1 : start.type;
   while (stack.length) {
     const i = stack.pop();
-    if (seen.has(i)) continue;
-    seen.add(i);
-    if (cells[i].type !== t) continue;
-    ids.add(cells[i].id);
-    const r = Math.floor(i/SIZE), c = i%SIZE;
-    if (r > 0) stack.push(i-SIZE);
-    if (r < SIZE-1) stack.push(i+SIZE);
-    if (c > 0) stack.push(i-1);
-    if (c < SIZE-1) stack.push(i+1);
+    if (seen.has(i)) continue; seen.add(i);
+    const cell = cells[i];
+    if (cell.type === JUNK) continue; // お邪魔は繋がらない
+    if (!cell.wild) {
+      if (base === -1) base = cell.type;
+      else if (cell.type !== base) continue;
+    }
+    ids.add(cell.id); push(i);
   }
   return ids;
 };
@@ -587,7 +608,7 @@ const groupInfo = (cells, ids) => {
   const spu = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0 };
   let junkCnt = 0;
   for (const cell of cells) if (ids.has(cell.id)) {
-    if (cell.special) { sp[cell.special]++; if (cell.up) spu[cell.special]++; }
+    if (cell.special && sp[cell.special] !== undefined) { sp[cell.special]++; if (cell.up) spu[cell.special]++; }
     if (cell.type === JUNK) junkCnt++;
   }
   const junk = junkCnt > 0 && junkCnt === ids.size; // 全部お邪魔のときだけ効果ゼロ
@@ -648,6 +669,23 @@ const expandClear = (b, idx, blastOk) => {
     }
     if (changed) ids = expandIds(b, ids);
   }
+  // 虹ライン特殊: グループ内の縦裂(linev)は列全体・横薙(lineh)は行全体を巻き込む
+  let lineChanged = true;
+  while (lineChanged) {
+    lineChanged = false;
+    for (let i = 0; i < N; i++) {
+      const c = b[i];
+      if (!ids.has(c.id)) continue;
+      if (c.special === "linev") {
+        const col = i % SIZE;
+        for (let r = 0; r < SIZE; r++) { const id2 = b[r*SIZE+col].id; if (!ids.has(id2)) { ids.add(id2); lineChanged = true; } }
+      } else if (c.special === "lineh") {
+        const row = (i/SIZE)|0;
+        for (let cc = 0; cc < SIZE; cc++) { const id2 = b[row*SIZE+cc].id; if (!ids.has(id2)) { ids.add(id2); lineChanged = true; } }
+      }
+    }
+    if (lineChanged) ids = expandIds(b, ids); // ラインで巻き込んだ爆弾を誘爆
+  }
   return { ids, seedJunk, blast };
 };
 const computeEffect = (act, info) => {
@@ -701,7 +739,7 @@ const refill = (cells, removeIds, bagRef, ownedRef, bagUpRef, ownedUpRef) => {
       next[np[k]] = { ...next[np[k]], special: d.k, up: d.up };
     }
   }
-  return next;
+  return { next, newPositions };
 };
 
 // パズル用: 袋・特殊なしの重力補充（残ったドロップが下に落ち、新規は上から降る）
@@ -1763,7 +1801,21 @@ function DropBattle() {
     if (blast) turnRef.current.blastUsed = true;
     const info = groupInfo(boardRef.current, ids);
     const eff = computeEffect(act, info);
-    const next = refill(boardRef.current, ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
+    const pureCount = findGroup(boardRef.current, idx).size; // 「同じ色を◯個」の判定は素の同色グループ数で
+    const { next, newPositions } = refill(boardRef.current, ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
+    // レリック生成の虹（ワイルド）特殊。盤面の特殊数に関係なく生成し、消した位置(新規落下)へ置く
+    const genKinds = [];
+    if (hasR("linegem") && pureCount >= 5) genKinds.push("linev");
+    if (hasR("linegemh") && pureCount >= 5) genKinds.push("lineh");
+    if (hasR("gachagem") && pureCount >= 6) {
+      const ownedSp = ITEM_KEYS.filter(k => ownedRef.current[k] > 0);
+      if (ownedSp.length) genKinds.push(pick(ownedSp));
+    }
+    if (genKinds.length) {
+      const freePos = shuffle(newPositions.slice());
+      genKinds.forEach((k, gi) => { if (gi < freePos.length) next[freePos[gi]] = { ...next[freePos[gi]], special: k, up: false, wild: true }; });
+      addLog(["🌈 虹ドロップが生まれた！"]);
+    }
     let mainAdd = eff.main;
     if (act === "atk" && turnRef.current.atkBoost) mainAdd *= 2;
     if (act === "def" && turnRef.current.defBoost) mainAdd *= 2;
@@ -1990,7 +2042,7 @@ function DropBattle() {
         junk: boardRef.current.filter(c => c.type === JUNK).length,
         bagLeft: ITEM_KEYS.reduce((t, k) => t + bagRef.current[k], 0),
         colors: new Set(boardRef.current.filter(c => c.type < 4).map(c => c.type)).size,
-        board: boardRef.current.map(c => ({ t: c.type, sp: c.special || null })),
+        board: boardRef.current.map(c => ({ t: c.type, sp: c.special || null, w: !!c.wild })),
         used: [...usedRef.current],
         locked: lockedRef.current,
         coins: coinsRef.current, items: itemsRef.current.slice(),
@@ -2021,8 +2073,8 @@ function DropBattle() {
       setShd: (i, v) => { const ens = enemiesRef.current.map((e, ix) => ix === i ? { ...e, shd: v } : e); setEnemiesBoth(ens); },
       setEnrEvery: (i, v) => { const ens = enemiesRef.current.map((e, ix) => ix === i ? { ...e, enrEvery: v } : e); setEnemiesBoth(ens); },
       setPat: (i, pat) => { const ens = enemiesRef.current.map((e, ix) => ix === i ? { ...e, pat, pi: 0 } : e); setEnemiesBoth(ens); },
-      setCellType: (i, t) => { const b = boardRef.current.slice(); b[i] = { ...b[i], type: t, special: false, up: false }; commitBoard(b); },
-      setCellSpecial: (i, k, up) => { const b = boardRef.current.slice(); b[i] = { ...b[i], special: k, up: !!up }; commitBoard(b); },
+      setCellType: (i, t) => { const b = boardRef.current.slice(); b[i] = { ...b[i], type: t, special: false, up: false, wild: false }; commitBoard(b); },
+      setCellSpecial: (i, k, up, wild) => { const b = boardRef.current.slice(); b[i] = { ...b[i], special: k, up: !!up, wild: !!wild }; commitBoard(b); },
       addAtk: v => { turnRef.current.atk += v; syncTurn(); },
       setPierce: v => { turnRef.current.pierce = !!v; syncTurn(); },
       setAct: a => { if (!usedRef.current.has(a)) { setAction(a); actionRef.current = a; } },
@@ -2058,7 +2110,9 @@ function DropBattle() {
       commit: i => commitRef.current(i),
       sound: () => ({ sfxOn: sfxEnabled, bgmOn, sfxVol, bgmVol }),
       previewSize: idx => makePreview(boardRef.current, idx).ids.size,
+      previewIdxs: idx => { const ids = makePreview(boardRef.current, idx).ids; return boardRef.current.map((c,i)=>ids.has(c.id)?i:-1).filter(i=>i>=0); },
       groupSize: idx => findGroup(boardRef.current, idx).size,
+      groupIdxs: idx => { const ids = findGroup(boardRef.current, idx); return boardRef.current.map((c,i)=>ids.has(c.id)?i:-1).filter(i=>i>=0); },
       gtut: () => gtutRef.current,
       gtutSeedGroup: () => [...findGroup(boardRef.current, gtutSeedRef.current)].map(id => boardRef.current.findIndex(c => c.id === id)),
       battleNum: () => battleNumRef.current,
@@ -2260,7 +2314,7 @@ function DropBattle() {
     const TUT = [
       { t:"① アクションを選ぼう", d:"⚔攻撃・🛡防御・✚回復のどれかを選ぶと、次に消すドロップの効果になる。1ターンに各1回ずつ、計3回消せる。" },
       { t:"② 同じ色をタップ", d:"つながっている同色ドロップがまとめて消える。大きいかたまりほど効果大！枠付きの特殊ドロップを巻き込むとボーナスが乗る。" },
-      { t:"③ 敵の予告を見よう", d:"敵の頭上の赤いチップは次の攻撃（⚔17×2=17を2回）。💥大技の前は防御をたっぷり仕込むか、時止めやポーションでしのごう。" }
+      { t:"③ 敵の予告を見よう", d:"敵の頭上の赤い数字は与えてくるダメージを表している。戦略を考えてダンジョンを突破しよう！" }
     ];
     const step = TUT[tut];
     overlays.push(h("div", { key:"tut", className:"fixed inset-0 flex items-end justify-center fade-in", style:{ background:"rgba(8,4,14,.72)", zIndex:80, paddingBottom:"14vh" } },
@@ -2509,19 +2563,24 @@ function DropBattle() {
             const d = DROPS[cell.type];
             const isPrev = preview && preview.over && preview.ids.has(cell.id);
             const isClr = clearing.has(cell.id);
-            const it = cell.special ? ITEMS[cell.special] : null;
+            const rgem = cell.special ? RGEM[cell.special] : null;   // 縦裂/横薙（虹ライン）
+            const norm = cell.special ? ITEMS[cell.special] : null;   // 通常特殊（袋 or 虹福生成）
+            const it = norm || rgem;
+            const isWild = !!cell.wild;                               // 虹＝どの色とも繋がる
+            const RAINBOW = "linear-gradient(135deg,#ff6b6b 0%,#ffcf5d 24%,#7cffb0 48%,#5aa0ff 72%,#c9a2ff 100%)";
             const gTarget = guideIds && guideIds.has(cell.id);
             const gDim = gtut === "warn" || gtut === "def" || (gtut === "clear" && !gTarget); // 誘導中の対象外は暗く
             const gHi = gtut === "clear" && gTarget;                        // 消させるグループを光らせる
             return h("button", { key:cell.id, "data-idx":i, onPointerDown: e => onDown(e,i),
               className:"relative rounded-xl",
               style:{ aspectRatio:"1 / 1",
-                background:`linear-gradient(180deg, ${d.c1} 0%, ${d.c2} 100%)`,
-                border:`2.5px solid ${d.c3}`,
-                animation: gHi ? "actPulse .8s ease-in-out infinite" : "dropIn .26s ease",
+                background: isWild ? RAINBOW : `linear-gradient(180deg, ${d.c1} 0%, ${d.c2} 100%)`,
+                border:`2.5px solid ${isWild ? "#fff3cf" : d.c3}`,
+                animation: gHi ? "none" : "dropIn .26s ease",
                 boxShadow: isClr ? "none"
                   : gHi ? "0 0 0 3px #7cffb0, 0 0 16px #7cffb0"
                   : isPrev ? `0 0 0 3px ${actColor}`
+                  : isWild ? "inset 0 0 0 2px rgba(255,255,255,.85), 0 0 9px rgba(255,255,255,.55)"
                   : it ? `inset 0 0 0 2px ${it.ring}, inset 0 -4px 0 rgba(0,0,0,.18)`
                   : "inset 0 -4px 0 rgba(0,0,0,.18)",
                 opacity: isClr ? 0 : gDim ? 0.26 : 1,
@@ -2530,7 +2589,8 @@ function DropBattle() {
                 transition:"transform .12s ease, opacity .2s ease, box-shadow .12s ease",
                 touchAction:"none" } },
               cell.type === JUNK ? h("img", { src:"assets/mk_skull.png", alt:"", draggable:false, className:"mark-img", style:{ position:"absolute", left:"22%", top:"22%", width:"56%", height:"56%", objectFit:"contain", pointerEvents:"none", opacity:0.92, filter:"drop-shadow(0 1px 1px rgba(0,0,0,.5))" } })
-                 : it ? [h("img", { key:"m", src:it.img, alt:it.name, draggable:false, className:"mark-img", style:{ position:"absolute", left:"19%", top:"19%", width:"62%", height:"62%", objectFit:"contain", pointerEvents:"none", filter:"drop-shadow(0 1px 2px rgba(0,0,0,.55))", animation:"markPulse 1.6s ease-in-out infinite" } }),
+                 : rgem ? h("span", { key:"g", style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.5rem", fontWeight:900, lineHeight:1, color:"#3a2f52", textShadow:"0 0 2px #fff, 0 1px 1px rgba(255,255,255,.9)", pointerEvents:"none" } }, rgem.glyph)
+                 : norm ? [h("img", { key:"m", src:norm.img, alt:norm.name, draggable:false, className:"mark-img", style:{ position:"absolute", left:"19%", top:"19%", width:"62%", height:"62%", objectFit:"contain", pointerEvents:"none", filter: isWild ? "drop-shadow(0 1px 2px rgba(0,0,0,.7))" : "drop-shadow(0 1px 2px rgba(0,0,0,.55))", animation:"markPulse 1.6s ease-in-out infinite" } }),
                    cell.up && h("span", { key:"u", style:{ position:"absolute", top:"-4%", right:"2%", fontSize:"0.85rem", fontWeight:900, color:"#ffd54a", textShadow:"0 1px 2px #000, 0 0 2px #000", pointerEvents:"none" } }, "＋")]
                  : h("span", { style:{ width:"30%", height:"22%", borderRadius:"50%", background:"rgba(255,255,255,.30)", position:"absolute", top:"11%", left:"13%", pointerEvents:"none" } }));
           })));
@@ -2578,7 +2638,7 @@ function DropBattle() {
         routeTut
           ? h("div", { className:"text-center rounded-lg py-2 px-3 mb-1 font-bold pop-in", style:{ position:"fixed", top:"7%", left:"4%", right:"4%", maxWidth:360, marginLeft:"auto", marginRight:"auto", zIndex:62, background:"rgba(30,24,42,.98)", border:"2px solid #e8c06a", color:"#ffe08a", boxShadow:"0 4px 16px rgba(0,0,0,.55)" } },
               h("span", { className:"block", style:{ fontSize:"0.98rem", textShadow:"0 1px 2px #000" } }, "タップでルートを選んで進もう！"),
-              h("span", { className:"block text-[11px] mt-0.5", style:{ color:"#8ce8b0" } }, "▼ 光っているマス「ここ！」をタップ"))
+              h("span", { className:"block text-[11px] mt-0.5", style:{ color:"#8ce8b0" } }, "▼ 光っているマスをタップ"))
           : h("div", { className:"text-center text-xs mb-1 rounded-lg py-1 font-bold", style:{ background:"rgba(216,168,72,.12)", border:"1px solid rgba(216,168,72,.4)", color:"#e8c06a", letterSpacing:"0.1em" } }, curNodeId == null ? "▼ 出発地点を選ぼう" : "▼ 次に進む場所を選ぼう"),
         h("div", { ref: mapBoxRef, className:"relative w-full mb-1", style:{ height:1560, borderRadius:16, overflow:"hidden", border:"2px solid #453b5c", background:"#1c1626" } },
           h("img", { src:MAP_BGS[act] || MAP_BGS[0], alt:"", draggable:false, className:"absolute pointer-events-none", style:{ left:0, top:0, width:"100%", height:"100%", objectFit:"cover", opacity:.9 } }),
@@ -2613,7 +2673,7 @@ function DropBattle() {
                   : `radial-gradient(circle at 50% 34%, rgba(${meta.tint},1) 0%, rgba(24,18,32,1) 78%)`,
                 border: `3px solid ${isCur ? "#f0e4c8" : meta.color}`,
                 opacity: isVis && !isCur ? 0.42 : sel || isCur ? 1 : routeTut ? 0.3 : 0.72,
-                animation: sel ? "nodePulse 1.3s ease-in-out infinite" : "none",
+                animation: "none",
                 boxShadow: isCur ? "0 3px 0 rgba(10,8,16,.55), 0 0 0 2px rgba(240,228,200,.4)"
                   : sel && routeTut ? `0 3px 0 rgba(10,8,16,.55), 0 0 0 3px #ffe08a, 0 0 18px 3px rgba(255,207,93,.9)`
                   : sel ? `0 3px 0 rgba(10,8,16,.55), inset 0 0 0 2px rgba(255,255,255,.14), 0 0 0 3px rgba(${meta.tint},.55)`
@@ -2627,7 +2687,7 @@ function DropBattle() {
                   filter: isVis && !isCur ? "grayscale(.9) drop-shadow(0 2px 1px rgba(0,0,0,.5))" : "drop-shadow(0 2px 1px rgba(0,0,0,.5))" } }),
               isCur && h("img", { src:"assets/hero.png", alt:"", draggable:false, className:"absolute pointer-events-none", style:{ width:48, height:48, objectFit:"contain", left:"50%", top:-46, transform:"translateX(-50%)", filter:"drop-shadow(0 3px 2px rgba(0,0,0,.55))" } }),
               h("span", { className:"absolute text-[9px] font-bold pointer-events-none", style:{ top:"100%", marginTop:3, color:meta.color, background:"rgba(10,8,16,.75)", borderRadius:6, padding:"0 5px", textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } }, meta.label),
-              routeTut && sel && h("span", { className:"absolute font-bold pointer-events-none", style:{ bottom:"104%", left:"50%", transform:"translateX(-50%)", whiteSpace:"nowrap", color:"#2c2030", background:"linear-gradient(180deg,#ffe08a,#e8b84a)", border:"2px solid #b8862e", borderRadius:10, padding:"2px 10px", fontSize:12, boxShadow:"0 3px 8px rgba(0,0,0,.5)", animation:"targetBob 1s ease-in-out infinite", zIndex:3 } }, "ここ！ ▼"));
+              routeTut && sel && h("span", { className:"absolute font-bold pointer-events-none", style:{ bottom:"104%", left:"50%", transform:"translateX(-50%)", whiteSpace:"nowrap", color:"#2c2030", background:"linear-gradient(180deg,#ffe08a,#e8b84a)", border:"2px solid #b8862e", borderRadius:10, padding:"2px 10px", fontSize:12, boxShadow:"0 3px 8px rgba(0,0,0,.5)", animation:"targetBob 1s ease-in-out infinite", zIndex:3 } }, "タップ ▼"));
           })),
         h("div", { className:"flex justify-center gap-1 mb-1 text-[9px]", style:{ flexWrap:"wrap" } },
           Object.keys(NODE_META).map(k => h("span", { key:k, className:"rounded-full inline-flex items-center", style:{ color:NODE_META[k].color, background:"rgba(30,24,42,.92)", border:"1px solid #3c3450", padding:"1px 8px", gap:3 } },
@@ -2694,7 +2754,7 @@ function DropBattle() {
                 fontSize: gtut === "warn" && isDmgIntent ? 14 : iv.act === "bigatk" ? 11 : 10,
                 transform: gtut === "warn" && isDmgIntent ? "scale(1.15)" : "none",
                 boxShadow: gtut === "warn" && isDmgIntent ? "0 0 0 2px #ff6b6b, 0 0 14px rgba(255,107,107,.8)" : "none",
-                opacity: en.alive ? 1 : 0, animation: (charging || (gtut === "warn" && isDmgIntent)) ? "intentBlink .9s ease-in-out infinite" : "none", textShadow:"0 1px 2px #000" } },
+                opacity: en.alive ? 1 : 0, animation: charging ? "intentBlink .9s ease-in-out infinite" : "none", textShadow:"0 1px 2px #000" } },
                 en.alive ? intentTxt : ""),
               en.alive && enrLeft(en, turn) === 0 && h("span", { className:"absolute pointer-events-none", style:{ top:16, right:0, fontSize:"1.2rem", zIndex:3, animation:"angerPulse .6s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)" } }, "💪"),
               isT && h("span", { className:"absolute pointer-events-none", style:{ top:14, left:"50%", animation:"targetBob 1s ease-in-out infinite", color:"#e8c05a", fontSize:12, textShadow:"0 1px 2px #000", zIndex:2 } }, "▼"),
@@ -2780,7 +2840,7 @@ function DropBattle() {
             background: isUsed ? (lit ? a.bg : "rgba(14,11,20,.85)") : (isSel || guideTgt) ? a.bg : "rgba(30,24,42,.92)",
             border: `2px solid ${isUsed ? (lit ? a.color : "#2c2740") : (isSel || guideTgt) ? a.color : "#3c3450"}`,
             boxShadow: guideTgt ? `0 0 0 3px ${a.color}, 0 0 18px ${a.color}` : lit ? `0 0 0 3px ${a.color}` : "none",
-            animation: guideTgt ? "actPulse .8s ease-in-out infinite" : lit ? "actPulse .55s ease" : "none",
+            animation: lit ? "actPulse .55s ease" : "none",
             opacity: guideOff ? 0.26 : isUsed ? (lit ? 1 : 0.4) : 1,
             zIndex: guideTgt ? 46 : "auto",
             transition:"background .25s ease, border-color .25s ease, box-shadow .25s ease, opacity .25s ease" } },
