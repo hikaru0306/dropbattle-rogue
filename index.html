@@ -384,13 +384,17 @@ const pick = arr => arr[Math.floor(Math.random()*arr.length)];
 const shuffle = arr => { for (let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; };
 const makeDrop = (special=false) => ({ id:UID++, type:Math.floor(Math.random()*4), special, up:false });
 
+// 初回プレイ（チュートリアル）中か: 2戦目ガイド未完了 かつ 非テスト
+const onboarding = () => { if (TEST_MODE) return false; try { return !(localStorage.getItem("db_gtut") || ""); } catch (e) { return true; } };
 // ===== マップ生成（分岐ルート）=====
-const genMap = () => {
+// simpleStart: 初回チュートリアル用。1戦目(row0)は分岐なし単一・2戦目(row1)は通常バトル固定
+const genMap = (simpleStart) => {
   let id = 0;
   const rows = [];
   for (let r = 0; r < ROWS; r++) {
     let types;
-    if (r === 0) types = ["battle","battle"];
+    if (r === 0) types = simpleStart ? ["battle"] : ["battle","battle"];
+    else if (r === 1 && simpleStart) types = ["battle","battle"];
     else if (r === ROWS-1) types = ["boss"];
     else if (r === ROWS-2) types = shuffle(["rest","elite"]);
     else {
@@ -718,7 +722,7 @@ const refillPlain = (cells, removeIds) => {
 };
 
 // ===== SFX（WebAudio 簡易シンセ）=====
-let AC = null, sfxEnabled = true, sfxVol = 1;
+let AC = null, sfxEnabled = true, sfxVol = 0.6;
 try { const v = parseFloat(localStorage.getItem("db_sfxvol")); if (v >= 0 && v <= 1) sfxVol = v; } catch (e) {}
 const ac = () => {
   if (!AC) { try { AC = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){} }
@@ -818,7 +822,7 @@ const SFX = {
 
 // ===== BGM（CC0実音源: cynicmusic / Juhani Junkala）=====
 const BGM_FILES = { title:"assets/bgm/title.mp3", map:"assets/bgm/map.mp3", battle:"assets/bgm/battle.mp3", boss:"assets/bgm/boss.mp3" };
-let bgmOn = true, bgmVol = 1, bgmAudio = null, bgmTrack = null;
+let bgmOn = true, bgmVol = 0.6, bgmAudio = null, bgmTrack = null;
 try { const v = parseFloat(localStorage.getItem("db_bgmvol")); if (v >= 0 && v <= 1) bgmVol = v; } catch (e) {}
 const bgmBase = name => (name === "battle" ? 0.26 : 0.3);
 const bgmApplyVol = () => { if (bgmAudio && bgmTrack) bgmAudio.volume = bgmBase(bgmTrack) * bgmVol; };
@@ -896,7 +900,7 @@ function DropBattle() {
   const syncBag = () => setBagView({ ...bagRef.current });
 
   // マップ
-  const [map, setMap] = useState(() => genMap());
+  const [map, setMap] = useState(() => genMap(onboarding()));
   const mapRef = useRef(map); mapRef.current = map;
   const [curNodeId, setCurNodeId] = useState(null);
   const curNodeRef = useRef(null); curNodeRef.current = curNodeId;
@@ -1927,7 +1931,7 @@ function DropBattle() {
     ownedRef.current = initOwned();
     bagRef.current = refillBag(ownedRef.current);
     syncOwned();
-    const m = genMap();
+    const m = genMap(onboarding());
     setMap(m); mapRef.current = m;
     setCurNodeId(null); curNodeRef.current = null;
     setVisited(new Set());
@@ -2074,6 +2078,7 @@ function DropBattle() {
         gtutSeedRef.current = TUT_SEED; setGuide("warn");
       },
       nextGuide: () => { if (gtutRef.current === "warn") setGuide("def"); },
+      mapPreview: simple => genMap(simple).rows.map(row => row.map(n => n.type)),
       declineReward: () => declineReward(),
       chooseReward: k => chooseReward(k),
       tapAct: key => { if (gtutRef.current === "def") { if (key === "def") { setAction("def"); actionRef.current = "def"; setGuide("clear"); } } else if (!gtutRef.current) { setAction(key); actionRef.current = key; } },
@@ -2274,11 +2279,11 @@ function DropBattle() {
           style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } },
           tut >= TUT.length - 1 ? "はじめる！" : "次へ ▶"))));
   }
-  // 2戦目ガイド: ① 敵の攻撃が来る！（攻撃値を見せる・敵の下に表示）
+  // 2戦目ガイド: ① 敵の攻撃が来る！（攻撃値を見せる・敵は上で光るのでテキストは画面下側）
   if (gtut === "warn") {
     const tutAtk = enemies[0] && enemies[0].alive ? intentOf(enemies[0], enemies).dmg : 0;
-    overlays.push(h("div", { key:"gwarn", className:"fixed pop-in", style:{ top:"35%", left:"50%", transform:"translateX(-50%)", zIndex:62,
-      background:"rgba(30,24,42,.98)", border:"2px solid #ff6b6b", borderRadius:14, padding:"12px 18px", maxWidth:"92%", width:"max-content", textAlign:"center", boxShadow:"0 6px 22px rgba(0,0,0,.6)" } },
+    overlays.push(h("div", { key:"gwarn", className:"fixed pop-in", style:{ bottom:"6%", left:"4%", right:"4%", maxWidth:360, marginLeft:"auto", marginRight:"auto", zIndex:62,
+      background:"rgba(30,24,42,.98)", border:"2px solid #ff6b6b", borderRadius:14, padding:"12px 18px", textAlign:"center", boxShadow:"0 6px 22px rgba(0,0,0,.6)" } },
       h("span", { className:"font-bold block", style:{ color:"#ff9a90", fontSize:"1.05rem", textShadow:"0 1px 2px #000" } }, "⚠️ 敵の攻撃が来る！"),
       h("div", { className:"flex items-center justify-center flex-wrap gap-1.5 my-1.5" },
         h("span", { className:"text-[11px]", style:{ opacity:0.9 } }, "このスライムの攻撃は"),
@@ -2289,11 +2294,11 @@ function DropBattle() {
       h("button", { onClick: () => { SFX.tap(); setGuide("def"); }, className:"rounded-xl py-2 px-6 font-bold text-sm",
         style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } }, "防御で防ぐ ▶")));
   }
-  // 2戦目ガイド: ② 防御を押す / ③ 5+グループを消す（敵の下に表示）
+  // 2戦目ガイド: ② 防御を押す / ③ 5+グループを消す（操作対象は下側なのでテキストは画面上側）
   if (gtut === "def" || gtut === "clear") {
     const txt = gtut === "def" ? "🛡 防御で受け止めよう！" : "5個以上つながったドロップをタップ！";
     const sub = gtut === "def" ? "▼ 光っている「防御」をタップ" : "▼ 光っているドロップをタップ";
-    overlays.push(h("div", { key:"gbanner", className:"fixed pop-in", style:{ top:"35%", left:"50%", transform:"translateX(-50%)", zIndex:62,
+    overlays.push(h("div", { key:"gbanner", className:"fixed pop-in", style:{ top:"8%", left:"50%", transform:"translateX(-50%)", zIndex:62,
       background:"rgba(30,24,42,.97)", border:"2px solid #e8c06a", borderRadius:14, padding:"10px 18px", maxWidth:"90%", width:"max-content", textAlign:"center", pointerEvents:"none", boxShadow:"0 4px 18px rgba(0,0,0,.55)" } },
       h("span", { className:"font-bold block", style:{ color:"#ffe08a", fontSize:"0.98rem", lineHeight:1.5, textShadow:"0 1px 2px #000" } }, txt),
       h("span", { className:"block text-[10px] mt-1", style:{ color:"#8ce8b0", fontWeight:700 } }, sub)));
@@ -2557,6 +2562,7 @@ function DropBattle() {
 
   if (status === "map" || (status === "reward" && pendingNodeRef.current && pendingNodeRef.current.type === "treasure")) {
     const selIds = selectableIds();
+    const routeTut = status === "map" && curNodeId == null && onboarding(); // 初回のルート選択チュートリアル
     const CENTERS = [50, 28, 70, 30, 71, 33, 66, 50]; // 蛇行する道の中心
     const nodeX = n => Math.max(13, Math.min(87, CENTERS[n.row] + (n.col - (n.n - 1) / 2) * 26));
     const nodeY = n => 7 + (ROWS - 1 - n.row) * (86 / (ROWS - 1));
@@ -2569,7 +2575,11 @@ function DropBattle() {
           h("div", { className:"flex-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:9 })),
           h("span", { className:"text-xs font-bold", style:{ color:"#7CFFB0", fontVariantNumeric:"tabular-nums" } }, pHP, "/", pMax)),
         itemBarEl,
-        h("div", { className:"text-center text-xs mb-1 rounded-lg py-1 font-bold", style:{ background:"rgba(216,168,72,.12)", border:"1px solid rgba(216,168,72,.4)", color:"#e8c06a", letterSpacing:"0.1em" } }, curNodeId == null ? "▼ 出発地点を選ぼう" : "▼ 次に進む場所を選ぼう"),
+        routeTut
+          ? h("div", { className:"text-center rounded-lg py-2 px-3 mb-1 font-bold pop-in", style:{ position:"fixed", top:"7%", left:"4%", right:"4%", maxWidth:360, marginLeft:"auto", marginRight:"auto", zIndex:62, background:"rgba(30,24,42,.98)", border:"2px solid #e8c06a", color:"#ffe08a", boxShadow:"0 4px 16px rgba(0,0,0,.55)" } },
+              h("span", { className:"block", style:{ fontSize:"0.98rem", textShadow:"0 1px 2px #000" } }, "タップでルートを選んで進もう！"),
+              h("span", { className:"block text-[11px] mt-0.5", style:{ color:"#8ce8b0" } }, "▼ 光っているマス「ここ！」をタップ"))
+          : h("div", { className:"text-center text-xs mb-1 rounded-lg py-1 font-bold", style:{ background:"rgba(216,168,72,.12)", border:"1px solid rgba(216,168,72,.4)", color:"#e8c06a", letterSpacing:"0.1em" } }, curNodeId == null ? "▼ 出発地点を選ぼう" : "▼ 次に進む場所を選ぼう"),
         h("div", { ref: mapBoxRef, className:"relative w-full mb-1", style:{ height:1560, borderRadius:16, overflow:"hidden", border:"2px solid #453b5c", background:"#1c1626" } },
           h("img", { src:MAP_BGS[act] || MAP_BGS[0], alt:"", draggable:false, className:"absolute pointer-events-none", style:{ left:0, top:0, width:"100%", height:"100%", objectFit:"cover", opacity:.9 } }),
           h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"linear-gradient(180deg, rgba(19,14,28,.5) 0%, rgba(19,14,28,.12) 35%, rgba(19,14,28,.25) 100%)" } }),
@@ -2602,9 +2612,10 @@ function DropBattle() {
                 background: isCur ? "#3a2f52"
                   : `radial-gradient(circle at 50% 34%, rgba(${meta.tint},1) 0%, rgba(24,18,32,1) 78%)`,
                 border: `3px solid ${isCur ? "#f0e4c8" : meta.color}`,
-                opacity: isVis && !isCur ? 0.42 : sel || isCur ? 1 : 0.72,
+                opacity: isVis && !isCur ? 0.42 : sel || isCur ? 1 : routeTut ? 0.3 : 0.72,
                 animation: sel ? "nodePulse 1.3s ease-in-out infinite" : "none",
                 boxShadow: isCur ? "0 3px 0 rgba(10,8,16,.55), 0 0 0 2px rgba(240,228,200,.4)"
+                  : sel && routeTut ? `0 3px 0 rgba(10,8,16,.55), 0 0 0 3px #ffe08a, 0 0 18px 3px rgba(255,207,93,.9)`
                   : sel ? `0 3px 0 rgba(10,8,16,.55), inset 0 0 0 2px rgba(255,255,255,.14), 0 0 0 3px rgba(${meta.tint},.55)`
                   : "0 3px 0 rgba(10,8,16,.55), inset 0 0 0 2px rgba(255,255,255,.08)",
                 cursor: sel ? "pointer" : "default",
@@ -2615,7 +2626,8 @@ function DropBattle() {
                 style:{ width:isz, height:isz, maxWidth:isz, maxHeight:isz, objectFit:"contain",
                   filter: isVis && !isCur ? "grayscale(.9) drop-shadow(0 2px 1px rgba(0,0,0,.5))" : "drop-shadow(0 2px 1px rgba(0,0,0,.5))" } }),
               isCur && h("img", { src:"assets/hero.png", alt:"", draggable:false, className:"absolute pointer-events-none", style:{ width:48, height:48, objectFit:"contain", left:"50%", top:-46, transform:"translateX(-50%)", filter:"drop-shadow(0 3px 2px rgba(0,0,0,.55))" } }),
-              h("span", { className:"absolute text-[9px] font-bold pointer-events-none", style:{ top:"100%", marginTop:3, color:meta.color, background:"rgba(10,8,16,.75)", borderRadius:6, padding:"0 5px", textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } }, meta.label));
+              h("span", { className:"absolute text-[9px] font-bold pointer-events-none", style:{ top:"100%", marginTop:3, color:meta.color, background:"rgba(10,8,16,.75)", borderRadius:6, padding:"0 5px", textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } }, meta.label),
+              routeTut && sel && h("span", { className:"absolute font-bold pointer-events-none", style:{ bottom:"104%", left:"50%", transform:"translateX(-50%)", whiteSpace:"nowrap", color:"#2c2030", background:"linear-gradient(180deg,#ffe08a,#e8b84a)", border:"2px solid #b8862e", borderRadius:10, padding:"2px 10px", fontSize:12, boxShadow:"0 3px 8px rgba(0,0,0,.5)", animation:"targetBob 1s ease-in-out infinite", zIndex:3 } }, "ここ！ ▼"));
           })),
         h("div", { className:"flex justify-center gap-1 mb-1 text-[9px]", style:{ flexWrap:"wrap" } },
           Object.keys(NODE_META).map(k => h("span", { key:k, className:"rounded-full inline-flex items-center", style:{ color:NODE_META[k].color, background:"rgba(30,24,42,.92)", border:"1px solid #3c3450", padding:"1px 8px", gap:3 } },
@@ -2684,8 +2696,6 @@ function DropBattle() {
                 boxShadow: gtut === "warn" && isDmgIntent ? "0 0 0 2px #ff6b6b, 0 0 14px rgba(255,107,107,.8)" : "none",
                 opacity: en.alive ? 1 : 0, animation: (charging || (gtut === "warn" && isDmgIntent)) ? "intentBlink .9s ease-in-out infinite" : "none", textShadow:"0 1px 2px #000" } },
                 en.alive ? intentTxt : ""),
-              // 攻撃予告チュートリアル: 予告チップを指す矢印
-              gtut === "warn" && isDmgIntent && en.alive && h("span", { className:"absolute pointer-events-none", style:{ top:-20, left:"50%", transform:"translateX(-50%)", fontSize:"1.1rem", animation:"targetBob 1s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)", zIndex:4 } }, "⚠️"),
               en.alive && enrLeft(en, turn) === 0 && h("span", { className:"absolute pointer-events-none", style:{ top:16, right:0, fontSize:"1.2rem", zIndex:3, animation:"angerPulse .6s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)" } }, "💪"),
               isT && h("span", { className:"absolute pointer-events-none", style:{ top:14, left:"50%", animation:"targetBob 1s ease-in-out infinite", color:"#e8c05a", fontSize:12, textShadow:"0 1px 2px #000", zIndex:2 } }, "▼"),
               pops[en.id] && h("span", { key:pops[en.id].seq, className:"dmg-pop", style:{ color:pops[en.id].color } }, pops[en.id].text),
