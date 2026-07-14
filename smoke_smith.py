@@ -1,0 +1,126 @@
+# -*- coding: utf-8 -*-
+"""鍛冶師（smith）検証: 補充で素材蓄積 / 生成で袋から特殊配置 / 強化で＋化 / 素材のバトル間持ち越し / 素材0はアクション消費なし"""
+import time
+from playwright.sync_api import sync_playwright
+
+EXE = r"C:\Users\2000h\AppData\Local\ms-playwright\chromium_headless_shell-1223\chrome-headless-shell-win64\chrome-headless-shell.exe"
+URL = "file:///C:/Users/2000h/Downloads/dropbattle-rogue/index.html?test=1&fast=1"
+
+fails, errors = [], []
+def chk(name, cond, extra=""):
+    print(("OK  " if cond else "NG  ") + name + (f"  [{extra}]" if extra and not cond else ""))
+    if not cond: fails.append(name)
+
+def st(p): return p.evaluate("window.__test.state()")
+def ci(p): return p.evaluate("window.__test.charInfo()")
+
+def fill(p, t=1):
+    for i in range(36):
+        p.evaluate(f"window.__test.setCellType({i}, {t})")
+
+def make_group(p, idxs, t):
+    """指定セルだけ色t、他は市松模様（縦横で隣接しない）にして孤立させる"""
+    for i in range(36):
+        r, c = divmod(i, 6)
+        base = 2 if (r + c) % 2 == 0 else 3
+        p.evaluate(f"window.__test.setCellType({i}, {base})")
+    for i in idxs:
+        p.evaluate(f"window.__test.setCellType({i}, {t})")
+
+with sync_playwright() as pw:
+    b = pw.chromium.launch(executable_path=EXE)
+    page = b.new_page(viewport={"width": 420, "height": 900})
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(URL)
+    page.wait_for_selector("text=冒険に出る", timeout=15000)
+    page.click("text=冒険に出る"); time.sleep(0.5)
+
+    # 選択画面: 6タイル・鍛冶師選択
+    tiles = page.query_selector_all("div.flex.justify-center.gap-2 > button")
+    chk("6 tiles on select", len(tiles) == 6)
+    tiles[5].click(); time.sleep(0.4)
+    body = page.evaluate("document.body.innerText")
+    chk("smith name/unlock shown", "鍛冶師ブロム" in body)
+    page.click("text=この仲間と冒険に出る"); time.sleep(0.6)
+    info = ci(page)
+    chk("char applied (smith)", info["cur"] == 5 and info["skill"] == "smith" and info["smithMode"] == "stock" and info["stock"] == 0)
+
+    s = st(page)
+    page.evaluate(f"window.__test.enter({s['selectable'][0]})"); time.sleep(0.8)
+    page.evaluate("window.__test.spawn(['slime'])"); time.sleep(0.3)
+
+    # 1) 補充: 5個消し → 素材+5・healは増えない
+    make_group(page, [0, 1, 2, 3, 4], 1); time.sleep(0.2)
+    page.evaluate("window.__test.setAct('heal')")
+    page.evaluate("window.__test.commit(0)"); time.sleep(0.8)
+    s = st(page); info = ci(page)
+    chk("stock +5 on 補充", info["stock"] == 5, f"stock={info['stock']}")
+    chk("heal not gained", s["tv"]["heal"] == 0)
+    chk("action consumed", "heal" in s["used"])
+
+    # 2) 生成: 別グループ(6個)に素材5で特殊5個配置（袋から引く）
+    page.evaluate("window.__test.resolve()"); time.sleep(1.2)
+    make_group(page, [6, 7, 8, 9, 10, 11], 0); time.sleep(0.2)
+    bag_before = st(page)["bagLeft"]
+    sp_before = st(page)["specials"]
+    page.evaluate("window.__test.setSmithMode('gen')")
+    page.evaluate("window.__test.setAct('heal')")
+    page.evaluate("window.__test.commit(6)"); time.sleep(0.6)
+    s = st(page); info = ci(page)
+    gen_n = s["specials"] - sp_before
+    chk("gen placed 5 specials", gen_n == 5, f"gen={gen_n}")
+    chk("stock spent to 0", info["stock"] == 0, f"stock={info['stock']}")
+    # 生成しても所持数を超えない（袋+盤面 <= 所持合計 = 複製なし）
+    chk("no duplication (bag+board<=owned)", s["bagLeft"] + s["specials"] <= s["ownedTotal"], f"bag{s['bagLeft']}+sp{s['specials']} vs owned{s['ownedTotal']}")
+    row_sp = [s["board"][i]["sp"] for i in [6, 7, 8, 9, 10, 11]]
+    chk("specials on tapped group", sum(1 for x in row_sp if x) == 5, str(row_sp))
+    chk("board not cleared (gen)", all(s["board"][i]["t"] == 0 for i in [6, 7, 8, 9, 10, 11]))
+
+    # 3) 素材0で生成 → アクション消費なし
+    page.evaluate("window.__test.resolve()"); time.sleep(1.2)
+    make_group(page, [12, 13, 14], 1); time.sleep(0.2)
+    page.evaluate("window.__test.setAct('heal')")
+    page.evaluate("window.__test.commit(12)"); time.sleep(0.4)
+    s = st(page)
+    chk("no-op when stock 0", "heal" not in s["used"])
+
+    # 4) 補充で貯め直し → 強化: 特殊入りグループを＋化
+    page.evaluate("window.__test.setSmithMode('stock')")
+    page.evaluate("window.__test.setAct('heal')")
+    page.evaluate("window.__test.commit(12)"); time.sleep(0.8)  # 3個消し → 素材3
+    info = ci(page)
+    chk("stock refilled 3", info["stock"] == 3, f"stock={info['stock']}")
+    # ターンを終わらせてから強化テスト（healは1ターン1回のため）
+    page.evaluate("window.__test.resolve()"); time.sleep(1.2)
+    # 特殊2個入りのグループを作る
+    make_group(page, [18, 19, 20, 21], 1); time.sleep(0.2)
+    page.evaluate("window.__test.setCellSpecial(18, 'atk', false, false)")
+    page.evaluate("window.__test.setCellSpecial(19, 'def', false, false)")
+    page.evaluate("window.__test.setSmithMode('up')")
+    page.evaluate("window.__test.setAct('heal')")
+    page.evaluate("window.__test.commit(18)"); time.sleep(0.6)
+    s = st(page); info = ci(page)
+    chk("upgraded 2 specials", s["board"][18]["u"] and s["board"][19]["u"], str([s["board"][18], s["board"][19]]))
+    chk("stock 3-2=1", info["stock"] == 1, f"stock={info['stock']}")
+
+    # 5) 素材はバトルをまたいで保持（勝利→次バトル）
+    page.evaluate("window.__test.weaken()")
+    page.evaluate("window.__test.setAct('atk')")
+    fillgrp = [30, 31, 32]
+    make_group(page, fillgrp, 2); time.sleep(0.2)
+    page.evaluate("window.__test.commit(30)"); time.sleep(0.6)
+    page.evaluate("window.__test.resolve()"); time.sleep(2.5)  # 撃破→報酬
+    if st(page)["status"] == "reward":
+        page.evaluate("window.__test.declineReward()"); time.sleep(1.0)
+    s = st(page)
+    if s["status"] == "map" and s["selectable"]:
+        page.evaluate(f"window.__test.enter({s['selectable'][0]})"); time.sleep(0.8)
+        info = ci(page)
+        chk("stock persists across battles", info["stock"] == 1, f"stock={info['stock']}")
+    else:
+        chk("stock persists across battles (skipped: status=" + s["status"] + ")", False)
+
+    chk("no page errors", len(errors) == 0, str(errors[:2]))
+    b.close()
+
+print("RESULT:", "PASS" if not fails else "FAIL " + str(fails))

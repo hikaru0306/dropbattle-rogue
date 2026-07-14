@@ -27,7 +27,7 @@ with sync_playwright() as pw:
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(URL)
     page.wait_for_selector("text=冒険に出る", timeout=15000)
-    page.click("text=冒険に出る")
+    page.click("text=冒険に出る"); page.click("text=この仲間と冒険に出る")
     time.sleep(0.5)
     enter_battle(page)
 
@@ -60,7 +60,7 @@ with sync_playwright() as pw:
     page.evaluate("window.__test.restart()")
     time.sleep(0.8)
     if st(page)["status"] != "map":
-        page.click("text=冒険に出る"); time.sleep(0.5)
+        page.click("text=冒険に出る"); page.click("text=この仲間と冒険に出る"); time.sleep(0.5)
     enter_battle(page)
     page.evaluate("window.__test.giveRelic('crossgem')")
     fill_board(page)
@@ -80,7 +80,7 @@ with sync_playwright() as pw:
     page.evaluate("window.__test.restart()")
     time.sleep(0.8)
     if st(page)["status"] != "map":
-        page.click("text=冒険に出る"); time.sleep(0.5)
+        page.click("text=冒険に出る"); page.click("text=この仲間と冒険に出る"); time.sleep(0.5)
     enter_battle(page)
     page.evaluate("window.__test.giveRelic('redcore')")
     fill_board(page)
@@ -98,7 +98,7 @@ with sync_playwright() as pw:
     page.evaluate("window.__test.restart()")
     time.sleep(0.8)
     if st(page)["status"] != "map":
-        page.click("text=冒険に出る"); time.sleep(0.5)
+        page.click("text=冒険に出る"); page.click("text=この仲間と冒険に出る"); time.sleep(0.5)
     enter_battle(page)
     page.evaluate("window.__test.giveRelic('blastcore')")
     fill_board(page)  # 全部黄(1)
@@ -119,7 +119,7 @@ with sync_playwright() as pw:
     page.evaluate("window.__test.restart()")
     time.sleep(0.8)
     if st(page)["status"] != "map":
-        page.click("text=冒険に出る"); time.sleep(0.5)
+        page.click("text=冒険に出る"); page.click("text=この仲間と冒険に出る"); time.sleep(0.5)
     enter_battle(page)
     fill_board(page)  # 全部黄(1)
     for i in (0, 1, 2):

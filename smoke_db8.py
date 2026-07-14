@@ -17,7 +17,7 @@ with sync_playwright() as pw:
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(URL)
     page.wait_for_selector("text=冒険に出る", timeout=15000)
-    page.click("text=冒険に出る")
+    page.click("text=冒険に出る"); page.click("text=この仲間と冒険に出る")
     time.sleep(0.5)
     s = st(page)
     page.evaluate(f"window.__test.enter({s['selectable'][0]})")
@@ -66,7 +66,7 @@ with sync_playwright() as pw:
         p.wait_for_selector("text=冒険に出る", timeout=15000)
         sw = p.evaluate("document.documentElement.scrollWidth")
         assert sw <= w + 1, f"title overflow at {w}: {sw}"
-        p.click("text=冒険に出る")
+        p.click("text=冒険に出る"); p.click("text=この仲間と冒険に出る")
         time.sleep(0.8)
         sw = p.evaluate("document.documentElement.scrollWidth")
         assert sw <= w + 1, f"map overflow at {w}: {sw}"

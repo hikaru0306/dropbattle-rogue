@@ -18,7 +18,7 @@ with sync_playwright() as pw:
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(URL)
     page.wait_for_selector("text=冒険に出る", timeout=15000)
-    page.click("text=冒険に出る")
+    page.click("text=冒険に出る"); page.click("text=この仲間と冒険に出る")
     time.sleep(0.6)
     s = st(page)
     assert s["items"] == [], f"initial items: {s['items']}"

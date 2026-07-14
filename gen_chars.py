@@ -34,6 +34,7 @@ CHARS = {
     "hero3": "A heavy lion-headed beastman knight, thick ornate plate armor, holding a broad sword and a round shield, red and blue war paint stripes on the face, mane around the helmet, powerful sturdy stance",
     "hero4": "A wise nine-tailed kitsune fox scholar wearing round glasses, layered scholarly robes, holding a huge old purple spellbook under one arm and a crystal-topped staff, calm intelligent expression, fox ears and bushy tails",
     "hero5": "A noble high elf archmage of grand stature, ornate white and gold flowing robes with intricate trim, a large golden halo ring painted behind the head as flat solid gold shape, holding a luxurious tall staff, serene majestic dignified expression, looks the strongest and most powerful",
+    "hero6": "A stout dwarf blacksmith with a big bushy braided brown beard, short stocky body, wearing a thick brown leather apron over a simple tunic, holding a large heavy smithing hammer resting over one shoulder, a small dark iron anvil on the ground at his feet, copper and steel-gray and warm brown color palette, sturdy confident friendly expression",
 }
 
 def build(seed, text):

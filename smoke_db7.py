@@ -13,7 +13,7 @@ with sync_playwright() as pw:
     p.on("pageerror", lambda e: errors.append(str(e)))
     p.goto(URL)
     p.wait_for_selector("text=冒険に出る", timeout=15000)
-    p.click("text=冒険に出る")
+    p.click("text=冒険に出る"); p.click("text=この仲間と冒険に出る")
     time.sleep(0.5)
     s = p.evaluate("window.__test.state()")
     p.evaluate(f"window.__test.enter({s['selectable'][0]})")

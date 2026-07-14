@@ -20,7 +20,7 @@ with sync_playwright() as pw:
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(URL)
     page.wait_for_selector("text=冒険に出る", timeout=15000)
-    page.click("text=冒険に出る")
+    page.click("text=冒険に出る"); page.click("text=この仲間と冒険に出る")
     time.sleep(0.5)
     s = st(page)
     page.evaluate(f"window.__test.enter({s['selectable'][0]})")
@@ -52,7 +52,7 @@ with sync_playwright() as pw:
     print("P3 golem charge x2 OK (no damage)")
     resolve(page)
     s = st(page)
-    assert hp0 - s["php"] == 96, f"golem bigatk expected 96, got {hp0-s['php']}"
+    assert hp0 - s["php"] == 72, f"golem bigatk expected 72 (bigMul cap 2.4, v47), got {hp0-s['php']}"
     print("P4 golem bigatk OK dmg:", hp0 - s["php"])
 
     # 3) コウモリ: 2連撃 (18x2=36)

@@ -29,7 +29,7 @@ with sync_playwright() as p:
     page.screenshot(path=SHOT + r"\s1_title.png")
     print("1 title OK")
 
-    page.click("text=冒険に出る")
+    page.click("text=冒険に出る"); page.click("text=この仲間と冒険に出る")
     s = wait_status(page, "map")
     assert len(s["selectable"]) >= 1, "no selectable nodes"
     page.screenshot(path=SHOT + r"\s2_map.png")

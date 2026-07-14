@@ -313,10 +313,13 @@ const CHARS = [
   { name:"大賢者ルクス",   skill:"healx",   img:"assets/hero5.png", color:"#e8c06a",
     tag:"回復＋全効果2倍", short:"回復",
     desc:"3つ目の力は「回復」。さらにドロップが1色増える代わりに、全ての効果が2倍になる大賢者。", unlock:"すべてのキャラで3章を突破" },
+  { name:"鍛冶師ブロム",   skill:"smith",   img:"assets/hero6.png", color:"#6f9fd8",
+    tag:"特殊ドロップを打つ", short:"鍛冶",
+    desc:"3つ目の力は「鍛冶」。補充＝消して素材を貯める／生成＝袋の特殊ドロップを素材の数だけ盤面に打ち出す／強化＝盤面の特殊ドロップを素材の数だけ＋に鍛える。", unlock:"焚き火で「鍛える」を合計3回行うと解放" },
 ];
 const CHAR_ALL = [0, 1, 2, 3]; // 「すべてのキャラ」判定に使う基本4体（5体目は報酬）
 function loadCharState() {
-  if (TEST_MODE) return { u:[0, 1, 2, 3, 4], c:[] };
+  if (TEST_MODE) return { u:[0, 1, 2, 3, 4, 5], c:[] };
   try { const j = JSON.parse(localStorage.getItem("db_chars")); if (j && Array.isArray(j.u)) return { u:j.u, c:j.c || [] }; } catch (e) {}
   return { u:[0], c:[] };
 }
@@ -1073,6 +1076,12 @@ function DropBattle() {
   const setSkillTarget = v => { skillTargetRef.current = v; setSkillTarget_(v); };
   const storeRef = useRef(0);                              // 蓄積キャラの累積値（冒険を通して保持）
   const [storeView, setStoreView] = useState(0);
+  const [smithMode, setSmithMode_] = useState("stock");    // 鍛冶キャラのモード（stock=補充/gen=生成/up=強化）
+  const smithModeRef = useRef("stock");
+  const setSmithMode = v => { smithModeRef.current = v; setSmithMode_(v); };
+  const stockRef = useRef(0);                              // 鍛冶キャラの素材（バトルをまたいで保持・冒険単位）
+  const [stockView, setStockView] = useState(0);
+  const [selView, setSelView] = useState(0);               // キャラ選択画面で眺めているキャラ
   const [charState, setCharState] = useState(() => loadCharState());
   const charStateRef = useRef(charState); charStateRef.current = charState;
   const unlockChar = idx => setCharState(s => {
@@ -1697,6 +1706,12 @@ function DropBattle() {
     syncOwned();
     addLog([`🔨 ${ITEMS[k].name}を1つ鍛えた（-${forgeCost()}💰）→ ${DESC_UP[k]}`]);
     SFX.forge();
+    // 鍛冶を重ねると鍛冶師が解放される（冒険をまたいで累積3回）
+    try {
+      const fn = (parseInt(localStorage.getItem("db_forge_n") || "0", 10) || 0) + 1;
+      localStorage.setItem("db_forge_n", String(fn));
+      if (fn >= 3) unlockChar(5);
+    } catch (e) {}
     setCampfire(null);
     finishNode();
   };
@@ -1959,6 +1974,43 @@ function DropBattle() {
       else { const na = ORDER.find(a => !nu.has(a)); setAction(na); actionRef.current = na; }
       return;
     }
+    // 鍛冶キャラ：生成＝袋の特殊ドロップを素材の数だけタップしたグループへ打ち出す／
+    // 強化＝グループ内の特殊ドロップを素材の数だけ＋に鍛える（どちらも消さない）
+    if (act === "heal" && skill === "smith" && smithModeRef.current !== "stock") {
+      const cell = boardRef.current[idx];
+      if (cell.type === JUNK) { SFX.tap(); return; } // お邪魔は鍛えられない（アクション消費なし）
+      const grp = findGroup(boardRef.current, idx);
+      const mode = smithModeRef.current;
+      const nb = boardRef.current.slice();
+      let done = 0;
+      if (mode === "gen") {
+        const target = boardRef.current.map((c, i) => (grp.has(c.id) && c.type !== JUNK && !c.wild && !c.special) ? i : -1).filter(i => i >= 0);
+        // 生成できる上限＝「所持しているが盤面に出ていない」特殊数（袋の枯渇による複製を防ぐ）
+        const onBoard = boardRef.current.filter(c => c.special).length;
+        const avail = ITEM_KEYS.reduce((s, k) => s + ownedRef.current[k], 0) - onBoard;
+        const n = Math.min(stockRef.current, target.length, Math.max(0, avail));
+        for (let t = 0; t < n; t++) {
+          const d = drawFromBag(bagRef, ownedRef, bagUpRef, ownedUpRef, nb);
+          nb[target[t]] = { ...nb[target[t]], special: d.k, up: d.up };
+          done++;
+        }
+        if (done) addLog([`⚒ 素材${done}を打ち、特殊ドロップ${done}個を生成した`]);
+      } else {
+        const target = boardRef.current.map((c, i) => (grp.has(c.id) && c.special && !c.up) ? i : -1).filter(i => i >= 0);
+        const n = Math.min(stockRef.current, target.length);
+        for (let t = 0; t < n; t++) { nb[target[t]] = { ...nb[target[t]], up: true }; done++; }
+        if (done) addLog([`⚒ 特殊ドロップ${done}個を＋に鍛えた`]);
+      }
+      if (!done) { SFX.tap(); return; } // 素材不足・対象なしはアクション消費なし
+      stockRef.current -= done; setStockView(stockRef.current);
+      commitBoard(nb); syncBag();
+      SFX.forge();
+      const nu = new Set(usedRef.current); nu.add("heal");
+      setUsed(nu); usedRef.current = nu;
+      if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
+      else { const na = ORDER.find(a => !nu.has(a)); setAction(na); actionRef.current = na; }
+      return;
+    }
     const { ids, seedJunk, blast, cross } = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed);
     if (blast) turnRef.current.blastUsed = true;
     if (cross) turnRef.current.crossUsed = true; // 十字晶は1ターン1回
@@ -2008,6 +2060,11 @@ function DropBattle() {
       setStoreView(storeRef.current);
       turnRef.current[st] += storeRef.current;
       addLog([`📚 蓄積 ${storeRef.current}（${st === "atk" ? "攻撃" : "防御"}へ加算）`]);
+    } else if (act === "heal" && skill === "smith") {
+      // 鍛冶キャラ・補充：消した数だけ素材を貯める（回復はしない）
+      stockRef.current += info.count;
+      setStockView(stockRef.current);
+      addLog([`📦 素材 +${info.count}（計 ${stockRef.current}）`]);
     } else {
       turnRef.current[act] += mainAdd;
     }
@@ -2196,8 +2253,9 @@ function DropBattle() {
   const makePreview = (b, idx) => {
     // 宝箱パズルはレリックの消し方拡張を無効化（プレーンな同色グループのみ）＝実消去(puzzleTap)と一致
     if (statusRef.current === "puzzle") { const ids = findGroup(b, idx); return { ids, over:true, info: groupInfo(b, ids) }; }
-    // 色変えキャラの3つ目アクションは「つながった同色グループ全体」を対象にする
-    if (statusRef.current === "battle" && actionRef.current === "heal" && charSkillRef.current === "recolor") {
+    // 色変え／鍛冶(生成・強化)の3つ目アクションは「つながった同色グループ全体」を対象にする（消さない）
+    if (statusRef.current === "battle" && actionRef.current === "heal" &&
+        (charSkillRef.current === "recolor" || (charSkillRef.current === "smith" && smithModeRef.current !== "stock"))) {
       const grp = findGroup(b, idx); return { ids:grp, over:true, info: groupInfo(b, grp) };
     }
     const { ids } = expandClear(b, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed);
@@ -2250,6 +2308,7 @@ function DropBattle() {
   const restart = (toTitle = false) => {
     UID = 1;
     storeRef.current = 0; setStoreView(0);          // 蓄積リセット（冒険をやり直す）
+    stockRef.current = 0; setStockView(0);          // 鍛冶素材もリセット
     CUR_SKILL = charSkillRef.current;               // 「もう一度挑む」は同キャラを維持
     CUR_HERO = CHARS[curCharRef.current].img.replace("assets/", "").replace(".png", "");
     ownedRef.current = initOwned(curCharRef.current);
@@ -2314,7 +2373,7 @@ function DropBattle() {
         junk: boardRef.current.filter(c => c.type === JUNK).length,
         bagLeft: ITEM_KEYS.reduce((t, k) => t + bagRef.current[k], 0),
         colors: new Set(boardRef.current.filter(c => c.type !== JUNK).map(c => c.type)).size,
-        board: boardRef.current.map(c => ({ t: c.type, sp: c.special || null, w: !!c.wild })),
+        board: boardRef.current.map(c => ({ t: c.type, sp: c.special || null, w: !!c.wild, u: !!c.up })),
         used: [...usedRef.current],
         locked: lockedRef.current,
         coins: coinsRef.current, items: itemsRef.current.slice(),
@@ -2416,12 +2475,13 @@ function DropBattle() {
       setSfxVol: v => changeSfxVol(v),
       setBgmVol: v => changeBgmVol(v),
       openSound: () => setSoundOpen(true),
-      setChar: i => { setCurChar(i); storeRef.current = 0; setStoreView(0); },
+      setChar: i => { setCurChar(i); storeRef.current = 0; setStoreView(0); stockRef.current = 0; setStockView(0); setSmithMode("stock"); },
       relicPool: () => RELIC_KEYS.filter(k => !relicsRef.current.includes(k) && (RELICS[k].char === undefined || RELICS[k].char === curCharRef.current)),
       charState: () => ({ u:charStateRef.current.u.slice(), c:charStateRef.current.c.slice() }),
-      charInfo: () => ({ cur:curCharRef.current, skill:charSkillRef.current, paint:paintColorRef.current, target:skillTargetRef.current, store:storeRef.current }),
+      charInfo: () => ({ cur:curCharRef.current, skill:charSkillRef.current, paint:paintColorRef.current, target:skillTargetRef.current, store:storeRef.current, smithMode:smithModeRef.current, stock:stockRef.current }),
       setPaint: c => setPaintColor(c),
       setSkillTarget: t => setSkillTarget(t),
+      setSmithMode: m => setSmithMode(m),
       unlockChar: i => unlockChar(i),
       recordClear: () => recordClear()
     };
@@ -2521,14 +2581,11 @@ function DropBattle() {
         h("p", { style:{ position:"relative", zIndex:1, fontSize:"clamp(0.62rem,2vw,0.78rem)", color:"#c4d2d8", letterSpacing:"0.32em", marginBottom:8, textShadow:"0 1px 2px #000" } }, "PUZZLE × ROGUELIKE"),
         h("h1", { className:"title-logo", style:{ position:"relative", zIndex:1, fontSize:"clamp(2.7rem,12.5vw,4.2rem)", margin:"0 0 2px" } }, "ドロプシア",
           h("span", { className:"title-sheen", "aria-hidden":"true", style:{ fontSize:"inherit" } }, "ドロプシア")),
-        h("p", { style:{ position:"relative", zIndex:1, fontSize:"clamp(0.72rem,2.5vw,0.95rem)", color:"#e8d8a8", letterSpacing:"0.42em", fontWeight:800, textShadow:"0 1px 3px #000", margin:"0 0 10px", paddingLeft:"0.42em" } }, "DROPSIA"),
-        h("p", { style:{ fontSize:"clamp(0.8rem,2.3vw,0.92rem)", color:"#e8d8a8", textShadow:"0 1px 3px #000", fontWeight:800 } }, "ルートを選び、ドロップを消して、魔王を倒せ。")),
+        h("p", { style:{ position:"relative", zIndex:1, fontSize:"clamp(0.72rem,2.5vw,0.95rem)", color:"#e8d8a8", letterSpacing:"0.42em", fontWeight:800, textShadow:"0 1px 3px #000", margin:"0 0 10px", paddingLeft:"0.42em" } }, "DROPSIA")),
       h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
         h("button", {
           onClick: () => { setStatus("select"); statusRef.current = "select"; SFX.pick(); },
-          style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", borderRadius:14, padding:"clamp(13px,3.2vw,16px) clamp(48px,12vw,66px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", boxShadow:"0 4px 0 #6e4e1a, 0 6px 12px rgba(0,0,0,.4)", border:"2px solid #6e4e1a", fontFamily:"inherit", marginBottom:14 } }, "冒険に出る"),
-        h("p", { style:{ fontSize:"clamp(0.66rem,1.9vw,0.74rem)", color:"#c8d2d4", textShadow:"0 1px 2px #000", lineHeight:1.8, maxWidth:340 } },
-          Ic("assets/icon_atk.png", 13), "攻撃 / ", Ic("assets/icon_def.png", 13), "防御 / ", Ic("assets/icon_heal.png", 13), "回復 を選んで同色ドロップをタップ。3回消すと敵のターン。")));
+          style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", borderRadius:14, padding:"clamp(13px,3.2vw,16px) clamp(48px,12vw,66px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", boxShadow:"0 4px 0 #6e4e1a, 0 6px 12px rgba(0,0,0,.4)", border:"2px solid #6e4e1a", fontFamily:"inherit" } }, "冒険に出る")));
   }
 
   // ===== キャラクター選択画面 =====
@@ -2538,6 +2595,7 @@ function DropBattle() {
       if (!unlocked.includes(i)) { SFX.tap(); return; }
       setCurChar(i);
       storeRef.current = 0; setStoreView(0);
+      stockRef.current = 0; setStockView(0); setSmithMode("stock");
       // キャラ別の初期特殊ドロップを袋にセット（ノアは蓄積石3＋剣盾回復2ずつ）
       ownedRef.current = initOwned(i);
       bagRef.current = refillBag(ownedRef.current);
@@ -2548,33 +2606,50 @@ function DropBattle() {
       setLog(["― ルートを選んで進もう ―"]);
       SFX.pick();
     };
-    return h("div", { style:{ fontFamily:FONT, minHeight:"100vh", background:'#0d131a url("assets/bg_texture.jpg") repeat', backgroundSize:"512px", color:"#ece7f2", WebkitUserSelect:"none", userSelect:"none", padding:"clamp(18px,4vh,32px) 16px clamp(24px,5vh,40px)" } },
-      h("div", { style:{ maxWidth:440, margin:"0 auto" } },
+    const ch = CHARS[selView];
+    const selOpen = unlocked.includes(selView);
+    return h("div", { style:{ fontFamily:FONT, minHeight:"100vh", background:'#0d131a url("assets/bg_texture.jpg") repeat', backgroundSize:"512px", color:"#ece7f2", WebkitUserSelect:"none", userSelect:"none", padding:"clamp(12px,2.5vh,24px) 16px clamp(16px,3.5vh,30px)", display:"flex", flexDirection:"column" } },
+      h("div", { style:{ maxWidth:440, margin:"0 auto", width:"100%", flex:1, display:"flex", flexDirection:"column" } },
         h("div", { className:"flex items-center justify-between mb-1" },
           h("button", { onClick: () => { setStatus("title"); statusRef.current = "title"; SFX.tap(); }, className:"text-xs px-3 py-1.5 rounded-lg", style:{ background:"rgba(255,255,255,.1)", color:"#c9bfe0", border:"1px solid #453b5c" } }, "◀ 戻る"),
+          h("h2", { className:"font-bold", style:{ fontSize:"1.15rem", color:"#f2e6c8", textShadow:"0 2px 0 rgba(0,0,0,.5)" } }, "キャラクター選択"),
           h("span", { className:"text-[11px]", style:{ opacity:0.6 } }, "解放 ", unlocked.length, " / ", CHARS.length)),
-        h("h2", { className:"font-bold text-center mb-1", style:{ fontSize:"1.35rem", color:"#f2e6c8", textShadow:"0 2px 0 rgba(0,0,0,.5)" } }, "キャラクター選択"),
-        h("p", { className:"text-center text-[11px] mb-3", style:{ opacity:0.7 } }, "3つ目のアクションの力がキャラごとに変わる"),
-        h("div", { className:"flex flex-col gap-2.5" }, CHARS.map((ch, i) => {
+        // ―― 上：選択中キャラのアップ ――
+        h("div", { style:{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"flex-end", position:"relative", minHeight:0, paddingTop:4 } },
+          h("div", { style:{ position:"absolute", left:"50%", top:"54%", transform:"translate(-50%,-50%)", width:"min(80vw,330px)", height:"min(80vw,330px)", borderRadius:"50%", background:`radial-gradient(circle, ${selOpen ? ch.color : "#544a6a"}36 0%, transparent 62%)`, pointerEvents:"none" } }),
+          h("img", { key:"chimg" + selView, src:ch.img, alt:"", draggable:false, className:"fade-in", onError: e => { e.target.style.display = "none"; },
+            style:{ height:"clamp(150px,30vh,250px)", maxWidth:"80%", objectFit:"contain", position:"relative",
+              filter: selOpen ? `drop-shadow(0 10px 18px rgba(0,0,0,.55)) drop-shadow(0 0 22px ${ch.color}44)` : "brightness(0) opacity(.85)",
+              animation: selOpen ? "breathA 3.4s ease-in-out infinite" : "none", transformOrigin:"bottom center" } }),
+          h("div", { style:{ width:"min(60vw,230px)", height:12, borderRadius:"50%", background:"radial-gradient(ellipse, rgba(0,0,0,.5) 0%, transparent 70%)", marginTop:-5 } })),
+        // ―― 中：名前と説明 ――
+        h("div", { key:"chinfo" + selView, className:"fade-in rounded-2xl px-4 mt-2 mb-3 text-center", style:{ background:"rgba(24,19,34,.92)", border:`2px solid ${selOpen ? ch.color : "#3c3450"}`, boxShadow:"0 3px 14px rgba(0,0,0,.4)", height:104, display:"flex", flexDirection:"column", justifyContent:"center" } },
+          h("div", { className:"flex items-center justify-center gap-2 mb-1" },
+            h("span", { className:"font-bold", style:{ fontSize:"1.12rem", color: selOpen ? "#f0e4c8" : "#8a8296", textShadow:"0 1px 0 rgba(0,0,0,.5)" } }, selOpen ? ch.name : "？？？"),
+            selOpen && h("span", { className:"text-[10px] px-1.5 py-0.5 rounded-md", style:{ background:"rgba(255,255,255,.08)", color:ch.color, border:`1px solid ${ch.color}` } }, ch.tag)),
+          selOpen
+            ? h("p", { className:"text-[11px]", style:{ opacity:0.85, lineHeight:1.6 } }, ch.desc)
+            : h("p", { className:"text-[11px]", style:{ color:"#c99", lineHeight:1.6 } }, "🔒 ", ch.unlock)),
+        // ―― 下：キャラ一覧タイル ――
+        h("div", { className:"flex justify-center gap-2 mb-3" }, CHARS.map((c, i) => {
           const open = unlocked.includes(i);
-          return h("button", { key:i, onClick: () => pickChar(i), disabled: !open,
-            className:"relative rounded-2xl text-left flex items-center gap-3 p-3",
-            style:{ background: open ? "rgba(30,24,42,.95)" : "rgba(18,14,24,.9)",
-              border:`2px solid ${open ? ch.color : "#2c2740"}`, opacity: open ? 1 : 0.72,
-              boxShadow: open ? `0 2px 10px rgba(0,0,0,.35)` : "none", cursor: open ? "pointer" : "default",
-              transition:"transform .12s ease", fontFamily:"inherit", color:"inherit" } },
-            h("div", { style:{ position:"relative", width:66, height:66, flexShrink:0, borderRadius:14, overflow:"hidden", background:"rgba(0,0,0,.25)", border:`1px solid ${open ? ch.color : "#3c3450"}`, display:"flex", alignItems:"center", justifyContent:"center" } },
-              h("img", { src:ch.img, alt:"", draggable:false, onError: e => { e.target.style.display = "none"; }, style:{ width:"100%", height:"100%", objectFit:"contain", filter: open ? "none" : "grayscale(1) brightness(.5)" } }),
-              !open && h("span", { style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.7rem" } }, "🔒")),
-            h("div", { style:{ flex:1, minWidth:0 } },
-              h("div", { className:"flex items-center gap-2" },
-                h("span", { className:"font-bold", style:{ fontSize:"1rem", color: open ? "#f0e4c8" : "#8a8296" } }, open ? ch.name : "？？？"),
-                h("span", { className:"text-[10px] px-1.5 py-0.5 rounded-md", style:{ background: open ? "rgba(255,255,255,.08)" : "transparent", color: open ? ch.color : "#6f6880", border:`1px solid ${open ? ch.color : "#3c3450"}` } }, ch.tag)),
-              open
-                ? h("p", { className:"text-[11px] mt-1", style:{ opacity:0.82, lineHeight:1.55 } }, ch.desc)
-                : h("p", { className:"text-[11px] mt-1", style:{ color:"#c99", lineHeight:1.55 } }, "🔒 ", ch.unlock)),
-            open && h("span", { style:{ fontSize:"1.4rem", color:ch.color, flexShrink:0 } }, "▶"));
-        }))));
+          const sel = i === selView;
+          return h("button", { key:i, onClick: () => { if (i !== selView) { setSelView(i); SFX.tap(); } },
+            style:{ width:"clamp(44px,12.5vw,58px)", height:"clamp(50px,14vw,66px)", borderRadius:14, flexShrink:0, position:"relative", overflow:"hidden", padding:3,
+              background: sel ? "rgba(42,34,58,.98)" : "rgba(22,17,30,.92)",
+              border: sel ? `2.5px solid ${open ? c.color : "#6f6880"}` : "2px solid #3c3450",
+              boxShadow: sel ? `0 0 12px ${open ? c.color : "#000"}55, 0 3px 8px rgba(0,0,0,.4)` : "none",
+              transform: sel ? "translateY(-4px)" : "none", transition:"transform .15s ease, box-shadow .15s ease, border-color .15s ease", cursor:"pointer" } },
+            h("img", { src:c.img, alt:"", draggable:false, onError: e => { e.target.style.display = "none"; }, style:{ width:"100%", height:"100%", objectFit:"contain", filter: open ? "none" : "brightness(0) opacity(.75)" } }),
+            !open && h("span", { style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.2rem", textShadow:"0 1px 3px #000" } }, "🔒"));
+        })),
+        // ―― 決定ボタン ――
+        h("button", { onClick: () => pickChar(selView), disabled: !selOpen,
+          className:"w-full rounded-2xl py-3 font-bold",
+          style: selOpen
+            ? { background:`linear-gradient(180deg, ${ch.color} 0%, ${ch.color}bb 100%)`, border:"2px solid rgba(255,255,255,.35)", color:"#1a1424", fontSize:"1.05rem", boxShadow:`0 4px 16px ${ch.color}55`, textShadow:"0 1px 0 rgba(255,255,255,.25)", cursor:"pointer", fontFamily:"inherit" }
+            : { background:"rgba(255,255,255,.06)", border:"2px solid #3c3450", color:"#776f88", fontSize:"1.05rem", cursor:"default", fontFamily:"inherit" } },
+          selOpen ? "この仲間と冒険に出る ▶" : "🔒 未解放")));
   }
 
   // ===== 共通オーバーレイ =====
@@ -2809,7 +2884,6 @@ function DropBattle() {
             h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, "レリック獲得: ", RELICS[rewards.relic].name),
             h("span", { className:"block text-[10px]", style:{ opacity:0.8 } }, RELICS[rewards.relic].desc))),
         rewards.healed > 0 && h("p", { className:"text-center text-xs mb-1", style:{ color:"#7cffb0" } }, "群れを一掃した勢いで HP +", rewards.healed),
-        rewards.kind === "elite" && h("p", { className:"text-center text-[10px] mb-1", style:{ color:"#d05cff" } }, "強敵の報酬にはレアが混ざる…"),
         h("div", { className:"grid grid-cols-1 gap-2 mt-2" }, rewards.picks.map(k => {
           const it = ITEMS[k];
           return h("button", { key:k, onClick: () => chooseReward(k), className:"rounded-xl px-4 py-3 flex items-center gap-3 text-left", style:{ background:"rgba(255,255,255,.06)", border:`2px solid ${it.ring}`, boxShadow:"0 2px 4px rgba(0,0,0,.4)" } },
@@ -3054,7 +3128,7 @@ function DropBattle() {
           h("div", { className:"w-full mt-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:8 })),
           h("span", { className:"text-[10px] font-bold mt-1", style:{ color: hit === "player" ? "#ff9a9a" : hit === "heal" ? "#7cffb0" : "#cfe9d8", fontVariantNumeric:"tabular-nums", transition:"color .3s" } }, pHP, "/", pMax)),
         // 敵
-        h("div", { className:"absolute flex items-end scene-actor", style:{ right:30, bottom:4, gap:4, zIndex: gtut === "warn" ? 3 : 1 } },
+        h("div", { className:"absolute flex items-end scene-actor", style:{ right:30, bottom:14, gap:4, zIndex: gtut === "warn" ? 3 : 1 } },
           enemies.map(en => {
             const k = KINDS[en.kind];
             const sz = en.boss ? 84 : enemies.length >= 3 ? Math.min(k.size, 58) : Math.min(k.size, 66);
@@ -3085,22 +3159,25 @@ function DropBattle() {
                 boxShadow: gtut === "warn" && isDmgIntent ? "0 0 0 2px #ff6b6b, 0 0 14px rgba(255,107,107,.8)" : "none",
                 opacity: en.alive ? 1 : 0, animation: charging ? "intentBlink .9s ease-in-out infinite" : "none", textShadow:"0 1px 2px #000" } },
                 en.alive ? intentTxt : ""),
-              en.alive && enrLeft(en, turn) === 0 && h("span", { className:"absolute pointer-events-none", style:{ top:16, right:0, fontSize:"1.2rem", zIndex:3, animation:"angerPulse .6s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)" } }, "💪"),
-              isT && h("span", { className:"absolute pointer-events-none", style:{ top:14, left:"50%", animation:"targetBob 1s ease-in-out infinite", color:"#e8c05a", fontSize:12, textShadow:"0 1px 2px #000", zIndex:2 } }, "▼"),
-              pops[en.id] && h("span", { key:pops[en.id].seq, className:"dmg-pop", style:{ color:pops[en.id].color } }, pops[en.id].text),
-              h(SpriteBox, { kind:en.kind, size:sz, idle:k.idle, anim:a, charge:charging, dead:!en.alive }),
-              (en.shd || 0) > 0 && en.alive && h("span", { className:"absolute flex items-center font-bold", style:{ right:-4, bottom:40, gap:2, padding:"1px 6px", borderRadius:9,
-                background:"rgba(34,64,116,.95)", border:"1px solid rgba(150,190,255,.85)",
-                fontSize:11, color:"#dce8ff", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", zIndex:2 } },
-                h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:12, height:12, style:{ width:12, height:12, maxWidth:12, maxHeight:12, flexShrink:0, objectFit:"contain" } }),
-                en.shd),
+              // 名前・被ダメ上限はスプライトの上に置く（下に積むと表示量で足元が浮くため）
+              h("span", { className:"flex items-center justify-center", style:{ gap:3, marginTop:2, marginBottom:2, maxWidth:"none" } },
+                h("span", { className:"text-[9px] font-bold", style:{ padding:"0 7px", borderRadius:6, background:"rgba(10,8,16,.72)", border:"1px solid rgba(255,255,255,.12)", color: en.boss ? "#ff5c7a" : en.elite ? "#d05cff" : "#d8cbe8", opacity: en.alive ? 0.95 : 0.35, textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } },
+                  ((en.enr || 0) > 0 ? "🔥" + en.enr + " " : "") + (en.elite ? "💀" : "") + en.name)),
+              h("span", { style:{ position:"relative", display:"block" } },
+                en.alive && enrLeft(en, turn) === 0 && h("span", { className:"absolute pointer-events-none", style:{ top:-6, right:-6, fontSize:"1.2rem", zIndex:3, animation:"angerPulse .6s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)" } }, "💪"),
+                isT && h("span", { className:"absolute pointer-events-none", style:{ top:-8, left:"50%", animation:"targetBob 1s ease-in-out infinite", color:"#e8c05a", fontSize:12, textShadow:"0 1px 2px #000", zIndex:2 } }, "▼"),
+                pops[en.id] && h("span", { key:pops[en.id].seq, className:"dmg-pop", style:{ color:pops[en.id].color } }, pops[en.id].text),
+                h(SpriteBox, { kind:en.kind, size:sz, idle:k.idle, anim:a, charge:charging, dead:!en.alive }),
+                (en.shd || 0) > 0 && en.alive && h("span", { className:"absolute flex items-center font-bold", style:{ right:-4, bottom:6, gap:2, padding:"1px 6px", borderRadius:9,
+                  background:"rgba(34,64,116,.95)", border:"1px solid rgba(150,190,255,.85)",
+                  fontSize:11, color:"#dce8ff", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", zIndex:2 } },
+                  h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:12, height:12, style:{ width:12, height:12, maxWidth:12, maxHeight:12, flexShrink:0, objectFit:"contain" } }),
+                  en.shd),
+                en.dcap > 0 && en.alive && h("span", { className:"absolute text-[8px] font-bold", style:{ left:-6, bottom:6, padding:"1px 6px", borderRadius:9, background:"rgba(58,20,20,.9)", border:"1px solid rgba(255,150,120,.65)", color:"#ffb3a2", textShadow:"0 1px 2px #000", whiteSpace:"nowrap", zIndex:2 } }, "上限" + en.dcap)),
               h("span", { style:{ width:sz * 0.6, height:6, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-4, filter:"blur(2px)", opacity: en.alive ? 1 : 0, transition:"opacity .5s" } }),
               h("span", { className:"w-full mt-1", style:{ opacity: en.alive ? 1 : 0, transition:"opacity .5s", maxWidth:74 } },
                 h(Bar, { value:en.hp, max:en.max, from:"#7a1d1d", to:"#ef4444", height:6 }),
-                h("span", { className:"block text-[9px] font-bold text-center", style:{ color:"#f0b8b0", fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000", marginTop:1 } }, en.hp, "/", en.max)),
-              h("span", { className:"text-[9px] font-bold", style:{ marginTop:2, padding:"0 7px", borderRadius:6, background:"rgba(10,8,16,.72)", border:"1px solid rgba(255,255,255,.12)", color: en.boss ? "#ff5c7a" : en.elite ? "#d05cff" : "#d8cbe8", opacity: en.alive ? 0.95 : 0.35, textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } },
-                ((en.enr || 0) > 0 ? "🔥" + en.enr + " " : "") + (en.elite ? "💀" : "") + en.name),
-              en.dcap > 0 && en.alive && h("span", { className:"text-[8px] font-bold", style:{ marginTop:2, padding:"1px 6px", borderRadius:6, background:"rgba(58,20,20,.85)", border:"1px solid rgba(255,150,120,.65)", color:"#ffb3a2", textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } }, "被ダメ上限 " + en.dcap));
+                h("span", { className:"block text-[9px] font-bold text-center", style:{ color:"#f0b8b0", fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000", marginTop:1 } }, en.hp, "/", en.max)));
           })),
         // 演出ポップ
         fx.length > 0 && h("div", { className:"absolute inset-0 flex flex-col items-center justify-center pointer-events-none", style:{ gap:6, zIndex:3 } },
@@ -3133,7 +3210,7 @@ function DropBattle() {
       h("div", { className:"grid grid-cols-3 gap-2 mb-1" }, ORDER.map(key => {
         const curSkill = CHARS[curChar].skill;
         // 3つ目のアクションがキャラ固有スキル（色変え/強化/蓄積）の場合は専用ボタン
-        if (key === "heal" && (curSkill === "recolor" || curSkill === "buff" || curSkill === "store")) {
+        if (key === "heal" && (curSkill === "recolor" || curSkill === "buff" || curSkill === "store" || curSkill === "smith")) {
           const sc = CHARS[curChar].color;
           const isUsed = used.has("heal");
           const isSel = action === "heal" && !isUsed;
@@ -3143,6 +3220,10 @@ function DropBattle() {
             title = "色変え";
             iconEl = h("span", { style:{ width:18, height:18, marginTop:5, borderRadius:5, border:"2px solid rgba(255,255,255,.85)", background:`linear-gradient(180deg,${DROPS[paintColor].c1},${DROPS[paintColor].c2})`, flexShrink:0 } });
             valEl = h("span", { style:{ fontSize:"0.72rem", fontWeight:800 } }, "インク");
+          } else if (curSkill === "smith") {
+            title = smithMode === "stock" ? "補充" : smithMode === "gen" ? "生成" : "強化＋";
+            iconEl = h("span", { style:{ fontSize:16, marginTop:5, lineHeight:1 } }, smithMode === "stock" ? "📦" : smithMode === "gen" ? "✨" : "⚒️");
+            valEl = h("span", { style:{ fontSize:"0.9rem", fontWeight:900 } }, "素材", stockView);
           } else if (curSkill === "buff") {
             const inc = hasR("warforge2") ? "0.4" : hasR("warforge") ? "0.3" : "0.2";
             title = "強化→" + tgtLabel;
@@ -3158,6 +3239,7 @@ function DropBattle() {
               if (isUsed || locked) return;
               if (!isSel) { setAction("heal"); actionRef.current = "heal"; SFX.tap(); return; }
               if (curSkill === "recolor") { setPaintColor((paintColor + 1) % 4); SFX.tap(); }
+              else if (curSkill === "smith") { setSmithMode(smithMode === "stock" ? "gen" : smithMode === "gen" ? "up" : "stock"); SFX.tap(); }
               else { setSkillTarget(skillTarget === "atk" ? "def" : "atk"); SFX.tap(); }
             }, disabled:isUsed,
             className:"act-h relative rounded-xl flex flex-col items-center justify-center overflow-hidden",

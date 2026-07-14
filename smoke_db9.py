@@ -17,7 +17,7 @@ with sync_playwright() as pw:
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(URL)
     page.wait_for_selector("text=冒険に出る", timeout=15000)
-    page.click("text=冒険に出る")
+    page.click("text=冒険に出る"); page.click("text=この仲間と冒険に出る")
     time.sleep(0.5)
 
     # 1) 貯金箱+天秤: (25+0+10)*1.5 = 53
