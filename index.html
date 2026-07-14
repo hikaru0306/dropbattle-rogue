@@ -250,8 +250,8 @@ const RELICS = {
   linegem:    { icon:"↕️", name:"縦裂の宝珠", desc:"同じ色を5個以上消すと、消した所に虹ドロップ（消すと縦1列消し）が生まれる。どの色とも繋がるがお邪魔とは繋がらない", rar:2 },
   linegemh:   { icon:"↔️", name:"横薙の宝珠", desc:"同じ色を5個以上消すと、消した所に虹ドロップ（消すと横1列消し）が生まれる。どの色とも繋がるがお邪魔とは繋がらない", rar:2 },
   gachagem:   { icon:"🌈", name:"虹福の玉", desc:"同じ色を6個以上消すと、所持中の特殊から1つが虹ドロップになって生まれる。どの色とも繋がる", rar:3 },
-  warforge:   { icon:"⚔️", name:"闘気の触媒", desc:"【ガレス専用】強化の倍率が1ドロップにつき1.3倍になる", rar:2, char:2 },
-  warforge2:  { icon:"🔥", name:"覇気の触媒", desc:"【ガレス専用】強化の倍率が1ドロップにつき1.4倍になる", rar:3, char:2 }
+  warforge:   { icon:"⚔️", name:"闘気の触媒", desc:"【ガレス専用】強化の増加量が1ドロップにつき+0.3になる（通常+0.2）", rar:2, char:2 },
+  warforge2:  { icon:"🔥", name:"覇気の触媒", desc:"【ガレス専用】強化の増加量が1ドロップにつき+0.4になる（通常+0.2）", rar:3, char:2 }
 };
 // レリック生成の虹（ワイルド）特殊ドロップ。ITEM_KEYS(袋)には含めない＝袋からは出ない
 const RGEM = {
@@ -290,6 +290,7 @@ const ORDER = ["atk", "def", "heal"];
 // ===== キャラクター =====
 // 3つ目のアクション（既定は「回復」）の性能がキャラごとに変わる
 let CUR_SKILL = "heal";              // makeDrop / computeEffect が参照する現在キャラのスキル
+let CUR_HERO = "hero";               // プレイヤースプライトの画像basename（選択キャラで変わる）
 const HEALX_COLORS = [0, 1, 2, 3, 5];  // 大賢者は色が1つ増える
 const CHARS = [
   { name:"賢者アルド",     skill:"heal",    img:"assets/hero.png",  color:"#54b878",
@@ -428,7 +429,7 @@ const Ic = (src, sz, extra) => h("img", { src, alt:"", draggable:false, width:sz
 const NODE_META = {
   battle:  { icon:"⚔",  img:"assets/node_battle.png",   label:"バトル", color:"#ff8a8a", tint:"58,32,38" },
   horde:   { icon:"👥", img:"assets/node_horde.png",    label:"群れ",   color:"#ffb35c", tint:"58,42,26" },
-  elite:   { icon:"💀", img:"assets/node_elite.png",    label:"精鋭",   color:"#d05cff", tint:"48,28,62" },
+  elite:   { icon:"💀", img:"assets/node_elite.png",    label:"強敵",   color:"#d05cff", tint:"48,28,62" },
   treasure:{ icon:"🎁", img:"assets/node_treasure.png", label:"宝箱",   color:"#ffd95c", tint:"56,46,22" },
   rest:    { icon:"🔥", img:"assets/node_rest.png",     label:"休憩",   color:"#7cffb0", tint:"24,50,38" },
   boss:    { icon:"👑", img:"assets/node_boss.png",     label:"ボス",   color:"#ff5c7a", tint:"64,24,36" }
@@ -477,7 +478,45 @@ const genMap = (simpleStart) => {
       if (n0===n1 && i+1<n1) edges.push({ from:na.id, to:b[i+1].id });
     });
   }
-  return { nodes: rows.flat(), edges, rows };
+  // ===== 強敵(elite)の配置制約: 1章あたり最大5つ / 1ルート最大3つ =====
+  const nodes = rows.flat();
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const succ = new Map(nodes.map(n => [n.id, []]));
+  edges.forEach(e => succ.get(e.from).push(e.to));
+  const elites = () => nodes.filter(n => n.type === "elite");
+  const demote = n => { n.type = "battle"; };
+  // (1) 総数を5以下に（超過分をランダムに通常戦へ）
+  let es = elites();
+  while (es.length > 5) { demote(es[Math.floor(Math.random() * es.length)]); es = elites(); }
+  // (2) どのルートでも強敵は最大3つまで。各ノードから最下層までの最大強敵数をDPで求め、
+  //     最大ルート上の強敵を1つ通常戦に落とす、を上限内に収まるまで繰り返す
+  const routeMax = () => {
+    const memo = new Map();
+    const dfs = id => {
+      if (memo.has(id)) return memo.get(id);
+      let best = 0; for (const k of succ.get(id)) best = Math.max(best, dfs(k));
+      const v = (byId.get(id).type === "elite" ? 1 : 0) + best;
+      memo.set(id, v); return v;
+    };
+    let mx = 0; for (const s of rows[0]) mx = Math.max(mx, dfs(s.id));
+    return { mx, memo };
+  };
+  for (let guard = 0; guard < 60; guard++) {
+    const { mx, memo } = routeMax();
+    if (mx <= 3) break;
+    let cur = rows[0].reduce((a, b) => memo.get(b.id) > memo.get(a.id) ? b : a).id;
+    const onPath = [];
+    while (true) {
+      const n = byId.get(cur);
+      if (n.type === "elite") onPath.push(n);
+      const kids = succ.get(cur);
+      if (!kids.length) break;
+      cur = kids.reduce((a, b) => memo.get(b) > memo.get(a) ? b : a);
+    }
+    if (!onPath.length) break;
+    demote(onPath[Math.floor(onPath.length / 2)]);
+  }
+  return { nodes, edges, rows };
 };
 
 // ===== エンカウント生成（場所で敵の数・強さが変わる）=====
@@ -519,6 +558,8 @@ const encounterFor = (node, act) => {
       atkFloor: (act >= 1 && e.elite) ? 60 : 0, bigFloor: (act >= 1 && e.elite) ? 120 : 0, // 2章以降エリートの火力下限
       enr: 0, enrEvery: SIM_MODE ? 0 : 4 + Math.floor(Math.random() * 3),
       shd, shdMax: si ? si.sh : 0, shdC: si ? si.c : 0,
+      // 上限ダメージ＝最大HPの約1/4〜1/5をキリよく10刻みに。ボス/強敵の"一部だけ"が持つ特殊耐性
+      dcap: ((e.boss && Math.random() < 0.5) || (e.elite && Math.random() < 0.35)) ? Math.max(10, Math.round(hp / 4.5 / 10) * 10) : 0,
       elite:!!e.elite, boss:!!e.boss, idx:i };
   });
 };
@@ -949,7 +990,7 @@ window.addEventListener("pageshow", bgmOnShow);
 
 // ===== キャラ画像スプライト（ComfyUI生成・透過PNG） =====
 const CharImg = ({ kind, size }) => h("img", {
-  src: "assets/" + kind + ".png", alt: kind, draggable: false,
+  src: "assets/" + (kind === "hero" ? CUR_HERO : kind) + ".png", alt: kind, draggable: false,
   style: { display:"block", width:size, height:size, objectFit:"contain",
     pointerEvents:"none", filter:"drop-shadow(0 4px 3px rgba(0,0,0,.35))" }
 });
@@ -1013,7 +1054,7 @@ function DropBattle() {
   const [curChar, setCurChar_] = useState(0);
   const curCharRef = useRef(0);
   const charSkillRef = useRef("heal");
-  const setCurChar = i => { curCharRef.current = i; charSkillRef.current = CHARS[i].skill; CUR_SKILL = CHARS[i].skill; setCurChar_(i); };
+  const setCurChar = i => { curCharRef.current = i; charSkillRef.current = CHARS[i].skill; CUR_SKILL = CHARS[i].skill; CUR_HERO = CHARS[i].img.replace("assets/", "").replace(".png", ""); setCurChar_(i); };
   const [paintColor, setPaintColor_] = useState(0);       // 色変えキャラの現在インク色
   const paintColorRef = useRef(0);
   const setPaintColor = v => { paintColorRef.current = v; setPaintColor_(v); };
@@ -1082,8 +1123,8 @@ function DropBattle() {
   };
   const pickRelics = (count, rarePref) => {
     const rareBoss = rarePref === "boss";
-    const allowSrc = rarePref === "boss" || rarePref === "elite"; // src指定レリックはボス/精鋭報酬でのみ出現
-    // char指定レリックは対応キャラでのみ / src指定レリックはボス・精鋭でのみ
+    const allowSrc = rarePref === "boss" || rarePref === "elite"; // src指定レリックはボス/強敵報酬でのみ出現
+    // char指定レリックは対応キャラでのみ / src指定レリックはボス・強敵でのみ
     const unowned = RELIC_KEYS.filter(k => !relicsRef.current.includes(k)
       && (RELICS[k].char === undefined || RELICS[k].char === curCharRef.current)
       && (!RELICS[k].src || allowSrc));
@@ -1240,7 +1281,8 @@ function DropBattle() {
           en.shd -= dealtS;
           remA -= Math.ceil(dealtS / eff);
         }
-        const dealtH = Math.min(en.hp, Math.max(0, remA));
+        const capA = en.dcap ? Math.min(remA, en.dcap) : remA; // 上限ダメージ
+        const dealtH = Math.min(en.hp, Math.max(0, capA));
         en.hp -= dealtH;
         if (en.hp <= 0) en.alive = false;
         const snap = ens.map(e => ({ ...e }));
@@ -1278,7 +1320,8 @@ function DropBattle() {
           en.shd -= dealtS;
           rem -= Math.ceil(dealtS / eff);
         }
-        const dealtH = Math.min(en.hp, rem);
+        const capR = en.dcap ? Math.min(rem, en.dcap) : rem; // 上限ダメージ
+        const dealtH = Math.min(en.hp, capR);
         en.hp -= dealtH;
         rem = pierce ? rem - dealtH : 0;
         if (en.hp <= 0) en.alive = false;
@@ -1888,12 +1931,17 @@ function DropBattle() {
     // 色変えキャラ：3つ目のアクションは「タップした1個を現在のインク色へ塗り替える」（消さない）
     if (act === "heal" && skill === "recolor") {
       const cell = boardRef.current[idx];
-      if (cell.type === JUNK || cell.special) { SFX.tap(); return; } // お邪魔・特殊は塗れない（アクション消費なし）
-      const nb = boardRef.current.slice();
-      nb[idx] = { ...cell, id:UID++, type:paintColorRef.current };
+      if (cell.type === JUNK) { SFX.tap(); return; } // お邪魔は塗れない（アクション消費なし）
+      const grp = findGroup(boardRef.current, idx); // つながった同色グループ全体を塗り替える
+      const paint = paintColorRef.current;
+      let painted = 0;
+      const nb = boardRef.current.map(c => {
+        if (grp.has(c.id) && c.type !== JUNK && !c.wild) { painted++; return { ...c, id:UID++, type:paint }; }
+        return c;
+      });
       commitBoard(nb); syncBag();
       SFX.clear();
-      addLog([`🎨 ドロップを${["赤","金","紫","碧","青"][paintColorRef.current] || ""}色に塗り替えた`]);
+      addLog([`🎨 つながった${painted}個を${["赤","金","紫","碧","青"][paint] || ""}色に塗り替えた`]);
       const nu = new Set(usedRef.current); nu.add("heal");
       setUsed(nu); usedRef.current = nu;
       if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
@@ -1937,10 +1985,10 @@ function DropBattle() {
     if (act === "heal" && skill === "buff") {
       // 強化キャラ：3つ目で消すと、選んだステータスを「1ドロップにつき◯倍」で累積強化
       const st = skillTargetRef.current;
-      const per = hasR("warforge2") ? 1.4 : hasR("warforge") ? 1.3 : 1.2;
-      const factor = Math.pow(per, info.count);
+      const inc = hasR("warforge2") ? 0.4 : hasR("warforge") ? 0.3 : 0.2;
+      const factor = 1 + inc * info.count; // 1ドロップにつき+inc の加算式（5個・+0.2 → 2.0倍）
       turnRef.current[st] = Math.round(turnRef.current[st] * factor);
-      addLog([`✨ ${st === "atk" ? "攻撃" : "防御"}を強化！ ${per}倍×${info.count}個 = ×${factor.toFixed(1)}`]);
+      addLog([`✨ ${st === "atk" ? "攻撃" : "防御"}を強化！ +${inc}×${info.count}個 → ×${factor.toFixed(1)}`]);
     } else if (act === "heal" && skill === "store") {
       // 蓄積キャラ：消した数を累積し、選んだステータスへ加算（累積は冒険を通して保持）
       const st = skillTargetRef.current;
@@ -2129,9 +2177,9 @@ function DropBattle() {
   const makePreview = (b, idx) => {
     // 宝箱パズルはレリックの消し方拡張を無効化（プレーンな同色グループのみ）＝実消去(puzzleTap)と一致
     if (statusRef.current === "puzzle") { const ids = findGroup(b, idx); return { ids, over:true, info: groupInfo(b, ids) }; }
-    // 色変えキャラの3つ目アクションはタップした1個だけを対象にする
+    // 色変えキャラの3つ目アクションは「つながった同色グループ全体」を対象にする
     if (statusRef.current === "battle" && actionRef.current === "heal" && charSkillRef.current === "recolor") {
-      const one = new Set([b[idx].id]); return { ids:one, over:true, info: groupInfo(b, one) };
+      const grp = findGroup(b, idx); return { ids:grp, over:true, info: groupInfo(b, grp) };
     }
     const { ids } = expandClear(b, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed);
     return { ids, over:true, info: groupInfo(b, ids) };
@@ -2184,6 +2232,7 @@ function DropBattle() {
     UID = 1;
     storeRef.current = 0; setStoreView(0);          // 蓄積リセット（冒険をやり直す）
     CUR_SKILL = charSkillRef.current;               // 「もう一度挑む」は同キャラを維持
+    CUR_HERO = CHARS[curCharRef.current].img.replace("assets/", "").replace(".png", "");
     ownedRef.current = initOwned();
     bagRef.current = refillBag(ownedRef.current);
     syncOwned();
@@ -2242,7 +2291,7 @@ function DropBattle() {
       state: () => ({ status: statusRef.current, cur: curNodeRef.current, php: pRef.current,
         turn: turnNumRef.current, tv: { ...turnRef.current },
         per: { atk: perOf("atk"), def: perOf("def"), heal: perOf("heal") },
-        enemies: enemiesRef.current.map(e => ({ kind:e.kind, hp:e.hp, alive:e.alive, pi:e.pi, shd:e.shd || 0, enr:e.enr || 0, atk:e.atk })),
+        enemies: enemiesRef.current.map(e => ({ kind:e.kind, hp:e.hp, alive:e.alive, pi:e.pi, shd:e.shd || 0, enr:e.enr || 0, atk:e.atk, dcap:e.dcap || 0 })),
         junk: boardRef.current.filter(c => c.type === JUNK).length,
         bagLeft: ITEM_KEYS.reduce((t, k) => t + bagRef.current[k], 0),
         colors: new Set(boardRef.current.filter(c => c.type !== JUNK).map(c => c.type)).size,
@@ -2270,7 +2319,7 @@ function DropBattle() {
       weaken: () => { const ens = enemiesRef.current.map(e => e.alive ? { ...e, hp:1 } : e); setEnemiesBoth(ens); },
       spawn: kinds => {
         const ens = kinds.map((kind,i) => { const k = KINDS[kind];
-          return { id:"e"+(UID++), kind, name:k.name, hp:k.hp, max:k.hp, atk:k.atk, alive:true, pi:0, pat:k.pats[0], rollMul:1, shd:0, shdMax:(SHIELDS[kind]||{}).sh||0, shdC:0, enr:0, enrEvery:0, elite:false, boss:kind==="demon", idx:i }; });
+          return { id:"e"+(UID++), kind, name:k.name, hp:k.hp, max:k.hp, atk:k.atk, alive:true, pi:0, pat:k.pats[0], rollMul:1, shd:0, shdMax:(SHIELDS[kind]||{}).sh||0, shdC:0, enr:0, enrEvery:0, dcap: kind==="demon" ? Math.max(10, Math.round(k.hp / 4.5 / 10) * 10) : 0, elite:false, boss:kind==="demon", idx:i }; });
         setEnemiesBoth(ens); setTargetId(ens[0].id); targetRef.current = ens[0].id;
       },
       hurtEnemies: () => { const ens = enemiesRef.current.map(e => e.alive ? { ...e, hp: Math.max(1, e.hp - 30) } : e); setEnemiesBoth(ens); },
@@ -2723,7 +2772,7 @@ function DropBattle() {
   }
   if (rewards) {
     const rIcon = rewards.kind === "treasure" ? "assets/node_treasure.png" : rewards.kind === "elite" ? "assets/node_elite.png" : "assets/node_battle.png";
-    const rTitle = rewards.kind === "treasure" ? "宝箱発見！" : rewards.kind === "elite" ? "精鋭撃破！" : "勝利！";
+    const rTitle = rewards.kind === "treasure" ? "宝箱発見！" : rewards.kind === "elite" ? "強敵撃破！" : "勝利！";
     overlays.push(h("div", { key:"reward", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:50 } },
       h("div", { className:"w-full pop-in rounded-2xl", style:{ maxWidth:380, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", padding:"16px 14px" } },
         h("h2", { className:"text-center font-bold mb-1 flex items-center justify-center gap-2", style:{ fontSize:"1.25rem", color:"#e0b45c", textShadow:"0 2px 0 rgba(0,0,0,.6)" } }, Ic(rIcon, 22), rTitle),
@@ -2736,7 +2785,7 @@ function DropBattle() {
             h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, "レリック獲得: ", RELICS[rewards.relic].name),
             h("span", { className:"block text-[10px]", style:{ opacity:0.8 } }, RELICS[rewards.relic].desc))),
         rewards.healed > 0 && h("p", { className:"text-center text-xs mb-1", style:{ color:"#7cffb0" } }, "群れを一掃した勢いで HP +", rewards.healed),
-        rewards.kind === "elite" && h("p", { className:"text-center text-[10px] mb-1", style:{ color:"#d05cff" } }, "精鋭の報酬にはレアが混ざる…"),
+        rewards.kind === "elite" && h("p", { className:"text-center text-[10px] mb-1", style:{ color:"#d05cff" } }, "強敵の報酬にはレアが混ざる…"),
         h("div", { className:"grid grid-cols-1 gap-2 mt-2" }, rewards.picks.map(k => {
           const it = ITEMS[k];
           return h("button", { key:k, onClick: () => chooseReward(k), className:"rounded-xl px-4 py-3 flex items-center gap-3 text-left", style:{ background:"rgba(255,255,255,.06)", border:`2px solid ${it.ring}`, boxShadow:"0 2px 4px rgba(0,0,0,.4)" } },
@@ -2887,7 +2936,7 @@ function DropBattle() {
         header,
         relicBarEl,
         h("div", { className:"flex items-center gap-2 rounded-xl px-3 py-1.5 mb-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c5a48" } },
-          Ic("assets/hero.png", 20),
+          Ic(CHARS[curChar].img, 20),
           h("div", { className:"flex-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:9 })),
           h("span", { className:"text-xs font-bold", style:{ color:"#7CFFB0", fontVariantNumeric:"tabular-nums" } }, pHP, "/", pMax)),
         itemBarEl,
@@ -2941,7 +2990,7 @@ function DropBattle() {
                 className:"pointer-events-none",
                 style:{ width:isz, height:isz, maxWidth:isz, maxHeight:isz, objectFit:"contain",
                   filter: isVis && !isCur ? "grayscale(.9) drop-shadow(0 2px 1px rgba(0,0,0,.5))" : "drop-shadow(0 2px 1px rgba(0,0,0,.5))" } }),
-              isCur && h("img", { src:"assets/hero.png", alt:"", draggable:false, className:"absolute pointer-events-none", style:{ width:48, height:48, objectFit:"contain", left:"50%", top:-46, transform:"translateX(-50%)", filter:"drop-shadow(0 3px 2px rgba(0,0,0,.55))" } }),
+              isCur && h("img", { src:CHARS[curChar].img, alt:"", draggable:false, className:"absolute pointer-events-none", style:{ width:48, height:48, objectFit:"contain", left:"50%", top:-46, transform:"translateX(-50%)", filter:"drop-shadow(0 3px 2px rgba(0,0,0,.55))" } }),
               h("span", { className:"absolute text-[9px] font-bold pointer-events-none", style:{ top:"100%", marginTop:3, color:meta.color, background:"rgba(10,8,16,.75)", borderRadius:6, padding:"0 5px", textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } }, meta.label),
               routeTut && sel && h("span", { className:"absolute font-bold pointer-events-none", style:{ bottom:"104%", left:"50%", transform:"translateX(-50%)", whiteSpace:"nowrap", color:"#2c2030", background:"linear-gradient(180deg,#ffe08a,#e8b84a)", border:"2px solid #b8862e", borderRadius:10, padding:"2px 10px", fontSize:12, boxShadow:"0 3px 8px rgba(0,0,0,.5)", animation:"targetBob 1s ease-in-out infinite", zIndex:3 } }, "タップ ▼"));
           })),
@@ -3026,7 +3075,8 @@ function DropBattle() {
                 h(Bar, { value:en.hp, max:en.max, from:"#7a1d1d", to:"#ef4444", height:6 }),
                 h("span", { className:"block text-[9px] font-bold text-center", style:{ color:"#f0b8b0", fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000", marginTop:1 } }, en.hp, "/", en.max)),
               h("span", { className:"text-[9px] font-bold", style:{ marginTop:2, padding:"0 7px", borderRadius:6, background:"rgba(10,8,16,.72)", border:"1px solid rgba(255,255,255,.12)", color: en.boss ? "#ff5c7a" : en.elite ? "#d05cff" : "#d8cbe8", opacity: en.alive ? 0.95 : 0.35, textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } },
-                ((en.enr || 0) > 0 ? "🔥" + en.enr + " " : "") + (en.elite ? "💀" : "") + en.name));
+                ((en.enr || 0) > 0 ? "🔥" + en.enr + " " : "") + (en.elite ? "💀" : "") + en.name),
+              en.dcap > 0 && en.alive && h("span", { className:"text-[8px] font-bold", style:{ marginTop:2, padding:"1px 6px", borderRadius:6, background:"rgba(58,20,20,.85)", border:"1px solid rgba(255,150,120,.65)", color:"#ffb3a2", textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } }, "被ダメ上限 " + en.dcap));
           })),
         // 演出ポップ
         fx.length > 0 && h("div", { className:"absolute inset-0 flex flex-col items-center justify-center pointer-events-none", style:{ gap:6, zIndex:3 } },
@@ -3070,10 +3120,10 @@ function DropBattle() {
             iconEl = h("span", { style:{ width:18, height:18, marginTop:5, borderRadius:5, border:"2px solid rgba(255,255,255,.85)", background:`linear-gradient(180deg,${DROPS[paintColor].c1},${DROPS[paintColor].c2})`, flexShrink:0 } });
             valEl = h("span", { style:{ fontSize:"0.72rem", fontWeight:800 } }, "インク");
           } else if (curSkill === "buff") {
-            const per = hasR("warforge2") ? "1.4" : hasR("warforge") ? "1.3" : "1.2";
+            const inc = hasR("warforge2") ? "0.4" : hasR("warforge") ? "0.3" : "0.2";
             title = "強化→" + tgtLabel;
             iconEl = h("span", { style:{ fontSize:16, marginTop:5, lineHeight:1 } }, "💪");
-            valEl = h("span", { style:{ fontSize:"0.9rem", fontWeight:900 } }, "×" + per + "/個");
+            valEl = h("span", { style:{ fontSize:"0.9rem", fontWeight:900 } }, "+" + inc + "/個");
           } else {
             title = "蓄積→" + tgtLabel;
             iconEl = h("span", { style:{ fontSize:16, marginTop:5, lineHeight:1 } }, "📚");
