@@ -4,3 +4,4 @@ v[0-9]*.png
 gen_new_enemies.log
 __pycache__/
 patch_v*.py
+assets_cand/

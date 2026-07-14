@@ -30,6 +30,10 @@ CHARS = {
     "shade": "A ghostly wraith specter floating, tattered dark indigo cloak that fades into wisps at the bottom, hollow pale white eyes, thin shadowy arms",
     "spore": "A small mushroom monster shaman with a wide brown spotted mushroom cap, sleepy gentle face, tiny body, holding a crooked twig staff with a leaf",
     "boss":  "An imposing demon lord boss monster with massive curved cream horns, small golden crown, dark violet muscular body, torn bat-like wings folded behind, magenta gem embedded in chest, cruel confident grin, clawed hands",
+    "hero2": "A cheerful long-eared elf witch, holding a wooden painter palette in one hand and a paintbrush wand in the other, wearing a colorful patchwork robe splattered with rainbow paint splotches, pointed hat, playful bright expression",
+    "hero3": "A heavy lion-headed beastman knight, thick ornate plate armor, holding a broad sword and a round shield, red and blue war paint stripes on the face, mane around the helmet, powerful sturdy stance",
+    "hero4": "A wise nine-tailed kitsune fox scholar wearing round glasses, layered scholarly robes, holding a huge old purple spellbook under one arm and a crystal-topped staff, calm intelligent expression, fox ears and bushy tails",
+    "hero5": "A noble high elf archmage of grand stature, ornate white and gold flowing robes with intricate trim, a large golden halo ring painted behind the head as flat solid gold shape, holding a luxurious tall staff, serene majestic dignified expression, looks the strongest and most powerful",
 }
 
 def build(seed, text):
