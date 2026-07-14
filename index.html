@@ -185,9 +185,12 @@ const ITEMS = {
   def:  { mark:"盾", img:"assets/icon_def.png", color:"#d6e8ff", ring:"rgba(90,160,255,.95)", glowc:"#5aa0ff", name:"ガード", desc:"消した効果の半分を防御に追加" },
   atk:  { mark:"剣", img:"assets/icon_atk.png", color:"#ffd9d9", ring:"rgba(255,90,90,.95)", glowc:"#ff5a5a", name:"ソード", desc:"消した効果の半分を攻撃に追加" },
   atkx: { mark:"攻", img:"assets/mk_atkx.png", color:"#ffe8cc", ring:"rgba(255,140,0,.95)", glowc:"#ff8c00", name:"猛攻", desc:"攻撃で消すと効果×2" },
-  defx: { mark:"防", img:"assets/mk_defx.png", color:"#cce4ff", ring:"rgba(0,160,255,.95)", glowc:"#00a0ff", name:"鉄壁", desc:"防御で消すと効果×2" }
+  defx: { mark:"防", img:"assets/mk_defx.png", color:"#cce4ff", ring:"rgba(0,160,255,.95)", glowc:"#00a0ff", name:"鉄壁", desc:"防御で消すと効果×2" },
+  store:{ mark:"蓄", img:"assets/mk_store.png", color:"#e6dcff", ring:"rgba(141,99,207,.95)", glowc:"#8d63cf", name:"蓄積石", desc:"【ノア専用】どの色で消しても蓄積が+1される", exclusive:"store" }
 };
 const ITEM_KEYS = Object.keys(ITEMS);
+// 報酬・虹福などランダム入手の対象（専用ドロップは初期所持限定なので除外）
+const REWARD_KEYS = ITEM_KEYS.filter(k => !ITEMS[k].exclusive);
 // ドロップ強化（焚き火の「鍛える」。種類単位で恒久強化）
 const DESC_UP = {
   star: "【強化】5個以上の同時消しで発動する",
@@ -203,9 +206,10 @@ const DESC_UP = {
   def:  "【強化】消した効果と同量を防御に追加",
   atk:  "【強化】消した効果と同量を攻撃に追加",
   atkx: "【強化】攻撃で消すと効果×2.5",
-  defx: "【強化】防御で消すと効果×2.5"
+  defx: "【強化】防御で消すと効果×2.5",
+  store:"【強化】消すと蓄積が+2される"
 };
-const initZero = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0 });
+const initZero = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0, store:0 });
 // ===== レリック（パッシブ遺物）=====
 const RELICS = {
   // rar1=コモン rar2=レア rar3=ボス級
@@ -251,7 +255,8 @@ const RELICS = {
   linegemh:   { icon:"↔️", name:"横薙の宝珠", desc:"同じ色を5個以上消すと、消した所に虹ドロップ（消すと横1列消し）が生まれる。どの色とも繋がるがお邪魔とは繋がらない", rar:2 },
   gachagem:   { icon:"🌈", name:"虹福の玉", desc:"同じ色を6個以上消すと、所持中の特殊から1つが虹ドロップになって生まれる。どの色とも繋がる", rar:3 },
   warforge:   { icon:"⚔️", name:"闘気の触媒", desc:"【ガレス専用】強化の増加量が1ドロップにつき+0.3になる（通常+0.2）", rar:2, char:2 },
-  warforge2:  { icon:"🔥", name:"覇気の触媒", desc:"【ガレス専用】強化の増加量が1ドロップにつき+0.4になる（通常+0.2）", rar:3, char:2 }
+  warforge2:  { icon:"🔥", name:"覇気の触媒", desc:"【ガレス専用】強化の増加量が1ドロップにつき+0.4になる（通常+0.2）", rar:3, char:2 },
+  storegem:   { icon:"🧮", name:"累積の指輪", desc:"【ノア専用】蓄積の増加量が1ドロップにつき+2になる（通常+1）", rar:2, char:3 }
 };
 // レリック生成の虹（ワイルド）特殊ドロップ。ITEM_KEYS(袋)には含めない＝袋からは出ない
 const RGEM = {
@@ -304,7 +309,7 @@ const CHARS = [
     desc:"3つ目の力は「強化」。攻撃か防御を選び、そのターンの効果を1.2倍にする。", unlock:"3章のボスを倒すと解放" },
   { name:"賢者ノア",       skill:"store",   img:"assets/hero4.png", color:"#8d63cf",
     tag:"蓄積して育つ",   short:"蓄積",
-    desc:"3つ目の力は「蓄積」。消した数を攻撃か防御に蓄積し続ける（冒険を通して成長）。", unlock:"2人以上のキャラで3章を突破" },
+    desc:"3つ目の力は「蓄積」。消した数を攻撃か防御に蓄積して育つ（蓄積はバトルごとにリセット）。", unlock:"2人以上のキャラで3章を突破" },
   { name:"大賢者ルクス",   skill:"healx",   img:"assets/hero5.png", color:"#e8c06a",
     tag:"回復＋全効果2倍", short:"回復",
     desc:"3つ目の力は「回復」。さらにドロップが1色増える代わりに、全ての効果が2倍になる大賢者。", unlock:"すべてのキャラで3章を突破" },
@@ -569,7 +574,12 @@ const makeTutorialEnemy = () => { const k = KINDS.slime; return [{ id:"e"+(UID++
   alive:true, pi:0, pat:["attack"], rollMul:1, atkFloor:0, bigFloor:0, enr:0, enrEvery:0, shd:0, shdMax:0, shdC:0, elite:false, boss:false, idx:0 }]; };
 
 // ===== 袋（抽選プール）=====
-const initOwned = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:3, def:3, atk:3, atkx:0, defx:0 });
+const initOwned = ci => {
+  const base = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:3, def:3, atk:3, atkx:0, defx:0, store:0 };
+  // 蓄積キャラ（ノア）専用スタート: 剣/盾/回復を2ずつ＋蓄積石3つ
+  if (ci != null && CHARS[ci] && CHARS[ci].skill === "store") return { ...base, heal:2, def:2, atk:2, store:3 };
+  return base;
+};
 const refillBag = owned => ({ ...owned });
 const bagTotal = bag => ITEM_KEYS.reduce((s,k) => s+bag[k], 0);
 const drawFromBag = (bagRef, ownedRef, bagUpRef, ownedUpRef, cellsNow) => {
@@ -696,8 +706,8 @@ const expandIds = (cells, ids) => {
   return out;
 };
 const groupInfo = (cells, ids) => {
-  const sp = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0 };
-  const spu = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0 };
+  const sp = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0, store:0 };
+  const spu = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0, store:0 };
   let junkCnt = 0;
   for (const cell of cells) if (ids.has(cell.id)) {
     if (cell.special && sp[cell.special] !== undefined) { sp[cell.special]++; if (cell.up) spu[cell.special]++; }
@@ -1578,7 +1588,7 @@ function DropBattle() {
     if (hasR("bento")) setPHP(Math.min(pMaxRef.current, pRef.current + 8));
     let relicDrop = null;
     if (node && node.type === "elite") { relicDrop = pickRelics(1, "elite")[0] || null; if (relicDrop) addRelic(relicDrop); }
-    let picks = shuffle(ITEM_KEYS.slice()).slice(0, hasR("magnet") ? 4 : 3);
+    let picks = shuffle(REWARD_KEYS.slice()).slice(0, hasR("magnet") ? 4 : 3);
     let healed = 0;
     if (node && node.type === "elite" && !picks.some(k => k === "atkx" || k === "defx")) picks[0] = pick(["atkx","defx"]);
     // 群れ勝利時の+30回復も廃止（バトル終了時に回復しない）
@@ -1881,7 +1891,7 @@ function DropBattle() {
     }
     if (node.type === "treasure") {
       if (!TEST_MODE && Math.random() < 0.45) { startPuzzle(); return; } // 不思議な宝箱（パズル）
-      const picks = shuffle(ITEM_KEYS.slice()).slice(0, hasR("magnet") ? 4 : 3);
+      const picks = shuffle(REWARD_KEYS.slice()).slice(0, hasR("magnet") ? 4 : 3);
       setRewards({ picks, kind:"treasure", healed:0 });
       setStatus("reward"); statusRef.current = "reward";
       return;
@@ -1903,6 +1913,7 @@ function DropBattle() {
     setAction("atk"); actionRef.current = "atk";
     setUsed(new Set()); usedRef.current = new Set();
     setPreview(null); setClearing(new Set());
+    storeRef.current = 0; setStoreView(0); // 蓄積はバトルごとにリセット
     turnRef.current = freshTurn(); syncTurn();
     setTurn(1); turnNumRef.current = 1;
     setAnims({});
@@ -1960,7 +1971,7 @@ function DropBattle() {
     if (hasR("linegem") && pureCount >= 5) genKinds.push("linev");
     if (hasR("linegemh") && pureCount >= 5) genKinds.push("lineh");
     if (hasR("gachagem") && pureCount >= 6) {
-      const ownedSp = ITEM_KEYS.filter(k => ownedRef.current[k] > 0);
+      const ownedSp = REWARD_KEYS.filter(k => ownedRef.current[k] > 0);
       if (ownedSp.length) genKinds.push(pick(ownedSp));
     }
     if (genKinds.length) {
@@ -1990,9 +2001,10 @@ function DropBattle() {
       turnRef.current[st] = Math.round(turnRef.current[st] * factor);
       addLog([`✨ ${st === "atk" ? "攻撃" : "防御"}を強化！ +${inc}×${info.count}個 → ×${factor.toFixed(1)}`]);
     } else if (act === "heal" && skill === "store") {
-      // 蓄積キャラ：消した数を累積し、選んだステータスへ加算（累積は冒険を通して保持）
+      // 蓄積キャラ：消した数を累積し、選んだステータスへ加算（累積はバトルごとにリセット）
       const st = skillTargetRef.current;
-      storeRef.current += info.count;
+      const sinc = hasR("storegem") ? 2 : 1; // ノア専用レリックで1ドロップ＝蓄積+2
+      storeRef.current += info.count * sinc;
       setStoreView(storeRef.current);
       turnRef.current[st] += storeRef.current;
       addLog([`📚 蓄積 ${storeRef.current}（${st === "atk" ? "攻撃" : "防御"}へ加算）`]);
@@ -2006,6 +2018,13 @@ function DropBattle() {
     if (act === "atk" && info.sp.aoe > 0) {
       turnRef.current.aoe = true;
       if (info.spu.aoe > 0) turnRef.current.aoeUp = true;
+    }
+    // 蓄積石：攻撃/防御で消しても蓄積が貯まる（蓄積スロットで消した分はinfo.countに含むので二重加算を避ける）
+    if (skill === "store" && act !== "heal" && info.sp.store > 0) {
+      const add = info.sp.store + info.spu.store; // 強化済みは+2
+      storeRef.current += add;
+      setStoreView(storeRef.current);
+      addLog([`📚 蓄積石 +${add}（蓄積 ${storeRef.current}）`]);
     }
     if (info.sp.gold > 0) {
       const g = (info.sp.gold - info.spu.gold) * 5 + info.spu.gold * 12;
@@ -2233,7 +2252,7 @@ function DropBattle() {
     storeRef.current = 0; setStoreView(0);          // 蓄積リセット（冒険をやり直す）
     CUR_SKILL = charSkillRef.current;               // 「もう一度挑む」は同キャラを維持
     CUR_HERO = CHARS[curCharRef.current].img.replace("assets/", "").replace(".png", "");
-    ownedRef.current = initOwned();
+    ownedRef.current = initOwned(curCharRef.current);
     bagRef.current = refillBag(ownedRef.current);
     syncOwned();
     const m = genMap(onboarding());
@@ -2519,6 +2538,11 @@ function DropBattle() {
       if (!unlocked.includes(i)) { SFX.tap(); return; }
       setCurChar(i);
       storeRef.current = 0; setStoreView(0);
+      // キャラ別の初期特殊ドロップを袋にセット（ノアは蓄積石3＋剣盾回復2ずつ）
+      ownedRef.current = initOwned(i);
+      bagRef.current = refillBag(ownedRef.current);
+      ownedUpRef.current = initZero(); bagUpRef.current = initZero();
+      syncOwned();
       setPaintColor(0); setSkillTarget("atk");
       setStatus("map"); statusRef.current = "map";
       setLog(["― ルートを選んで進もう ―"]);
