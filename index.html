@@ -1625,7 +1625,7 @@ function DropBattle() {
       { text: "🏆 敵を撃破！", color:"#ffd54a", wait:850, run: () => {} },
       { text: `💰 コイン +${gain} 獲得`, color:"#e8c06a", wait:850, run: () => SFX.coin() }
     ], () => {
-      setRewards({ picks, kind: node ? node.type : "battle", healed, coins: gain, relic: relicDrop });
+      setRewards({ picks, kind: node ? node.type : "battle", healed, coins: gain, relic: relicDrop, step: relicDrop ? "relic" : "drop" });
       setStatus("reward"); statusRef.current = "reward";
     });
   };
@@ -2144,7 +2144,15 @@ function DropBattle() {
     const playEffects = () => {
       const explode = bombIdxs.slice();
       if (blast) explode.push(idx);
-      if (xgTrig) explode.push(idx);
+      // X字晶(xgem): タップ位置から斜め4方向のセルすべてを爆破し、X字状の爆発に
+      if (xgTrig) {
+        for (let d = 1; d < SIZE; d++) {
+          [[r0 + d, c0 + d], [r0 + d, c0 - d], [r0 - d, c0 + d], [r0 - d, c0 - d]].forEach(rc => {
+            if (rc[0] >= 0 && rc[0] < SIZE && rc[1] >= 0 && rc[1] < SIZE) explode.push(rc[0] * SIZE + rc[1]);
+          });
+        }
+        explode.push(idx);
+      }
       if (explode.length) boomAt(explode);
       let sweptLine = false;
       // 縦裂(linev)/横薙(lineh): 1列消しを棒状の爆破で表現
@@ -2928,29 +2936,37 @@ function DropBattle() {
   if (rewards) {
     const rIcon = rewards.kind === "treasure" ? "assets/node_treasure.png" : rewards.kind === "elite" ? "assets/node_elite.png" : "assets/node_battle.png";
     const rTitle = rewards.kind === "treasure" ? "宝箱発見！" : rewards.kind === "elite" ? "強敵撃破！" : "勝利！";
+    const rStep = rewards.step || (rewards.relic ? "relic" : "drop");
     overlays.push(h("div", { key:"reward", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:50 } },
       h("div", { className:"w-full pop-in rounded-2xl", style:{ maxWidth:380, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", padding:"16px 14px" } },
         h("h2", { className:"text-center font-bold mb-1 flex items-center justify-center gap-2", style:{ fontSize:"1.25rem", color:"#e0b45c", textShadow:"0 2px 0 rgba(0,0,0,.6)" } }, Ic(rIcon, 22), rTitle),
-        h("p", { className:"text-center text-xs mb-1", style:{ opacity:0.8 } },
-          rewards.kind === "treasure" ? "好きなアイテムを1つ持っていこう（不要ならスキップ可）" : "戦利品を1つ選ぼう（不要ならスキップ可）"),
-        rewards.coins > 0 && h("p", { className:"text-center text-xs mb-1", style:{ color:"#e8c06a", fontWeight:800 } }, Ic("assets/icon_coin.png", 13), " コイン +", rewards.coins),
-        rewards.relic && h("div", { className:"flex items-center gap-2 rounded-xl px-3 py-2 mb-2", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.5)" } },
-          h("span", { style:{ fontSize:"1.4rem" } }, RELICS[rewards.relic].icon),
-          h("span", null,
-            h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, "レリック獲得: ", RELICS[rewards.relic].name),
-            h("span", { className:"block text-[10px]", style:{ opacity:0.8 } }, RELICS[rewards.relic].desc))),
-        rewards.healed > 0 && h("p", { className:"text-center text-xs mb-1", style:{ color:"#7cffb0" } }, "群れを一掃した勢いで HP +", rewards.healed),
-        h("div", { className:"grid grid-cols-1 gap-2 mt-2" }, rewards.picks.map(k => {
-          const it = ITEMS[k];
-          return h("button", { key:k, onClick: () => chooseReward(k), className:"rounded-xl px-4 py-3 flex items-center gap-3 text-left", style:{ background:"rgba(255,255,255,.06)", border:`2px solid ${it.ring}`, boxShadow:"0 2px 4px rgba(0,0,0,.4)" } },
-            h("img", { src:it.img, alt:it.name, draggable:false, style:{ width:34, height:34, objectFit:"contain", filter:"drop-shadow(0 1px 2px rgba(0,0,0,.5))" } }),
+        rewards.coins > 0 && h("p", { key:"coin", className:"text-center text-xs mb-1", style:{ color:"#e8c06a", fontWeight:800 } }, Ic("assets/icon_coin.png", 13), " コイン +", rewards.coins),
+        // ステップ1: レリック獲得の告知（強敵のみ）→「特殊ドロップを選ぶ」で次へ
+        ...(rStep === "relic" ? [
+          h("p", { key:"rdesc", className:"text-center text-xs mb-2", style:{ opacity:0.8 } }, "強敵を倒した証にレリックを獲得！"),
+          rewards.relic && h("div", { key:"rpanel", className:"flex items-center gap-2 rounded-xl px-3 py-2 mb-3", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.5)" } },
+            h("span", { style:{ fontSize:"1.4rem" } }, RELICS[rewards.relic].icon),
             h("span", null,
-              h("span", { className:"font-bold", style:{ color:it.glowc } }, itemName(k)),
-              h("span", { className:"block text-[11px]", style:{ opacity:0.85 } }, itemDesc(k)),
-              h("span", { className:"block text-[10px]", style:{ opacity:0.6 } }, "所持 ", ownedView[k], " → ", ownedView[k] + 1)));
-        })),
-        h("button", { onClick: declineReward, className:"w-full rounded-xl py-2 font-bold text-sm mt-2", style:{ background:"rgba(255,255,255,.07)", border:"2px solid #453b5c", color:"#c9bfe0" } },
-          "受け取らない（袋をそのままにする）"))));
+              h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, "レリック獲得: ", RELICS[rewards.relic].name),
+              h("span", { className:"block text-[10px]", style:{ opacity:0.8 } }, RELICS[rewards.relic].desc))),
+          h("button", { key:"toDrop", onClick: () => { SFX.tap(); setRewards(r => ({ ...r, step:"drop" })); }, className:"w-full rounded-xl py-2.5 font-bold", style:{ background:"rgba(232,192,106,.16)", border:"2px solid #8a6f3c", color:"#f0d89a" } }, "特殊ドロップを選ぶ ▶")
+        ] : [
+          // ステップ2: 特殊ドロップ選択
+          h("p", { key:"ddesc", className:"text-center text-xs mb-1", style:{ opacity:0.8 } },
+            rewards.kind === "treasure" ? "好きなアイテムを1つ持っていこう（不要ならスキップ可）" : "戦利品を1つ選ぼう（不要ならスキップ可）"),
+          rewards.healed > 0 && h("p", { key:"heal", className:"text-center text-xs mb-1", style:{ color:"#7cffb0" } }, "群れを一掃した勢いで HP +", rewards.healed),
+          h("div", { key:"picks", className:"grid grid-cols-1 gap-2 mt-2" }, rewards.picks.map(k => {
+            const it = ITEMS[k];
+            return h("button", { key:k, onClick: () => chooseReward(k), className:"rounded-xl px-4 py-3 flex items-center gap-3 text-left", style:{ background:"rgba(255,255,255,.06)", border:`2px solid ${it.ring}`, boxShadow:"0 2px 4px rgba(0,0,0,.4)" } },
+              h("img", { src:it.img, alt:it.name, draggable:false, style:{ width:34, height:34, objectFit:"contain", filter:"drop-shadow(0 1px 2px rgba(0,0,0,.5))" } }),
+              h("span", null,
+                h("span", { className:"font-bold", style:{ color:it.glowc } }, itemName(k)),
+                h("span", { className:"block text-[11px]", style:{ opacity:0.85 } }, itemDesc(k)),
+                h("span", { className:"block text-[10px]", style:{ opacity:0.6 } }, "所持 ", ownedView[k], " → ", ownedView[k] + 1)));
+          })),
+          h("button", { key:"decline", onClick: declineReward, className:"w-full rounded-xl py-2 font-bold text-sm mt-2", style:{ background:"rgba(255,255,255,.07)", border:"2px solid #453b5c", color:"#c9bfe0" } },
+            "受け取らない（袋をそのままにする）")
+        ]))));
   }
   if (puzzle && puzzle.done) {
     const d = puzzle.done;
