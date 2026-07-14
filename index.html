@@ -105,6 +105,13 @@ button:active{filter:brightness(1.12)}
 @keyframes angerPulse{0%,100%{transform:scale(1) rotate(-4deg)}50%{transform:scale(1.3) rotate(6deg)}}
 @keyframes boomFx{0%{transform:translate(-50%,-50%) scale(.25);opacity:.95}60%{opacity:.7}100%{transform:translate(-50%,-50%) scale(1.15);opacity:0}}
 .boom-fx{position:fixed;width:76px;height:76px;border-radius:50%;z-index:89;pointer-events:none;background:radial-gradient(circle, rgba(255,235,180,.95) 8%, rgba(255,150,60,.75) 34%, rgba(200,60,20,.35) 58%, transparent 72%);border:3px solid rgba(255,190,110,.8);animation:boomFx .45s ease-out forwards}
+@keyframes lineSweepV{0%{background-position:50% -35%}100%{background-position:50% 135%}}
+@keyframes lineSweepH{0%{background-position:-35% 50%}100%{background-position:135% 50%}}
+@keyframes lineFade{0%{opacity:0}18%{opacity:1}100%{opacity:0}}
+.line-fx-v{position:fixed;z-index:88;pointer-events:none;border-radius:6px;background:linear-gradient(180deg,transparent 30%,rgba(255,255,255,.95) 50%,rgba(150,205,255,.7) 58%,transparent 74%);background-size:100% 60%;background-repeat:no-repeat;box-shadow:0 0 14px rgba(160,210,255,.85);animation:lineSweepV .4s ease-out forwards, lineFade .4s ease-out forwards}
+.line-fx-h{position:fixed;z-index:88;pointer-events:none;border-radius:6px;background:linear-gradient(90deg,transparent 30%,rgba(255,255,255,.95) 50%,rgba(150,205,255,.7) 58%,transparent 74%);background-size:60% 100%;background-repeat:no-repeat;box-shadow:0 0 14px rgba(160,210,255,.85);animation:lineSweepH .4s ease-out forwards, lineFade .4s ease-out forwards}
+@keyframes boltCell{0%{opacity:0;transform:scale(.8)}15%{opacity:1;transform:scale(1.14)}45%{opacity:.5}100%{opacity:0;transform:scale(1)}}
+.bolt-fx{position:fixed;z-index:89;pointer-events:none;border-radius:8px;background:radial-gradient(circle,rgba(230,244,255,.95) 10%,rgba(140,195,255,.6) 45%,transparent 72%);box-shadow:0 0 12px rgba(150,205,255,.9);animation:boltCell .4s ease-out forwards}
 .mark-img{position:absolute !important;left:19% !important;top:19% !important;width:62% !important;height:62% !important;object-fit:contain;pointer-events:none}
 .act-h img{width:20px !important;height:20px !important}
 .scene-h{height:176px}
@@ -141,6 +148,12 @@ const ACTS = 3;
 const ACT_NAMES = ["翠緑の森", "毒霧の沼窟", "灼熱の魔城"];
 const BOSS_BY_ACT = [["kslime","treant","alraune"], ["vamp","lich","toadking"], ["demon","dragon","ifrit","reaper"]];
 const MAP_BGS = ["assets/bg_map_tall.jpg", "assets/bg_map2.jpg", "assets/bg_map3.jpg"];
+// マップ背景はノード/ルートが見やすいよう、章ごとのテーマ色グラデーション（シンプル）
+const MAP_GRAD = [
+  "linear-gradient(180deg,#1b3a30 0%,#132821 48%,#0b1712 100%)", // 翠緑の森
+  "linear-gradient(180deg,#2c1d40 0%,#1d1330 48%,#110c1d 100%)", // 毒霧の沼窟
+  "linear-gradient(180deg,#3b1d1a 0%,#271113 48%,#150c0d 100%)"  // 灼熱の魔城
+];
 const BATTLE_BGS = ["assets/bg_battle.jpg", "assets/bg_battle2.jpg", "assets/bg_battle3.jpg"];
 const ACT_POOLS = [
   { light:["slime","bat","wolf","bee","crow","pixie"], mid:["slime","wolf","spore","mandra","pixie","fox","crow"], heavy:["imp","boar","snail","mandra","fox"] },
@@ -209,7 +222,7 @@ const RELICS = {
   adventmap:  { icon:"🗺", name:"冒険者の地図", desc:"焚き火に着くとコイン+30", rar:1 },
   scale:      { icon:"⚖", name:"商人の天秤", desc:"コイン獲得が1.5倍になる", rar:2 },
   blastcore:  { icon:"💥", name:"爆心の石", desc:"1個だけで消すと周囲3×3も爆破（1ターンに1回）", rar:2 },
-  crossgem:   { icon:"✚", name:"十字晶", desc:"ちょうど4個で消すと、タップ位置から十字1列を爆破", rar:2 },
+  crossgem:   { icon:"✚", name:"十字晶", desc:"ちょうど4個で消すと、タップ位置から十字1列を爆破（1ターンに1回）", rar:2, src:"boss" },
   xgem:       { icon:"❌", name:"X字晶", desc:"ちょうど5個で消すと、タップ位置から斜め4方向を爆破", rar:3 },
   redcore:    { icon:"🌋", name:"紅蓮の核", desc:"赤ドロップを消すと、消した各赤の上下も爆破", rar:2 },
   swordbook:  { icon:"⚔", name:"剣術指南書", desc:"攻撃ドロップ1個の効果+2", rar:1 },
@@ -665,11 +678,11 @@ const perOf = act =>
   + (act === "heal" ? (hasR("healbook") ? 2 : 0) + (hasR("saintprayer") ? 3 : 0) : 0);
 // タップ起点の消去範囲を確定する。パターン系レリックの追加爆破と、
 // 爆破に巻き込まれた特殊ドロップ（爆弾連鎖・雷）の再帰発動まで含む
-const expandClear = (b, idx, blastOk) => {
+const expandClear = (b, idx, blastOk, crossOk) => {
   const seedJunk = b[idx].type === JUNK;
   const ids0 = findGroup(b, idx);
-  if (seedJunk) return { ids: ids0, seedJunk, blast: false };
-  let blast = false;
+  if (seedJunk) return { ids: ids0, seedJunk, blast: false, cross: false };
+  let blast = false, cross = false;
   const N = SIZE * SIZE;
   const addIdx = i => { if (i >= 0 && i < N) ids0.add(b[i].id); };
   const r0 = Math.floor(idx / SIZE), c0 = idx % SIZE;
@@ -680,7 +693,8 @@ const expandClear = (b, idx, blastOk) => {
       if (r >= 0 && r < SIZE && c >= 0 && c < SIZE) addIdx(r * SIZE + c);
     }
   }
-  if (hasR("crossgem") && ids0.size === 4) {
+  if (hasR("crossgem") && crossOk !== false && ids0.size === 4) {
+    cross = true;
     for (let i = 0; i < SIZE; i++) { addIdx(r0 * SIZE + i); addIdx(i * SIZE + c0); }
   }
   if (hasR("xgem") && ids0.size === 5) {
@@ -724,7 +738,7 @@ const expandClear = (b, idx, blastOk) => {
     }
     if (lineChanged) ids = expandIds(b, ids); // ラインで巻き込んだ爆弾を誘爆
   }
-  return { ids, seedJunk, blast };
+  return { ids, seedJunk, blast, cross };
 };
 const computeEffect = (act, info) => {
   if (info.junk) return { main:0, splitAtk:0, splitDef:0, healBonus:0 };
@@ -881,6 +895,8 @@ const SFX = {
   atk:  () => { noise(0.12, 900, 0.12, 0, 0.6); softTone(150, 0.16, "sine", 0.14, 0.01, 55); },
   hurt: () => { softTone(110, 0.22, "sine", 0.16, 0, 45); noise(0.18, 350, 0.1, 0, 0.7, "lowpass"); },
   crack:() => { noise(0.2, 2400, 0.16, 0, 0.5); noise(0.25, 700, 0.12, 0.03, 0.6); softTone(80, 0.22, "sine", 0.12, 0.02, 40); },
+  swish:() => { noise(0.16, 3600, 0.09, 0, 1.6); softTone(880, 0.14, "sine", 0.05, 0, 1500); },
+  zap:  () => { noise(0.1, 8000, 0.16, 0, 2.2); noise(0.14, 3200, 0.1, 0.02, 1); softTone(140, 0.16, "sine", 0.1, 0.01, 60); },
   heal: () => { softTone(523, 0.3, "sine", 0.06); softTone(784, 0.35, "sine", 0.05, 0.08); noise(0.25, 6000, 0.02, 0.05, 2); },
   win:  () => {
     [[523,0],[659,0.1],[784,0.2],[1046,0.34]].forEach(p => ringTone(p[0], 0.4, 0.075, p[1]));
@@ -1065,15 +1081,18 @@ function DropBattle() {
     SFX.pick();
   };
   const pickRelics = (count, rarePref) => {
-    // char指定レリックは対応キャラでのみ出現（例: ガレス専用の強化倍率レリック）
+    const rareBoss = rarePref === "boss";
+    const allowSrc = rarePref === "boss" || rarePref === "elite"; // src指定レリックはボス/精鋭報酬でのみ出現
+    // char指定レリックは対応キャラでのみ / src指定レリックはボス・精鋭でのみ
     const unowned = RELIC_KEYS.filter(k => !relicsRef.current.includes(k)
-      && (RELICS[k].char === undefined || RELICS[k].char === curCharRef.current));
+      && (RELICS[k].char === undefined || RELICS[k].char === curCharRef.current)
+      && (!RELICS[k].src || allowSrc));
     const byRar = r => unowned.filter(k => RELICS[k].rar === r);
     const out = [];
     for (let i = 0; i < count; i++) {
       let pool = [];
-      if (rarePref === "boss" && i === 0) pool = byRar(3);
-      if (!pool.length) pool = Math.random() < (rarePref ? 0.5 : 0.6) ? byRar(1) : byRar(2);
+      if (rareBoss && i === 0) pool = byRar(3);
+      if (!pool.length) pool = Math.random() < (rareBoss ? 0.5 : 0.6) ? byRar(1) : byRar(2);
       if (!pool.length) pool = unowned;
       const cand = pool.filter(k => !out.includes(k));
       if (!cand.length) break;
@@ -1515,7 +1534,7 @@ function DropBattle() {
     // 勝利時の自動回復(7%)は廃止。レリックの回復(弁当箱)はユーザー指示で維持
     if (hasR("bento")) setPHP(Math.min(pMaxRef.current, pRef.current + 8));
     let relicDrop = null;
-    if (node && node.type === "elite") { relicDrop = pickRelics(1)[0] || null; if (relicDrop) addRelic(relicDrop); }
+    if (node && node.type === "elite") { relicDrop = pickRelics(1, "elite")[0] || null; if (relicDrop) addRelic(relicDrop); }
     let picks = shuffle(ITEM_KEYS.slice()).slice(0, hasR("magnet") ? 4 : 3);
     let healed = 0;
     if (node && node.type === "elite" && !picks.some(k => k === "atkx" || k === "defx")) picks[0] = pick(["atkx","defx"]);
@@ -1881,13 +1900,14 @@ function DropBattle() {
       else { const na = ORDER.find(a => !nu.has(a)); setAction(na); actionRef.current = na; }
       return;
     }
-    const { ids, seedJunk, blast } = expandClear(boardRef.current, idx, !turnRef.current.blastUsed);
+    const { ids, seedJunk, blast, cross } = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed);
     if (blast) turnRef.current.blastUsed = true;
+    if (cross) turnRef.current.crossUsed = true; // 十字晶は1ターン1回
     const info = groupInfo(boardRef.current, ids);
     const eff = computeEffect(act, info);
     const pureCount = findGroup(boardRef.current, idx).size; // 「同じ色を◯個」の判定は素の同色グループ数で
     const { next, newPositions } = refill(boardRef.current, ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
-    // レリック生成の虹（ワイルド）特殊。盤面の特殊数に関係なく生成し、消した位置(新規落下)へ置く
+    // レリック生成の虹（ワイルド）特殊。消した位置(新規落下)へ置く
     const genKinds = [];
     if (hasR("linegem") && pureCount >= 5) genKinds.push("linev");
     if (hasR("linegemh") && pureCount >= 5) genKinds.push("lineh");
@@ -1899,6 +1919,17 @@ function DropBattle() {
       const freePos = shuffle(newPositions.slice());
       genKinds.forEach((k, gi) => { if (gi < freePos.length) next[freePos[gi]] = { ...next[freePos[gi]], special: k, up: false, wild: true }; });
       addLog(["🌈 虹ドロップが生まれた！"]);
+    }
+    // 盤面の特殊ドロップ数を指定数(specialTarget)に収める。生成した虹を優先して残し、
+    // 超過分は通常特殊を間引く＝虹生成しても盤面の特殊が指定数以上に増え続けない
+    {
+      const cap = specialTarget();
+      let curSp = 0; const normPos = [];
+      for (let i = 0; i < next.length; i++) { if (next[i].special) { curSp++; if (!next[i].wild) normPos.push(i); } }
+      if (curSp > cap) {
+        const rm = shuffle(normPos);
+        for (let k = 0; k < rm.length && curSp > cap; k++) { next[rm[k]] = { ...next[rm[k]], special: false, up: false }; curSp--; }
+      }
     }
     let mainAdd = eff.main;
     if (act === "atk" && turnRef.current.atkBoost) mainAdd *= 2;
@@ -1951,18 +1982,34 @@ function DropBattle() {
     const newUsed = new Set(usedRef.current);
     newUsed.add(act);
     setUsed(newUsed); usedRef.current = newUsed;
-    // エフェクト: 爆弾バースト + 数値への粒子集約（盤面が消える前に座標を取る）
+    // ==== 消去演出（盤面が消える前に座標を取る）====
+    // 通常範囲(素の同色グループ)を先に消す → 特殊エフェクト → 追加分を消す
+    const baseIds = findGroup(boardRef.current, idx);
+    const hasExtra = ids.size > baseIds.size;
     const clearedIdxs = [], bombIdxs = [];
     boardRef.current.forEach((c, i) => {
       if (!ids.has(c.id)) return;
       clearedIdxs.push(i);
       if (c.special === "bombx" || c.special === "bombd") bombIdxs.push(i);
     });
-    if (bombIdxs.length) boomAt(bombIdxs);
-    if (!info.junk) flyParticles(clearedIdxs, act);
-    setClearing(new Set(ids));
-    setLocked(true); lockedRef.current = true;
-    setTimeout(() => {
+    const linevCols = [...new Set(boardRef.current.map((c, i) => (ids.has(c.id) && c.special === "linev") ? (i % SIZE) : -1).filter(x => x >= 0))];
+    const linehRows = [...new Set(boardRef.current.map((c, i) => (ids.has(c.id) && c.special === "lineh") ? ((i / SIZE) | 0) : -1).filter(x => x >= 0))];
+    const boltExtra = boardRef.current.map((c, i) => (ids.has(c.id) && !baseIds.has(c.id) && info.sp.bolt > 0) ? i : -1).filter(i => i >= 0);
+    const r0 = Math.floor(idx / SIZE), c0 = idx % SIZE;
+    const xgTrig = hasR("xgem") && baseIds.size === 5 && hasExtra;
+    const playEffects = () => {
+      const explode = bombIdxs.slice();
+      if (blast) explode.push(idx);
+      if (xgTrig) explode.push(idx);
+      if (explode.length) boomAt(explode);
+      let sweptLine = false;
+      linevCols.forEach(c => { lineSweep("v", colCells(c)); sweptLine = true; });
+      linehRows.forEach(r => { lineSweep("h", rowCells(r)); sweptLine = true; });
+      if (cross) { lineSweep("v", colCells(c0)); lineSweep("h", rowCells(r0)); sweptLine = true; }
+      if (sweptLine) SFX.swish();
+      if (boltExtra.length) lightningAt(boltExtra);
+    };
+    const finishClear = () => {
       commitBoard(next);
       setClearing(new Set());
       syncBag();
@@ -1974,7 +2021,26 @@ function DropBattle() {
         setAction(nextAct); actionRef.current = nextAct;
         setLocked(false); lockedRef.current = false;
       }
-    }, FAST ? 40 : 240);
+    };
+    setLocked(true); lockedRef.current = true;
+    if (!hasExtra) {
+      // 特殊拡張なし → 従来どおり一括で消す
+      if (bombIdxs.length) boomAt(bombIdxs);
+      if (!info.junk) flyParticles(clearedIdxs, act);
+      setClearing(new Set(ids));
+      setTimeout(finishClear, FAST ? 40 : 240);
+    } else {
+      // 段階演出: 通常範囲を消す → エフェクト → 追加分を消す
+      setClearing(new Set(baseIds));
+      setTimeout(() => {
+        playEffects();
+        setTimeout(() => {
+          setClearing(new Set(ids));
+          if (!info.junk) flyParticles(clearedIdxs, act);
+          setTimeout(finishClear, FAST ? 30 : 220);
+        }, FAST ? 20 : 300);
+      }, FAST ? 20 : 190);
+    }
   }, [resolveTurn]);
   commitRef.current = commit;
 
@@ -1993,6 +2059,38 @@ function DropBattle() {
         setTimeout(() => d.remove(), 520);
       });
       if (idxs.length) { SFX.crack(); setShakeSeq(q => q + 1); }
+    } catch (e) {}
+  };
+  // 列/行のセル群
+  const colCells = c => Array.from({ length: SIZE }, (_, r) => r * SIZE + c);
+  const rowCells = r => Array.from({ length: SIZE }, (_, c) => r * SIZE + c);
+  // 列消し系: 行/列に沿って光の線が走る演出
+  const lineSweep = (kind, cellIdxs) => {
+    try {
+      const rects = cellIdxs.map(i => document.querySelector(`[data-idx="${i}"]`)).filter(Boolean).map(e => e.getBoundingClientRect());
+      if (!rects.length) return;
+      const left = Math.min(...rects.map(r => r.left)), right = Math.max(...rects.map(r => r.right));
+      const top = Math.min(...rects.map(r => r.top)), bottom = Math.max(...rects.map(r => r.bottom));
+      const d = document.createElement("div");
+      d.className = kind === "v" ? "line-fx-v" : "line-fx-h";
+      d.style.left = left + "px"; d.style.top = top + "px";
+      d.style.width = (right - left) + "px"; d.style.height = (bottom - top) + "px";
+      document.body.appendChild(d);
+      setTimeout(() => d.remove(), 440);
+    } catch (e) {}
+  };
+  // サンダー: 対象セルが電撃で弾ける演出
+  const lightningAt = idxs => {
+    try {
+      idxs.forEach(i => {
+        const el = document.querySelector(`[data-idx="${i}"]`); if (!el) return;
+        const r = el.getBoundingClientRect();
+        const d = document.createElement("div"); d.className = "bolt-fx";
+        d.style.left = r.left + "px"; d.style.top = r.top + "px";
+        d.style.width = r.width + "px"; d.style.height = r.height + "px";
+        document.body.appendChild(d); setTimeout(() => d.remove(), 420);
+      });
+      if (idxs.length) { SFX.zap(); setFlashSeq(q => q + 1); }
     } catch (e) {}
   };
   // 消したドロップからアクション数値へ粒子が飛ぶ
@@ -2035,7 +2133,7 @@ function DropBattle() {
     if (statusRef.current === "battle" && actionRef.current === "heal" && charSkillRef.current === "recolor") {
       const one = new Set([b[idx].id]); return { ids:one, over:true, info: groupInfo(b, one) };
     }
-    const { ids } = expandClear(b, idx, !turnRef.current.blastUsed);
+    const { ids } = expandClear(b, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed);
     return { ids, over:true, info: groupInfo(b, ids) };
   };
   useEffect(() => {
@@ -2798,9 +2896,9 @@ function DropBattle() {
               h("span", { className:"block", style:{ fontSize:"0.98rem", textShadow:"0 1px 2px #000" } }, "タップでルートを選んで進もう！"),
               h("span", { className:"block text-[11px] mt-0.5", style:{ color:"#8ce8b0" } }, "▼ 光っているマスをタップ"))
           : h("div", { className:"text-center text-xs mb-1 rounded-lg py-1 font-bold", style:{ background:"rgba(216,168,72,.12)", border:"1px solid rgba(216,168,72,.4)", color:"#e8c06a", letterSpacing:"0.1em" } }, curNodeId == null ? "▼ 出発地点を選ぼう" : "▼ 次に進む場所を選ぼう"),
-        h("div", { ref: mapBoxRef, className:"relative w-full mb-1", style:{ height:1560, borderRadius:16, overflow:"hidden", border:"2px solid #453b5c", background:"#1c1626" } },
-          h("img", { src:MAP_BGS[act] || MAP_BGS[0], alt:"", draggable:false, className:"absolute pointer-events-none", style:{ left:0, top:0, width:"100%", height:"100%", objectFit:"cover", opacity:.9 } }),
-          h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"linear-gradient(180deg, rgba(19,14,28,.5) 0%, rgba(19,14,28,.12) 35%, rgba(19,14,28,.25) 100%)" } }),
+        h("div", { ref: mapBoxRef, className:"relative w-full mb-1", style:{ height:1560, borderRadius:16, overflow:"hidden", border:"2px solid #453b5c", background: MAP_GRAD[act] || MAP_GRAD[0] } },
+          h("div", { className:"absolute inset-0 pointer-events-none", style:{ backgroundImage:'url("assets/bg_texture.jpg")', backgroundSize:"360px", opacity:.09, mixBlendMode:"soft-light" } }),
+          h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"radial-gradient(125% 55% at 50% 42%, rgba(0,0,0,0) 52%, rgba(0,0,0,.42) 100%)" } }),
           h("svg", { className:"absolute inset-0", width:"100%", height:"100%", viewBox:"0 0 100 100", preserveAspectRatio:"none", style:{ pointerEvents:"none" } },
             map.edges.map((e,i) => {
               const a = map.nodes.find(n => n.id === e.from), b = map.nodes.find(n => n.id === e.to);
