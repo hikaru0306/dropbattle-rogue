@@ -151,6 +151,7 @@ const P_MAX = 300;
 const NUM_SPECIAL = 5;
 const STAR_THRESHOLD = 6;
 const ATK_PER = 10, DEF_PER = 10, HEAL_PER = 1;
+const POISON_DMG = 4, POISON_TURNS = 3; // 毒：防御無視で毎ターン固定ダメージ（1桁）× 持続ターン数
 const ROWS = 8; // マップの段数(固定高さに収まる上限)。近道エッジによりルート長は約6〜8で変動する
 const ACTS = 3;
 const ACT_NAMES = ["翠緑の森", "毒霧の沼窟", "灼熱の魔城"];
@@ -379,7 +380,7 @@ const KINDS = {
   snail: { name:"アイアンスネイル", hp:200, atk:30, size:60, idle:"b", pats:[["attack"], ["charge","attack","attack"]] },
   fox:   { name:"妖狐コンコ",   hp:125, atk:31, size:60, idle:"a", pats:[["drain","attack"], ["drain"]] },
   crow:  { name:"ヨルガラス",   hp:120, atk:30, size:56, idle:"f", pats:[["attack"], ["double","attack"]] },
-  toad:  { name:"ドクガエル",   hp:135, atk:31, size:60, idle:"a", jamN:3, pats:[["attack","jam"], ["jamatk","double"]] },
+  toad:  { name:"ドクガエル",   hp:135, atk:31, size:60, idle:"a", jamN:3, pats:[["attack","jam"], ["jamatk","double"], ["poison","attack"]] },
   eel:   { name:"ヌマウナギ",   hp:125, atk:30, size:60, idle:"f", pats:[["double"], ["double","attack"]] },
   mudman:{ name:"マッドマン",   hp:170, atk:32, size:64, idle:"b", bigMul:2.5, pats:[["charge","bigatk","attack"]] },
   wisp:  { name:"ウィルウィスプ", hp:120, atk:30, size:52, idle:"f", jamN:2, pats:[["drain"], ["drain","jam"]] },
@@ -394,7 +395,7 @@ const KINDS = {
   skel:  { name:"スケルトン兵", hp:145, atk:31, size:62, idle:"b", pats:[["attack","attack","double"]] },
   wraith:{ name:"亡霊騎士レイス", hp:155, atk:33, size:62, idle:"f", bigMul:2.2, pats:[["drain","charge","bigatk"]] },
   alraune: { name:"森妃アルラウネ", hp:540, atk:68, size:104, idle:"a", bigMul:2.6, jamN:3, pats:[["jam","charge","bigatk"], ["jamatk","charge","bigatk"]] },
-  toadking:{ name:"大王ガマ",     hp:760, atk:80, size:108, idle:"a", bigMul:2.3, jamN:3, pats:[["double","jam","charge","bigatk"]] },
+  toadking:{ name:"大王ガマ",     hp:760, atk:80, size:108, idle:"a", bigMul:2.3, jamN:3, pats:[["double","jam","poison","charge","bigatk"]] },
   ifrit:   { name:"炎魔イフリート", hp:1080, atk:96, size:110, idle:"b", bigMul:2.3, pats:[["attack","double","charge","bigatk"]] },
   reaper:  { name:"死神モルス",   hp:1150, atk:100, size:110, idle:"f", bigMul:2.4, jamN:4, pats:[["drain","charge","bigatk","jam"], ["drain","charge","bigatk","jamatk"]] }
 };
@@ -406,7 +407,8 @@ const PATTERNS = {
   jam:     { icon:"🌀", label:"おじゃま",   color:"#c9a2ff" },
   healally:{ icon:"💚", label:"なかま回復", color:"#8ce8b0" },
   drain:   { icon:"🩸", label:"吸血",       color:"#ff9ad0" },
-  jamatk:  { icon:"⚔🌀", label:"呪撃",      color:"#e8a2ff" }
+  jamatk:  { icon:"⚔🌀", label:"呪撃",      color:"#e8a2ff" },
+  poison:  { icon:"🐍", label:"どく",       color:"#8ce87c" }
 };
 // 敵の次の行動。仲間がいないヒーラーは攻撃に切り替わる
 const intentOf = (en, allies) => {
@@ -1153,6 +1155,9 @@ function DropBattle() {
   const [pMax, setPMax_] = useState(P_MAX);
   const pMaxRef = useRef(P_MAX);
   const setPMax = v => { pMaxRef.current = v; setPMax_(v); };
+  const poisonRef = useRef(0);                             // 毒の残りターン数（0=なし）
+  const [poisonView, setPoisonView] = useState(0);
+  const setPoison = v => { poisonRef.current = v; setPoisonView(v); };
   const [act, setAct_] = useState(0);
   const actRef = useRef(0);
   const setAct = v => { actRef.current = v; setAct_(v); };
@@ -1472,6 +1477,16 @@ function DropBattle() {
         logs.push(`🌀 ${en.name}がドロップ${jn}個をお邪魔に変えた`);
         continue;
       }
+      if (iv.act === "poison") {
+        poisonRef.current = POISON_TURNS; // 再度受けても持続は上書き（加算はしない）。表示は同ターン後半の毒ダメージ処理でまとめて更新
+        seq.push({ text: `${en.name}の毒霧！`, color: "#8ce87c",
+          run: () => {
+            setAnim(en.id, "attack");
+            setTimeout(() => { SFX.jam(); addPop("hero", "🐍毒", "#8ce87c"); }, 220);
+          } });
+        logs.push(`🐍 ${en.name}の毒霧！${POISON_TURNS}ターンの間、毎ターン${POISON_DMG}ダメージ`);
+        continue;
+      }
       if (iv.act === "healally") {
         const tgts = ens.filter(a => a.alive && a.id !== en.id && a.hp < a.max);
         const tg = tgts.sort((a,b) => a.hp/a.max - b.hp/b.max)[0];
@@ -1573,6 +1588,21 @@ function DropBattle() {
         logs.push(`✚ ${healed} 回復`);
       }
       php = np;
+    }
+    // ④ 毒ダメージ（防御無視・持続ターン中は毎ターン発生）
+    if (php > 0 && poisonRef.current > 0) {
+      const pdmg = Math.min(php, POISON_DMG);
+      php -= pdmg;
+      const np = php;
+      const turnsLeft = poisonRef.current - 1;
+      seq.push({ text: `毒 ${pdmg}！`, color: "#8ce87c", act: "def",
+        run: () => {
+          setPHP(np); setAnim("hero","hit"); SFX.hurt(); flash("player");
+          addPop("hero", "-" + pdmg, "#8ce87c");
+          setPoisonView(turnsLeft);
+        } });
+      logs.push(`🐍 毒ダメージ ${pdmg}` + (turnsLeft > 0 ? `（残り${turnsLeft}ターン）` : "（毒が治った）"));
+      poisonRef.current = turnsLeft;
     }
     const finalHp = php;
     addLog(logs);
@@ -1698,6 +1728,7 @@ function DropBattle() {
     setAct(na);
     if (hasR("crown")) setPMax(pMaxRef.current + 50);
     setPHP(pMaxRef.current); // 章クリア時の全回復（ユーザー指示で維持）
+    setPoison(0); // 章クリアで毒も治る
     setCoinsBoth(coinsRef.current + 100);
     const m = genMap();
     setMap(m); mapRef.current = m;
@@ -1979,6 +2010,7 @@ function DropBattle() {
     setUsed(new Set()); usedRef.current = new Set();
     setPreview(null); setClearing(new Set());
     storeRef.current = 0; setStoreView(0); // 蓄積はバトルごとにリセット
+    setPoison(0); // 毒はバトルごとにリセット
     turnRef.current = freshTurn(); syncTurn();
     setTurn(1); turnNumRef.current = 1;
     setAnims({});
@@ -2416,6 +2448,7 @@ function DropBattle() {
     pendingNodeRef.current = null;
     setEnemiesBoth([]);
     setPHP(P_MAX);
+    setPoison(0);
     commitBoard(makeBoard(bagRef, ownedRef, bagUpRef, ownedUpRef));
     syncBag();
     setPops({});
@@ -2502,6 +2535,7 @@ function DropBattle() {
       setCellType: (i, t) => { const b = boardRef.current.slice(); b[i] = { ...b[i], type: t, special: false, up: false, wild: false }; commitBoard(b); },
       setCellSpecial: (i, k, up, wild) => { const b = boardRef.current.slice(); b[i] = { ...b[i], special: k, up: !!up, wild: !!wild }; commitBoard(b); },
       addAtk: v => { turnRef.current.atk += v; syncTurn(); },
+      setPoison: v => setPoison(v),
       setPierce: v => { turnRef.current.pierce = !!v; syncTurn(); },
       setAct: a => { if (!usedRef.current.has(a)) { setAction(a); actionRef.current = a; } },
       setTargetIdx: i => { const en = enemiesRef.current[i]; if (en && en.alive) { setTargetId(en.id); targetRef.current = en.id; } },
@@ -3234,7 +3268,11 @@ function DropBattle() {
               fontSize:13, color:"#e4eeff", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums",
               animation: sv === 0 ? "hitShake .45s ease" : "none", zIndex:2 } },
               h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:15, height:15, style:{ width:15, height:15, maxWidth:15, maxHeight:15, flexShrink:0, objectFit:"contain" } }),
-              sv !== null ? sv : tv.def)),
+              sv !== null ? sv : tv.def),
+            poisonView > 0 && h("span", { title:"毒", className:"absolute font-bold flex items-center", style:{ left:-14, top:-6, gap:2, padding:"2px 6px", borderRadius:10,
+              background:"rgba(46,92,40,.92)", border:"1px solid rgba(140,232,124,.7)",
+              fontSize:12, color:"#c8f5b8", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", zIndex:2 } },
+              "🐍", poisonView)),
           h("div", { style:{ width:40, height:7, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-5, filter:"blur(2px)" } }),
           h("div", { className:"w-full mt-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:8 })),
           h("span", { className:"text-[10px] font-bold mt-1", style:{ color: hit === "player" ? "#ff9a9a" : hit === "heal" ? "#7cffb0" : "#cfe9d8", fontVariantNumeric:"tabular-nums", transition:"color .3s" } }, pHP, "/", pMax)),
@@ -3254,6 +3292,7 @@ function DropBattle() {
               : iv.act === "jamatk" ? "⚔" + iv.dmg + " 🌀" + iv.jamN
               : iv.act === "healally" ? pm.icon + iv.heal
               : iv.act === "double" ? "⚔" + iv.hit + "×" + iv.hits
+              : iv.act === "poison" ? pm.icon + POISON_DMG + "×" + POISON_TURNS
               : pm.icon + iv.dmg) + (twice ? "⚡×2" : "");
             const isDmgIntent = iv.act === "attack" || iv.act === "double" || iv.act === "bigatk" || iv.act === "drain" || iv.act === "jamatk";
             return h("button", { key:en.id,
