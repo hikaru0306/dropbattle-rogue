@@ -89,6 +89,9 @@ with sync_playwright() as p:
         time.sleep(0.7)
     s=wait_status(page,"reward")
     page.click("css=[class*=pop-in] button >> nth=0")
+    time.sleep(0.8)
+    if st(page)["status"]=="reward":  # 精鋭は2段階報酬（レリック→特殊ドロップ）
+        page.click("css=[class*=pop-in] button >> nth=0")
     wait_status(page,"map")
     n=goto_type(page,"rest")
     time.sleep(0.5)

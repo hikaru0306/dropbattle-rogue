@@ -103,7 +103,7 @@ with sync_playwright() as pw:
     chk("upgraded 2 specials", s["board"][18]["u"] and s["board"][19]["u"], str([s["board"][18], s["board"][19]]))
     chk("stock 3-2=1", info["stock"] == 1, f"stock={info['stock']}")
 
-    # 5) 素材はバトルをまたいで保持（勝利→次バトル）
+    # 5) 素材はバトルごとにリセット（勝利→次バトルで0に）
     page.evaluate("window.__test.weaken()")
     page.evaluate("window.__test.setAct('atk')")
     fillgrp = [30, 31, 32]
@@ -116,9 +116,9 @@ with sync_playwright() as pw:
     if s["status"] == "map" and s["selectable"]:
         page.evaluate(f"window.__test.enter({s['selectable'][0]})"); time.sleep(0.8)
         info = ci(page)
-        chk("stock persists across battles", info["stock"] == 1, f"stock={info['stock']}")
+        chk("stock resets per battle", info["stock"] == 0, f"stock={info['stock']}")
     else:
-        chk("stock persists across battles (skipped: status=" + s["status"] + ")", False)
+        chk("stock resets per battle (skipped: status=" + s["status"] + ")", False)
 
     chk("no page errors", len(errors) == 0, str(errors[:2]))
     b.close()

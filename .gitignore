@@ -5,3 +5,7 @@ gen_new_enemies.log
 __pycache__/
 patch_v*.py
 assets_cand/
+assets_raw_ura/
+gen_ura.log
+sim_ura_*.log
+sim_omote_*.log

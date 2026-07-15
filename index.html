@@ -169,6 +169,39 @@ const ACT_POOLS = [
   { light:["bat","shade","eel","wisp","toad"], mid:["shade","toad","eel","wisp","sludge","spore","turtle"], heavy:["golem","mudman","crab","scorp","turtle"] },
   { light:["shade","hound","skel","sala"], mid:["scorp","sala","hound","skel","ifrita","spore","wraith"], heavy:["golem","gargo","knight","bomber","wraith"] }
 ];
+// ===== 裏ステージ（各キャラで表3章クリア → そのキャラで挑戦可能。全5章・高難度） =====
+const URA_ACTS = 5;
+const URA_ACT_NAMES = ["月影の森", "氷晶の霊窟", "雷鳴の砂海", "奈落の霊廟", "星淵の魔殿"];
+const URA_BOSS_BY_ACT = [["fenrir","titania"], ["skadi","jotun"], ["behemot","sphinx"], ["bdragon","noct","vorax"], ["demonx"]];
+const URA_MAP_GRAD = [
+  "linear-gradient(180deg,#1c2440 0%,#141a30 48%,#0a0e1c 100%)", // 月影の森（藍夜）
+  "linear-gradient(180deg,#1d3a48 0%,#132835 48%,#0a161e 100%)", // 氷晶の霊窟（氷青）
+  "linear-gradient(180deg,#4a3a1c 0%,#332812 48%,#1c150a 100%)", // 雷鳴の砂海（砂金）
+  "linear-gradient(180deg,#331c33 0%,#221224 48%,#130a14 100%)", // 奈落の霊廟（冥紫）
+  "linear-gradient(180deg,#181c4a 0%,#101233 48%,#08091c 100%)"  // 星淵の魔殿（星紺）
+];
+// 裏のバトル背景は表の背景を色調変換して流用（章ごとのフィルタ）
+const URA_BATTLE_BGS = [
+  { src:"assets/bg_battle.jpg",  filter:"hue-rotate(150deg) saturate(.8) brightness(.72)" },
+  { src:"assets/bg_battle2.jpg", filter:"hue-rotate(160deg) saturate(.95)" },
+  { src:"assets/bg_battle3.jpg", filter:"sepia(.4) hue-rotate(-18deg) saturate(1.05) brightness(1.05)" },
+  { src:"assets/bg_battle2.jpg", filter:"hue-rotate(-55deg) saturate(.85) brightness(.68)" },
+  { src:"assets/bg_battle3.jpg", filter:"hue-rotate(200deg) saturate(1.1) brightness(.66)" }
+];
+const URA_POOLS = [
+  { light:["moth","owl","mant","fox","crow"],        mid:["thorn","dryad","moth","mant","wolf"],          heavy:["thorn","mant","snail","dryad","boar"] },
+  { light:["frost","peng","icewolf","wisp"],         mid:["peng","icewolf","yeti","frost","dryad"],       heavy:["yeti","fgolem","turtle","crab"] },
+  { light:["cobra","raiju","mummy","bee"],           mid:["cobra","mummy","djinn","raiju","scarab"],      heavy:["scarab","djinn","mummy","golem","knight"] },
+  { light:["ghoul","banshee","skel","wraith"],       mid:["ghoul","banshee","eye","mare","wraith"],       heavy:["bonek","eye","mare","gargo","ghoul"] },
+  { light:["voids","kaos","gazer","banshee"],        mid:["voids","kaos","gazer","cosmo","dryad"],        heavy:["cosmo","drake","gazer","bonek","knight"] }
+];
+// 裏の難度カーブ（雑魚HP/雑魚ATK/ボスHP/ボスATK、章ごと）。序盤ゆるめ→終盤急騰のインフレ型
+const URA_HP_ACT     = [1.25, 1.45, 1.7, 2.0, 2.35];
+const URA_ATK_ACT    = [1.55, 1.6, 1.6, 1.6, 1.65];    // 雑魚/強敵はD係数で章成長するため倍率はほぼ一定（強敵大技がボスを超えない範囲）
+const URA_BOSSHP_ACT = [1.1, 1.35, 1.65, 2.1, 2.65];   // 真魔王(2100×0.72×2.65)≒HP4000
+const URA_BOSSATK_ACT= [1.05, 1.2, 1.35, 1.5, 1.7];    // ボス大技の目安: 1章≒240/2章≒300/3章≒350(ロール込み300〜400)/4章≒420/5章≒500
+const actsOf = mode => mode === "ura" ? URA_ACTS : ACTS;
+const actNameOf = (mode, a) => (mode === "ura" ? URA_ACT_NAMES : ACT_NAMES)[a] || "";
 
 const DROPS = {
   0: { c1:"#ef8078", c2:"#d84a40", c3:"#7e2620", glow:"#d84a40" },
@@ -191,8 +224,8 @@ const ITEMS = {
   gold:  { mark:"金", img:"assets/mk_gold.png", color:"#fff2c8", ring:"rgba(240,200,80,.95)", glowc:"#e8c04a", name:"金貨", desc:"消すとコイン+5" },
   bolt:  { mark:"雷", img:"assets/mk_bolt.png", color:"#fffbc8", ring:"rgba(255,230,90,.95)", glowc:"#ffd83c", name:"サンダー", desc:"6個以上の消去に含めて消すと、同じ色が盤面全体から消える" },
   heal: { mark:"♥", img:"assets/mk_heart.png", color:"#d6ffe4", ring:"rgba(80,230,140,.95)", glowc:"#48e890", name:"ヒール", desc:"消すと10回復" },
-  def:  { mark:"盾", img:"assets/icon_def.png", color:"#d6e8ff", ring:"rgba(90,160,255,.95)", glowc:"#5aa0ff", name:"ガード", desc:"消した効果の半分を防御に追加" },
-  atk:  { mark:"剣", img:"assets/icon_atk.png", color:"#ffd9d9", ring:"rgba(255,90,90,.95)", glowc:"#ff5a5a", name:"ソード", desc:"消した効果の半分を攻撃に追加" },
+  def:  { mark:"盾", img:"assets/icon_def.png", color:"#d6e8ff", ring:"rgba(90,160,255,.95)", glowc:"#5aa0ff", name:"ガード", desc:"同時に消したドロップ1つにつき防御+5" },
+  atk:  { mark:"剣", img:"assets/icon_atk.png", color:"#ffd9d9", ring:"rgba(255,90,90,.95)", glowc:"#ff5a5a", name:"ソード", desc:"同時に消したドロップ1つにつき攻撃+5" },
   atkx: { mark:"攻", img:"assets/mk_atkx.png", color:"#ffe8cc", ring:"rgba(255,140,0,.95)", glowc:"#ff8c00", name:"猛攻", desc:"攻撃で消すと効果×2" },
   defx: { mark:"防", img:"assets/mk_defx.png", color:"#cce4ff", ring:"rgba(0,160,255,.95)", glowc:"#00a0ff", name:"鉄壁", desc:"防御で消すと効果×2" },
   store:{ mark:"蓄", img:"assets/mk_store.png", color:"#e6dcff", ring:"rgba(141,99,207,.95)", glowc:"#8d63cf", name:"蓄積石", desc:"【ノア専用】どの色で消しても蓄積が+1される", exclusive:"store" }
@@ -202,7 +235,7 @@ const ITEM_KEYS = Object.keys(ITEMS);
 const REWARD_KEYS = ITEM_KEYS.filter(k => !ITEMS[k].exclusive);
 // ドロップ強化（焚き火の「鍛える」。種類単位で恒久強化）
 const DESC_UP = {
-  star: "【強化】5個以上の同時消しで発動する",
+  star: "【強化】6個以上の同時消しで効果(★の数×2+1)倍",
   plus: "【強化】消した数を+2する",
   three:"【強化】ちょうど3個で消すと4倍",
   pierce:"【強化】貫通＋消した数を+1する",
@@ -212,8 +245,8 @@ const DESC_UP = {
   gold:  "【強化】消すとコイン+12",
   bolt:  "【強化】同色全消し＋消した数を+3する",
   heal: "【強化】消すと25回復",
-  def:  "【強化】消した効果と同量を防御に追加",
-  atk:  "【強化】消した効果と同量を攻撃に追加",
+  def:  "【強化】同時に消したドロップ1つにつき防御+10",
+  atk:  "【強化】同時に消したドロップ1つにつき攻撃+10",
   atkx: "【強化】攻撃で消すと効果×2.5",
   defx: "【強化】防御で消すと効果×2.5",
   store:"【強化】消すと蓄積が+2される"
@@ -263,8 +296,8 @@ const RELICS = {
   linegem:    { icon:"↕️", name:"縦裂の宝珠", desc:"同じ色を5個以上消すと、消した所に虹ドロップ（消すと縦1列消し）が生まれる。どの色とも繋がるがお邪魔とは繋がらない", rar:2 },
   linegemh:   { icon:"↔️", name:"横薙の宝珠", desc:"同じ色を5個以上消すと、消した所に虹ドロップ（消すと横1列消し）が生まれる。どの色とも繋がるがお邪魔とは繋がらない", rar:2 },
   gachagem:   { icon:"🌈", name:"虹福の玉", desc:"同じ色を6個以上消すと、所持中の特殊から1つが虹ドロップになって生まれる。どの色とも繋がる", rar:3 },
-  warforge:   { icon:"⚔️", name:"闘気の触媒", desc:"【ガレス専用】強化の増加量が1ドロップにつき+0.3になる（通常+0.2）", rar:2, char:2 },
-  warforge2:  { icon:"🔥", name:"覇気の触媒", desc:"【ガレス専用】強化の増加量が1ドロップにつき+0.4になる（通常+0.2）", rar:3, char:2 },
+  warforge:   { icon:"⚔️", name:"闘気の触媒", desc:"【ガレス専用】強化の増加量が1ドロップにつき+0.2になる（通常+0.1）", rar:2, char:2 },
+  warforge2:  { icon:"🔥", name:"覇気の触媒", desc:"【ガレス専用】強化の増加量が1ドロップにつき+0.3になる（通常+0.1）", rar:3, char:2 },
   storegem:   { icon:"🧮", name:"累積の指輪", desc:"【ノア専用】蓄積の増加量が1ドロップにつき+2になる（通常+1）", rar:2, char:3 }
 };
 // レリック生成の虹（ワイルド）特殊ドロップ。ITEM_KEYS(袋)には含めない＝袋からは出ない
@@ -312,10 +345,10 @@ const CHARS = [
     desc:"3つ目の力は「回復」。勝利したターンにHPを回復する王道タイプ。", unlock:null },
   { name:"彩の魔女イリス", skill:"recolor", img:"assets/hero2.png", color:"#d06ad0",
     tag:"色を塗り替える", short:"色変え",
-    desc:"3つ目の力は「色変え」。タップするたびにインクの色が変わり、選んだドロップをその色へ塗り替える。", unlock:"2章のボスを倒すと解放" },
+    desc:"3つ目の力は「色変え」。つながった同色グループをインクの色へ塗り替えて大きく育てる。その代わり攻撃・防御の基礎値は5。", unlock:"2章のボスを倒すと解放" },
   { name:"重騎士ガレス",   skill:"buff",    img:"assets/hero3.png", color:"#e0a24a",
     tag:"攻防を強化",     short:"強化",
-    desc:"3つ目の力は「強化」。攻撃か防御を選び、そのターンの効果を1.2倍にする。", unlock:"3章のボスを倒すと解放" },
+    desc:"3つ目の力は「強化」。攻撃か防御を選び、消した1ドロップにつきそのターンの効果を+0.1倍する。", unlock:"3章のボスを倒すと解放" },
   { name:"賢者ノア",       skill:"store",   img:"assets/hero4.png", color:"#8d63cf",
     tag:"蓄積して育つ",   short:"蓄積",
     desc:"3つ目の力は「蓄積」。消した数を攻撃か防御に蓄積して育つ（蓄積はバトルごとにリセット）。", unlock:"2人以上のキャラで3章を突破" },
@@ -328,9 +361,9 @@ const CHARS = [
 ];
 const CHAR_ALL = [0, 1, 2, 3]; // 「すべてのキャラ」判定に使う基本4体（5体目は報酬）
 function loadCharState() {
-  if (TEST_MODE) return { u:[0, 1, 2, 3, 4, 5], c:[] };
-  try { const j = JSON.parse(localStorage.getItem("db_chars")); if (j && Array.isArray(j.u)) return { u:j.u, c:j.c || [] }; } catch (e) {}
-  return { u:[0], c:[] };
+  if (TEST_MODE) return { u:[0, 1, 2, 3, 4, 5], c:[], cu:[] };
+  try { const j = JSON.parse(localStorage.getItem("db_chars")); if (j && Array.isArray(j.u)) return { u:j.u, c:j.c || [], cu:j.cu || [] }; } catch (e) {}
+  return { u:[0], c:[], cu:[] };
 }
 function saveCharState(s) { try { localStorage.setItem("db_chars", JSON.stringify(s)); } catch (e) {} }
 // キャラごとの記録（突破数・最大攻撃力・最大防御力）
@@ -397,7 +430,49 @@ const KINDS = {
   alraune: { name:"森妃アルラウネ", hp:540, atk:68, size:104, idle:"a", bigMul:2.6, jamN:3, pats:[["jam","charge","bigatk"], ["jamatk","charge","bigatk"]] },
   toadking:{ name:"大王ガマ",     hp:760, atk:80, size:108, idle:"a", bigMul:2.3, jamN:3, pats:[["double","jam","poison","charge","bigatk"]] },
   ifrit:   { name:"炎魔イフリート", hp:1080, atk:96, size:110, idle:"b", bigMul:2.3, pats:[["attack","double","charge","bigatk"]] },
-  reaper:  { name:"死神モルス",   hp:1150, atk:100, size:110, idle:"f", bigMul:2.4, jamN:4, pats:[["drain","charge","bigatk","jam"], ["drain","charge","bigatk","jamatk"]] }
+  reaper:  { name:"死神モルス",   hp:1150, atk:100, size:110, idle:"f", bigMul:2.4, jamN:4, pats:[["drain","charge","bigatk","jam"], ["drain","charge","bigatk","jamatk"]] },
+  // ===== 裏ステージ 雑魚25種 =====
+  // 裏1章 月影の森
+  moth:  { name:"ヤミモスラ",     hp:160, atk:36, size:56, idle:"f", jamN:2, pats:[["poison","attack"], ["poison","double"]] },
+  thorn: { name:"イバラビースト", hp:185, atk:38, size:64, idle:"a", pats:[["attack","double"], ["attack","attack","double"]] },
+  owl:   { name:"ヨミフクロウ",   hp:155, atk:36, size:56, idle:"f", bigMul:2.2, pats:[["charge","bigatk"], ["attack","charge","bigatk"]] },
+  dryad: { name:"ダークドライアド", hp:165, atk:35, size:60, idle:"a", healMul:1.7, jamN:3, pats:[["healally","jam"], ["jam","attack"], ["healally","attack"]] },
+  mant:  { name:"シャドウマンティス", hp:170, atk:40, size:62, idle:"b", pats:[["double"], ["double","attack"]] },
+  // 裏2章 氷晶の霊窟
+  yeti:   { name:"イエティ",         hp:240, atk:38, size:70, idle:"b", bigMul:2.4, pats:[["charge","bigatk"], ["attack","charge","bigatk"]] },
+  icewolf:{ name:"フロストウルフ",   hp:180, atk:40, size:62, idle:"a", pats:[["double","attack"], ["attack","double"]] },
+  fgolem: { name:"アイスゴーレム",   hp:280, atk:36, size:72, idle:"b", bigMul:3.0, pats:[["charge","charge","bigatk"]] },
+  peng:   { name:"ブリザードペンギン", hp:170, atk:36, size:56, idle:"a", jamN:3, pats:[["jam","attack"], ["jamatk","double"]] },
+  frost:  { name:"フロストウィスプ", hp:150, atk:36, size:52, idle:"f", jamN:2, pats:[["drain"], ["drain","jam"]] },
+  // 裏3章 雷鳴の砂海
+  djinn: { name:"サンドジン",     hp:190, atk:40, size:62, idle:"f", bigMul:2.3, jamN:3, pats:[["jam","charge","bigatk"], ["jamatk","charge","bigatk"]] },
+  cobra: { name:"サンダーコブラ", hp:175, atk:42, size:60, idle:"a", pats:[["poison","attack"], ["attack","poison","double"]] },
+  scarab:{ name:"ゴールドスカラベ", hp:210, atk:36, size:60, idle:"b", bigMul:2.0, pats:[["attack","attack","bigatk"]] },
+  mummy: { name:"ミイラ兵",       hp:200, atk:38, size:62, idle:"b", jamN:3, pats:[["jamatk","attack"], ["attack","jam","double"]] },
+  raiju: { name:"雷獣ライジュウ", hp:180, atk:44, size:60, idle:"a", bigMul:1.9, pats:[["attack","bigatk"], ["double","bigatk"]] },
+  // 裏4章 奈落の霊廟
+  ghoul:  { name:"グール",       hp:210, atk:40, size:62, idle:"a", pats:[["drain","attack"], ["drain","double"]] },
+  banshee:{ name:"バンシー",     hp:185, atk:40, size:60, idle:"f", bigMul:2.4, jamN:4, pats:[["jam","charge","bigatk"], ["jamatk","drain"]] },
+  bonek:  { name:"ボーンナイト", hp:250, atk:42, size:66, idle:"b", bigMul:2.2, pats:[["attack","attack","bigatk"], ["double","charge","bigatk"]] },
+  eye:    { name:"邪眼オクルス", hp:190, atk:40, size:58, idle:"f", bigMul:2.6, jamN:3, pats:[["charge","bigatk"], ["jam","charge","bigatk"]] },
+  mare:   { name:"ナイトメア",   hp:195, atk:42, size:64, idle:"a", bigMul:2.0, pats:[["double","attack","bigatk"]] },
+  // 裏5章 星淵の魔殿
+  voids: { name:"ヴォイドスライム", hp:230, atk:40, size:60, idle:"a", bigMul:2.0, jamN:4, pats:[["jamatk","attack"], ["jam","attack","bigatk"]] },
+  cosmo: { name:"コスモビースト",   hp:260, atk:44, size:68, idle:"b", bigMul:2.3, pats:[["attack","charge","bigatk"]] },
+  gazer: { name:"ボイドゲイザー",   hp:210, atk:42, size:58, idle:"f", bigMul:2.8, jamN:3, pats:[["charge","charge","bigatk"], ["jam","charge","bigatk"]] },
+  kaos:  { name:"カオスインプ",     hp:200, atk:44, size:58, idle:"f", jamN:3, pats:[["double","double","attack"], ["jamatk","double"]] },
+  drake: { name:"ヴォイドドレイク", hp:270, atk:44, size:68, idle:"b", bigMul:2.4, pats:[["attack","charge","bigatk","double"]] },
+  // ===== 裏ステージ ボス10種 =====
+  fenrir: { name:"月狼王フェンリル",   hp:1250, atk:100, size:112, idle:"a", bigMul:2.4, pats:[["double","attack","charge","bigatk"]] },
+  titania:{ name:"幻妖女王ティターニア", hp:1150, atk:95, size:108, idle:"f", bigMul:2.3, jamN:4, pats:[["jam","drain","charge","bigatk"], ["jamatk","attack","charge","bigatk"]] },
+  skadi:  { name:"氷魔女スカディ",     hp:1300, atk:100, size:108, idle:"f", bigMul:2.5, jamN:4, pats:[["jam","charge","bigatk","attack"]] },
+  jotun:  { name:"霜巨人ヨトゥン",     hp:1500, atk:105, size:116, idle:"b", bigMul:2.6, pats:[["charge","bigatk","attack","double"]] },
+  behemot:{ name:"雷獣王ベヒモス",     hp:1600, atk:108, size:116, idle:"b", bigMul:2.4, pats:[["attack","double","charge","bigatk"]] },
+  sphinx: { name:"砂王スフィンクス",   hp:1450, atk:102, size:112, idle:"a", bigMul:2.5, jamN:4, pats:[["jam","poison","charge","bigatk"]] },
+  bdragon:{ name:"屍竜ドラクリッチ",   hp:1750, atk:110, size:116, idle:"f", bigMul:2.5, jamN:4, pats:[["drain","jam","charge","bigatk"]] },
+  noct:   { name:"夜の女王ノクターナ", hp:1650, atk:108, size:110, idle:"f", bigMul:2.6, jamN:4, pats:[["drain","charge","bigatk","jamatk"]] },
+  vorax:  { name:"星喰龍ヴォラクス",   hp:1950, atk:112, size:118, idle:"b", bigMul:2.5, jamN:4, pats:[["attack","charge","bigatk","double","jam"]] },
+  demonx: { name:"真魔王ヴァルガ",     hp:2100, atk:115, size:120, idle:"b", bigMul:2.6, jamN:5, pats:[["jamatk","charge","bigatk","attack","drain","charge","bigatk"]] }
 };
 const PATTERNS = {
   attack:  { icon:"⚔",  label:"こうげき",   color:"#ffb3a8" },
@@ -445,7 +520,12 @@ const SHIELDS = {
   gargo:{sh:30,c:0.55}, knight:{sh:25,c:0.5}, skel:{sh:15,c:0.4}, sala:{sh:15,c:0.4},
   kslime:{sh:25,c:0.4}, treant:{sh:40,c:0.5}, alraune:{sh:30,c:0.45},
   vamp:{sh:25,c:0.4}, lich:{sh:35,c:0.45}, toadking:{sh:30,c:0.4},
-  demon:{sh:50,c:0.45}, dragon:{sh:60,c:0.45}, ifrit:{sh:45,c:0.45}, reaper:{sh:70,c:0.4}
+  demon:{sh:50,c:0.45}, dragon:{sh:60,c:0.45}, ifrit:{sh:45,c:0.45}, reaper:{sh:70,c:0.4},
+  // 裏ステージ
+  thorn:{sh:15,c:0.45}, yeti:{sh:25,c:0.5}, fgolem:{sh:30,c:0.5}, scarab:{sh:25,c:0.55}, mummy:{sh:15,c:0.4},
+  bonek:{sh:30,c:0.5}, eye:{sh:15,c:0.4}, drake:{sh:30,c:0.5}, cosmo:{sh:25,c:0.45}, voids:{sh:20,c:0.45},
+  fenrir:{sh:50,c:0.4}, titania:{sh:40,c:0.4}, skadi:{sh:50,c:0.45}, jotun:{sh:70,c:0.45}, behemot:{sh:60,c:0.45},
+  sphinx:{sh:55,c:0.45}, bdragon:{sh:70,c:0.45}, noct:{sh:60,c:0.4}, vorax:{sh:80,c:0.45}, demonx:{sh:90,c:0.45}
 };
 const Ic = (src, sz, extra) => h("img", { src, alt:"", draggable:false, width:sz, height:sz,
   style: Object.assign({ width:sz, height:sz, maxWidth:sz, maxHeight:sz, objectFit:"contain",
@@ -555,21 +635,22 @@ const genMap = (simpleStart) => {
 };
 
 // ===== エンカウント生成（場所で敵の数・強さが変わる）=====
-const encounterFor = (node, act) => {
+const encounterFor = (node, act, mode) => {
+  const ura = mode === "ura";
   const r = node.row;
   const D = act * 4 + r; // 章をまたいで難度が伸びる
   const hpS = 1 + D * 0.12, atkS = 1 + D * 0.05;
-  const pool = ACT_POOLS[act] || ACT_POOLS[0];
+  const pool = (ura ? URA_POOLS : ACT_POOLS)[act] || (ura ? URA_POOLS : ACT_POOLS)[0];
   let list;
   if (node.type === "boss") {
-    list = [{ kind: pick(BOSS_BY_ACT[act] || ["demon"]), hpM:0.72, atkM:1, boss:true, noScale:true }];
-    const minions = act >= 2 ? 2 : 1 + (act >= 1 && Math.random() < 0.5 ? 1 : 0);
+    list = [{ kind: pick((ura ? URA_BOSS_BY_ACT : BOSS_BY_ACT)[act] || ["demon"]), hpM:0.72, atkM:1, boss:true, noScale:true }];
+    const minions = ura ? 2 : act >= 2 ? 2 : 1 + (act >= 1 && Math.random() < 0.5 ? 1 : 0);
     for (let m = 0; m < minions; m++) list.push({ kind: pick(pool.light), hpM:0.55, atkM:0.7 });
   }
   else if (node.type === "elite") list = [{ kind:pick(pool.heavy), hpM:1.6, atkM:1.3, elite:true }];
   else if (node.type === "horde") {
     list = [0,1].map(() => ({ kind:pick(pool.light), hpM:0.62, atkM:0.58 }));
-    list.push({ kind: Math.random() < 0.45 ? "spore" : pick(pool.light), hpM:0.62, atkM:0.58 });
+    list.push({ kind: Math.random() < 0.45 ? (ura ? "dryad" : "spore") : pick(pool.light), hpM:0.62, atkM:0.58 });
   }
   else {
     if (r <= 1) list = [{ kind:pick(pool.light), hpM:1, atkM:1 }];
@@ -581,17 +662,22 @@ const encounterFor = (node, act) => {
       { kind:pick(pool.heavy), hpM:0.9, atkM:0.8 }
     ];
   }
+  // 章ごとの倍率（表は従来値そのまま。裏は5章カーブで全体的に高い）
+  const hpAct   = ura ? URA_HP_ACT[act]      : (act >= 2 ? 1.7 : 1);
+  const bossHp  = ura ? URA_BOSSHP_ACT[act]  : (act >= 2 ? 2.5 : 1);
+  const atkAct  = ura ? URA_ATK_ACT[act]     : (act === 0 ? 1.44 : act === 1 ? 1.35 : 1.6);
+  const bossAtk = ura ? URA_BOSSATK_ACT[act] : (act >= 2 ? 1.5 : 1);
   return list.map((e,i) => {
     const k = KINDS[e.kind];
     const hs = e.noScale ? 1 : hpS, as = e.noScale ? 1 : atkS;
-    const hp = Math.round(k.hp * hs * e.hpM * (act >= 2 ? (e.boss ? 2.5 : 1.7) : 1) * (!e.boss && hasR("deathmark") ? 0.9 : 1));
+    const hp = Math.round(k.hp * hs * e.hpM * (e.boss ? bossHp : hpAct) * (!e.boss && hasR("deathmark") ? 0.9 : 1));
     const si = SHIELDS[e.kind];
     const shd = (!SIM_MODE && si && Math.random() < si.c) ? Math.round(si.sh * (0.5 + Math.random() * 0.5)) : 0;
     return { id:"e"+(UID++), kind:e.kind, name:k.name, hp, max:hp,
-      atk: Math.max(1, Math.round(k.atk * as * e.atkM * (e.boss ? (act >= 2 ? 1.5 : 1) : (act === 0 ? 1.44 : act === 1 ? 1.35 : 1.6)))), bigX: e.boss ? 1 : (act >= 1 ? 1.0 : 1.1), alive:true, pi:0,
+      atk: Math.max(1, Math.round(k.atk * as * e.atkM * (e.boss ? bossAtk : atkAct))), bigX: e.boss ? 1 : (act >= 1 ? 1.0 : 1.1), alive:true, pi:0,
       pat: pick(k.pats), rollMul: rollDmg(),
-      atkFloor: (act >= 1 && e.elite) ? 60 : 0, bigFloor: (act >= 1 && e.elite) ? 120 : 0, // 2章以降エリートの火力下限
-      enr: 0, enrEvery: SIM_MODE ? 0 : 4 + Math.floor(Math.random() * 3),
+      atkFloor: (act >= 1 && e.elite) ? (ura ? 70 : 60) : 0, bigFloor: (act >= 1 && e.elite) ? (ura ? 140 : 120) : 0, // 2章以降エリートの火力下限
+      enr: 0, enrEvery: SIM_MODE ? 0 : (ura ? 3 + Math.floor(Math.random() * 2) : 4 + Math.floor(Math.random() * 3)), // 裏は激昂が早い
       shd, shdMax: si ? si.sh : 0, shdC: si ? si.c : 0,
       // 上限ダメージ＝最大HPの約1/4〜1/5をキリよく10刻みに。ボス/強敵の"一部だけ"が持つ特殊耐性
       dcap: ((e.boss && Math.random() < 0.5) || (e.elite && Math.random() < 0.35)) ? Math.max(10, Math.round(hp / 4.5 / 10) * 10) : 0,
@@ -766,14 +852,14 @@ const groupInfo = (cells, ids) => {
   const junk = junkCnt > 0 && junkCnt === ids.size; // 全部お邪魔のときだけ効果ゼロ
   const base = ids.size + sp.plus + spu.plus + spu.pierce + spu.bolt * 3; // ＋/貫＋/雷＋のボーナス込み
   let mult = 1;
-  const starOn = sp.star > 0 && base >= Math.max(4, (spu.star > 0 ? 5 : STAR_THRESHOLD) - (hasR("starbook") ? 1 : 0));
-  if (starOn) mult *= 1 + sp.star;
+  const starOn = sp.star > 0 && base >= Math.max(4, STAR_THRESHOLD - (hasR("starbook") ? 1 : 0));
+  if (starOn) mult *= 1 + sp.star + spu.star; // 強化★は1つで3倍（★の数×2+1倍）。発動個数は強化で変わらない
   const threeOn = ids.size === 3;
   if (sp.three > 0 && threeOn) mult *= spu.three > 0 ? 4 : 3;
   return { count:ids.size, base, sp, spu, mult, starOn, threeOn: threeOn && sp.three > 0, junk };
 };
 const perOf = act =>
-  ACTIONS[act].per
+  (CUR_SKILL === "recolor" && act !== "heal" ? 5 : ACTIONS[act].per) // イリスは攻/防の基礎値5（色変えで大グループを作れる代償）
   + (act === "atk" ? (hasR("swordbook") ? 2 : 0) + (hasR("dragonblade") ? 3 : 0) : 0)
   + (act === "def" ? (hasR("guardbook") ? 2 : 0) + (hasR("aegis_gr") ? 3 : 0) : 0)
   + (act === "heal" ? (hasR("healbook") ? 2 : 0) + (hasR("saintprayer") ? 3 : 0) : 0);
@@ -853,9 +939,12 @@ const computeEffect = (act, info) => {
   if (act === "heal" && hasR("holywater")) relicMul = 1.5;
   let main = Math.round(info.base * perOf(act) * info.mult * actBoost * relicMul);
   if (CUR_SKILL === "healx") main *= 2; // 大賢者：全効果2倍
-  const healMult = act === "heal" ? 10 : 1;
-  const splitAtk = Math.round(main * ((info.sp.atk - info.spu.atk) * 0.5 + info.spu.atk) * healMult);
-  const splitDef = Math.round(main * ((info.sp.def - info.spu.def) * 0.5 + info.spu.def) * healMult);
+  // 剣/盾: 同時に消したドロップ1つにつき+5（強化は+10）。アクションや倍率に依存しない固定値
+  const splitPer = (info.sp.atk - info.spu.atk) * 5 + info.spu.atk * 10;
+  const splitPerD = (info.sp.def - info.spu.def) * 5 + info.spu.def * 10;
+  const healxMul = CUR_SKILL === "healx" ? 2 : 1;
+  const splitAtk = splitPer * info.count * healxMul;
+  const splitDef = splitPerD * info.count * healxMul;
   let healBonus = (info.sp.heal - info.spu.heal) * 10 + info.spu.heal * 25;
   if (CUR_SKILL === "healx") healBonus *= 2;
   return { main, splitAtk, splitDef, healBonus };
@@ -1130,19 +1219,24 @@ function DropBattle() {
   const stockRef = useRef(0);                              // 鍛冶キャラの素材（バトルをまたいで保持・冒険単位）
   const [stockView, setStockView] = useState(0);
   const [selView, setSelView] = useState(0);               // キャラ選択画面で眺めているキャラ
+  const [selMode, setSelMode] = useState("omote");         // キャラ選択画面のモード（表/裏）
   const [charState, setCharState] = useState(() => loadCharState());
   const charStateRef = useRef(charState); charStateRef.current = charState;
   const unlockChar = idx => setCharState(s => {
     if (s.u.includes(idx)) return s;
-    const ns = { u:[...s.u, idx], c:s.c }; saveCharState(ns); return ns;
+    const ns = { u:[...s.u, idx], c:s.c, cu:s.cu }; saveCharState(ns); return ns;
   });
   const recordClear = () => setCharState(s => {
+    if (modeRef.current === "ura") {                     // 裏5章クリア（キャラ解放には影響しない）
+      const cu = (s.cu || []).includes(curCharRef.current) ? s.cu : [...(s.cu || []), curCharRef.current];
+      const ns = { u:s.u, c:s.c, cu }; saveCharState(ns); return ns;
+    }
     const c = s.c.includes(curCharRef.current) ? s.c : [...s.c, curCharRef.current];
     const u = new Set(s.u);
     u.add(2);                                            // 3章ボス撃破 → 3体目
     if (c.length >= 2) u.add(3);                         // 2人以上で突破 → 4体目
     if (CHAR_ALL.every(i => c.includes(i))) u.add(4);    // 全員で突破 → 5体目
-    const ns = { u:[...u], c }; saveCharState(ns); return ns;
+    const ns = { u:[...u], c, cu:s.cu }; saveCharState(ns); return ns;
   });
   const [charStats, setCharStats] = useState(() => {
     const st = loadCharStats();
@@ -1157,7 +1251,8 @@ function DropBattle() {
   });
   const bumpCharClear = idx => setCharStats(s => {
     const prev = s[idx] || { clears:0, maxAtk:0, maxDef:0 };
-    const ns = { ...s, [idx]: { ...prev, clears: prev.clears + 1 } };
+    const key = modeRef.current === "ura" ? "uraClears" : "clears";
+    const ns = { ...s, [idx]: { ...prev, [key]: (prev[key] || 0) + 1 } };
     saveCharStats(ns); return ns;
   });
   const recordCharStats = (idx, atk, def) => setCharStats(s => {
@@ -1181,6 +1276,10 @@ function DropBattle() {
   const [act, setAct_] = useState(0);
   const actRef = useRef(0);
   const setAct = v => { actRef.current = v; setAct_(v); };
+  const [mode, setMode_] = useState("omote"); // omote=表 | ura=裏（5章・高難度）
+  const modeRef = useRef("omote");
+  const setMode = v => { modeRef.current = v; setMode_(v); };
+  const curActs = () => actsOf(modeRef.current); // 現モードの章数
   const [actClear, setActClear] = useState(null); // {picks:[relicKeys]}
   const actClearRef = useRef(false); actClearRef.current = actClear;
   const [turn, setTurn] = useState(1);
@@ -1678,9 +1777,9 @@ function DropBattle() {
     const node = pendingNodeRef.current;
     if (node && node.type === "boss") {
       SFX.win();
-      if (actRef.current === 1) unlockChar(1); // 2章ボス撃破 → 2体目解放
-      if (actRef.current < ACTS - 1) { setActClear({ picks: pickRelics(3, "boss") }); return; }
-      recordClear();                            // 最終章ボス撃破 → クリア記録＆解放判定
+      if (actRef.current === 1 && modeRef.current !== "ura") unlockChar(1); // 表2章ボス撃破 → 2体目解放
+      if (actRef.current < curActs() - 1) { setActClear({ picks: pickRelics(3, "boss") }); return; }
+      recordClear();                            // 最終章ボス撃破 → クリア記録＆解放判定（裏は裏クリアとして記録）
       bumpCharClear(curCharRef.current);         // このキャラの突破数+1
       setStatus("clear"); statusRef.current = "clear";
       return;
@@ -1759,7 +1858,7 @@ function DropBattle() {
     setActClear(null);
     setStatus("map"); statusRef.current = "map";
     setLocked(false); lockedRef.current = false;
-    addLog([`― 第${na + 1}章「${ACT_NAMES[na]}」開始 ―`, hasR("crown") ? "🎁 最大HP+50・全回復・💰+100" : "🎁 全回復・💰+100"]);
+    addLog([`― ${modeRef.current === "ura" ? "裏・" : ""}第${na + 1}章「${actNameOf(modeRef.current, na)}」開始 ―`, hasR("crown") ? "🎁 最大HP+50・全回復・💰+100" : "🎁 全回復・💰+100"]);
     SFX.step();
   };
 
@@ -2017,7 +2116,7 @@ function DropBattle() {
     let gtutDone = "1";
     try { gtutDone = localStorage.getItem("db_gtut") || ""; } catch (e) {}
     const guided = battleNumRef.current === 2 && !gtutDone && !TEST_MODE; // 2戦目のガイド付きチュートリアル
-    const ens = guided ? makeTutorialEnemy() : encounterFor(node, actRef.current);
+    const ens = guided ? makeTutorialEnemy() : encounterFor(node, actRef.current, modeRef.current);
     setEnemiesBoth(ens);
     setTargetId(ens[0].id); targetRef.current = ens[0].id;
     let bd0 = guided ? makeTutorialBoard() : makeBoard(bagRef, ownedRef, bagUpRef, ownedUpRef);
@@ -2030,6 +2129,7 @@ function DropBattle() {
     setUsed(new Set()); usedRef.current = new Set();
     setPreview(null); setClearing(new Set());
     storeRef.current = 0; setStoreView(0); // 蓄積はバトルごとにリセット
+    stockRef.current = 0; setStockView(0); // 鍛冶素材もバトルごとにリセット
     setPoison(0); // 毒はバトルごとにリセット
     turnRef.current = freshTurn(); syncTurn();
     setTurn(1); turnNumRef.current = 1;
@@ -2139,8 +2239,8 @@ function DropBattle() {
     if (act === "heal" && skill === "buff") {
       // 強化キャラ：3つ目で消すと、選んだステータスを「1ドロップにつき◯倍」で累積強化
       const st = skillTargetRef.current;
-      const inc = hasR("warforge2") ? 0.4 : hasR("warforge") ? 0.3 : 0.2;
-      const factor = 1 + inc * info.count; // 1ドロップにつき+inc の加算式（5個・+0.2 → 2.0倍）
+      const inc = hasR("warforge2") ? 0.3 : hasR("warforge") ? 0.2 : 0.1;
+      const factor = 1 + inc * info.count; // 1ドロップにつき+inc の加算式（1個・+0.1 → 1.1倍、5個 → 1.5倍）
       turnRef.current[st] = Math.round(turnRef.current[st] * factor);
       addLog([`✨ ${st === "atk" ? "攻撃" : "防御"}を強化！ +${inc}×${info.count}個 → ×${factor.toFixed(1)}`]);
     } else if (act === "heal" && skill === "store") {
@@ -2444,6 +2544,39 @@ function DropBattle() {
     SFX.tap();
   };
 
+  // ===== 隠しコード「1010」: キャラと裏の冒険を全解放（タイトル画面で入力） =====
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [codeVal, setCodeVal] = useState("");
+  const [codeMsg, setCodeMsg] = useState(null);
+  const codeBufRef = useRef("");
+  const logoTapRef = useRef({ n: 0, t: 0 });
+  const unlockAll = () => {
+    const all = [0, 1, 2, 3, 4, 5];
+    setCharState(s => { const ns = { u: all, c: all, cu: s.cu || [] }; saveCharState(ns); return ns; });
+    setCodeOpen(false); setCodeVal("");
+    setCodeMsg("🔓 隠しコード発動！ キャラクターと裏の冒険がすべて解放された");
+    setTimeout(() => setCodeMsg(null), 3000);
+    SFX.win();
+  };
+  const tryCode = v => { if (v === "1010") unlockAll(); else { setCodeVal(""); setCodeMsg("……なにも起こらなかった"); setTimeout(() => setCodeMsg(null), 1500); SFX.tap(); } };
+  const logoTap = () => {
+    const now = Date.now();
+    const lt = logoTapRef.current;
+    logoTapRef.current = { n: now - lt.t < 1200 ? lt.n + 1 : 1, t: now };
+    if (logoTapRef.current.n >= 5) { logoTapRef.current = { n: 0, t: 0 }; setCodeOpen(true); SFX.open(); }
+  };
+  useEffect(() => {
+    if (status !== "title") return;
+    const onKey = e => {
+      if (e.key >= "0" && e.key <= "9") {
+        codeBufRef.current = (codeBufRef.current + e.key).slice(-8);
+        if (codeBufRef.current.endsWith("1010")) { codeBufRef.current = ""; unlockAll(); }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [status]);
+
   const restart = (toTitle = false) => {
     UID = 1;
     storeRef.current = 0; setStoreView(0);          // 蓄積リセット（冒険をやり直す）
@@ -2519,7 +2652,7 @@ function DropBattle() {
         coins: coinsRef.current, items: itemsRef.current.slice(),
         shop: shopRef.current ? shopRef.current.offers.slice() : null,
         campfire: campfireRef.current,
-        act: actRef.current, pmax: pMaxRef.current, actClear: !!actClearRef.current,
+        act: actRef.current, mode: modeRef.current, pmax: pMaxRef.current, actClear: !!actClearRef.current,
         relics: relicsRef.current.slice(),
         rewardPicks: rewardsRef.current ? (rewardsRef.current.picks || []).length : 0,
         specials: boardRef.current.filter(c => c.special).length,
@@ -2609,7 +2742,7 @@ function DropBattle() {
       chooseReward: k => chooseReward(k),
       tapAct: key => { if (gtutRef.current === "def") { if (key === "def") { setAction("def"); actionRef.current = "def"; setGuide("clear"); } } else if (!gtutRef.current) { setAction(key); actionRef.current = key; } },
       dismissGuide: () => { setGuide(null); try { localStorage.setItem("db_gtut", "1"); } catch (e) {} },
-      encPreview: (a, nodeType) => encounterFor({ row: 1, type: nodeType }, a).map(e => ({
+      encPreview: (a, nodeType, m) => encounterFor({ row: 1, type: nodeType }, a, m).map(e => ({
         kind: e.kind, atk: e.atk, atkFloor: e.atkFloor, bigFloor: e.bigFloor,
         normalDmg: intentOf({ ...e, pat: ["attack"], pi: 0, rollMul: 1 }, []).dmg,
         bigDmg: intentOf({ ...e, pat: ["bigatk"], pi: 0, rollMul: 1 }, []).dmg })),
@@ -2618,7 +2751,9 @@ function DropBattle() {
       openSound: () => setSoundOpen(true),
       setChar: i => { setCurChar(i); storeRef.current = 0; setStoreView(0); stockRef.current = 0; setStockView(0); setSmithMode("stock"); },
       relicPool: () => RELIC_KEYS.filter(k => !relicsRef.current.includes(k) && (RELICS[k].char === undefined || RELICS[k].char === curCharRef.current)),
-      charState: () => ({ u:charStateRef.current.u.slice(), c:charStateRef.current.c.slice() }),
+      charState: () => ({ u:charStateRef.current.u.slice(), c:charStateRef.current.c.slice(), cu:(charStateRef.current.cu || []).slice() }),
+      setMode: m => setMode(m),
+      setCleared: i => setCharState(s => { const c = s.c.includes(i) ? s.c : [...s.c, i]; const ns = { u:s.u, c, cu:s.cu }; saveCharState(ns); return ns; }),
       charInfo: () => ({ cur:curCharRef.current, skill:charSkillRef.current, paint:paintColorRef.current, target:skillTargetRef.current, store:storeRef.current, smithMode:smithModeRef.current, stock:stockRef.current }),
       setPaint: c => setPaintColor(c),
       setSkillTarget: t => setSkillTarget(t),
@@ -2708,8 +2843,8 @@ function DropBattle() {
     h("span", { className:"text-[9px]", style:{ opacity:0.55, marginLeft:2 } }, "タップで使用（最大", itemCap(), "個）"));
 
   const header = h("div", { className:"flex items-center justify-between mb-1 rounded-xl px-3 py-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450" } },
-    h("h1", { className:"font-bold", style:{ fontSize:"0.98rem", color:"#f2e6c8", whiteSpace:"nowrap", textShadow:"0 2px 0 rgba(0,0,0,.55)" } },
-      "第", act + 1, "章"),
+    h("h1", { className:"font-bold", style:{ fontSize:"0.98rem", color: mode === "ura" ? "#cf9af8" : "#f2e6c8", whiteSpace:"nowrap", textShadow:"0 2px 0 rgba(0,0,0,.55)" } },
+      mode === "ura" ? "裏・" : "", "第", act + 1, "章"),
     h("div", { className:"flex items-center gap-2" },
       h("span", { className:"rounded-xl px-2 py-1.5 text-sm font-bold flex items-center gap-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c", color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, Ic("assets/icon_coin.png", 15), coins),
       h("button", { onClick: () => { setSoundOpen(true); SFX.open(); }, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", lineHeight:1 } },
@@ -2726,20 +2861,32 @@ function DropBattle() {
       h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
         h("div", { "aria-hidden":"true", className:"title-glow", style:{ position:"absolute", top:"46%", left:"50%", width:"128%", height:150, transform:"translate(-50%,-50%)", background:"radial-gradient(ellipse at center, rgba(232,192,106,.32) 0%, rgba(232,192,106,0) 68%)", pointerEvents:"none", zIndex:0 } }),
         h("p", { style:{ position:"relative", zIndex:1, fontSize:"clamp(0.62rem,2vw,0.78rem)", color:"#c4d2d8", letterSpacing:"0.32em", marginBottom:8, textShadow:"0 1px 2px #000" } }, "PUZZLE × ROGUELIKE"),
-        h("h1", { className:"title-logo", style:{ position:"relative", zIndex:1, fontSize:"clamp(2.7rem,12.5vw,4.2rem)", margin:"0 0 2px" } }, "ドロプシア",
+        h("h1", { className:"title-logo", onClick: logoTap, style:{ position:"relative", zIndex:1, fontSize:"clamp(2.7rem,12.5vw,4.2rem)", margin:"0 0 2px", cursor:"default" } }, "ドロプシア",
           h("span", { className:"title-sheen", "aria-hidden":"true", style:{ fontSize:"inherit" } }, "ドロプシア")),
         h("p", { style:{ position:"relative", zIndex:1, fontSize:"clamp(0.72rem,2.5vw,0.95rem)", color:"#e8d8a8", letterSpacing:"0.42em", fontWeight:800, textShadow:"0 1px 3px #000", margin:"0 0 10px", paddingLeft:"0.42em" } }, "DROPSIA")),
       h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
         h("button", {
           onClick: () => { setStatus("select"); statusRef.current = "select"; SFX.pick(); },
-          style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", borderRadius:14, padding:"clamp(13px,3.2vw,16px) clamp(48px,12vw,66px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", boxShadow:"0 4px 0 #6e4e1a, 0 6px 12px rgba(0,0,0,.4)", border:"2px solid #6e4e1a", fontFamily:"inherit" } }, "冒険に出る")));
+          style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", borderRadius:14, padding:"clamp(13px,3.2vw,16px) clamp(48px,12vw,66px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", boxShadow:"0 4px 0 #6e4e1a, 0 6px 12px rgba(0,0,0,.4)", border:"2px solid #6e4e1a", fontFamily:"inherit" } }, "冒険に出る")),
+      codeMsg && h("div", { className:"pop-in", style:{ position:"fixed", top:16, left:"4%", right:"4%", margin:"0 auto", maxWidth:380, zIndex:70, background:"rgba(30,24,42,.97)", border:"2px solid #8a6f3c", color:"#ffe9b0", borderRadius:12, padding:"10px 14px", fontSize:"0.82rem", fontWeight:800, boxShadow:"0 3px 8px rgba(0,0,0,.5)", textAlign:"center" } }, codeMsg),
+      codeOpen && h("div", { className:"fade-in", style:{ position:"fixed", inset:0, zIndex:60, background:"rgba(8,4,14,.82)", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 24px" } },
+        h("div", { className:"pop-in rounded-2xl p-4 w-full", style:{ maxWidth:300, background:"rgba(30,24,42,.98)", border:"2px solid #3c3450", textAlign:"center" } },
+          h("p", { className:"font-bold mb-2", style:{ color:"#e8c06a" } }, "🗝 ひみつのコード"),
+          h("input", { type:"tel", inputMode:"numeric", maxLength:8, value:codeVal, autoFocus:true,
+            onChange: e => setCodeVal(e.target.value.replace(/[^0-9]/g, "").slice(0, 8)),
+            style:{ width:"100%", boxSizing:"border-box", background:"rgba(255,255,255,.08)", border:"2px solid #8a6f3c", borderRadius:10, color:"#f2e6c8", fontSize:"1.3rem", fontWeight:800, textAlign:"center", letterSpacing:"0.3em", padding:"8px 6px", fontFamily:"inherit", outline:"none" } }),
+          h("div", { className:"flex gap-2 mt-3" },
+            h("button", { onClick: () => { setCodeOpen(false); setCodeVal(""); SFX.tap(); }, className:"flex-1 rounded-xl py-2 font-bold text-sm", style:{ background:"rgba(255,255,255,.07)", border:"2px solid #453b5c", color:"#c9bfe0", fontFamily:"inherit" } }, "閉じる"),
+            h("button", { onClick: () => tryCode(codeVal), className:"flex-1 rounded-xl py-2 font-bold text-sm", style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", border:"1px solid #6e4e1a", color:"#2c2030", fontFamily:"inherit" } }, "決定")))));
   }
 
   // ===== キャラクター選択画面 =====
   if (status === "select") {
     const unlocked = charState.u;
-    const pickChar = i => {
+    const pickChar = (i, m) => {
       if (!unlocked.includes(i)) { SFX.tap(); return; }
+      if (m === "ura" && !charState.c.includes(i)) { SFX.tap(); return; } // 裏は表クリア済みキャラのみ
+      setMode(m === "ura" ? "ura" : "omote");
       setCurChar(i);
       storeRef.current = 0; setStoreView(0);
       stockRef.current = 0; setStockView(0); setSmithMode("stock");
@@ -2755,6 +2902,9 @@ function DropBattle() {
     };
     const ch = CHARS[selView];
     const selOpen = unlocked.includes(selView);
+    const uraOpen = selOpen && charState.c.includes(selView);            // このキャラで裏に挑めるか
+    const effMode = uraOpen && selMode === "ura" ? "ura" : "omote";      // 実際に開始するモード
+    const URA_C = "#b06af0";                                             // 裏のテーマ色
     return h("div", { style:{ fontFamily:FONT, minHeight:"calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))", background:'#0d131a url("assets/bg_texture.jpg") repeat', backgroundSize:"512px", color:"#ece7f2", WebkitUserSelect:"none", userSelect:"none", padding:"clamp(12px,2.5vh,24px) 16px clamp(16px,3.5vh,30px)", display:"flex", flexDirection:"column" } },
       h("div", { style:{ maxWidth:440, margin:"0 auto", width:"100%", flex:1, display:"flex", flexDirection:"column" } },
         h("div", { className:"flex items-center justify-between mb-1" },
@@ -2774,6 +2924,7 @@ function DropBattle() {
           selOpen && h("div", { key:"chstats" + selView, className:"fade-in", style:{ display:"flex", flexDirection:"column", gap:6, paddingBottom:18 } },
             [
               ["assets/node_boss.png", "突破", (charStats[selView] || {}).clears || 0, "回", "#e8c06a"],
+              ...(uraOpen ? [["assets/node_elite.png", "裏突破", (charStats[selView] || {}).uraClears || 0, "回", URA_C]] : []),
               ["assets/icon_atk.png", "最大ダメージ", (charStats[selView] || {}).maxAtk || 0, "", "#e05a50"],
               ["assets/icon_def.png", "最大ガード", (charStats[selView] || {}).maxDef || 0, "", "#5a8fd0"]
             ].map(([icon, label, val, unit, color]) => h("div", { key:label, className:"flex flex-col items-center rounded-xl px-1.5 py-1", style:{ background:"rgba(24,19,34,.88)", border:`1px solid ${color}77`, minWidth:52 } },
@@ -2785,7 +2936,8 @@ function DropBattle() {
           h("div", { className:"flex items-center justify-center gap-2 mb-1" },
             h("span", { className:"font-bold", style:{ fontSize:"1.12rem", color: selOpen ? "#f0e4c8" : "#8a8296", textShadow:"0 1px 0 rgba(0,0,0,.5)" } }, selOpen ? ch.name : "？？？"),
             selOpen && h("span", { className:"text-[10px] px-1.5 py-0.5 rounded-md", style:{ background:"rgba(255,255,255,.08)", color:ch.color, border:`1px solid ${ch.color}` } }, ch.tag),
-            selOpen && charState.c.includes(selView) && h("span", { className:"text-[10px] px-1.5 py-0.5 rounded-md font-bold", style:{ background:"rgba(140,232,176,.16)", color:"#8ce8b0", border:"1px solid #4fae7a" } }, "✓ クリア済み")),
+            selOpen && charState.c.includes(selView) && h("span", { className:"text-[10px] px-1.5 py-0.5 rounded-md font-bold", style:{ background:"rgba(140,232,176,.16)", color:"#8ce8b0", border:"1px solid #4fae7a" } }, "✓ クリア済み"),
+            selOpen && (charState.cu || []).includes(selView) && h("span", { className:"text-[10px] px-1.5 py-0.5 rounded-md font-bold", style:{ background:"rgba(176,106,240,.16)", color:"#cf9af8", border:"1px solid #8a4fc0" } }, "✓ 裏制覇")),
           selOpen
             ? h("p", { className:"text-[11px]", style:{ opacity:0.85, lineHeight:1.6 } }, ch.desc)
             : h("p", { className:"text-[11px]", style:{ color:"#c99", lineHeight:1.6 } }, "🔒 ", ch.unlock)),
@@ -2803,13 +2955,28 @@ function DropBattle() {
             !open && h("span", { style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.2rem", textShadow:"0 1px 3px #000" } }, "🔒"),
             open && charState.c.includes(i) && h("span", { title:"クリア済み", style:{ position:"absolute", top:-3, right:-3, width:18, height:18, borderRadius:"50%", background:"linear-gradient(180deg,#8ce8b0,#3ea866)", border:"1.5px solid rgba(255,255,255,.9)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:900, color:"#0d2015", boxShadow:"0 1px 3px rgba(0,0,0,.5)" } }, "✓"));
         })),
+        // ―― モード切替（表クリア済みキャラのみ裏を選べる） ――
+        uraOpen && h("div", { className:"flex gap-2 mb-2" }, [
+          ["omote", "表の冒険", "全3章", ch.color],
+          ["ura", "裏の冒険", "全5章・高難度", URA_C]
+        ].map(([m, label, sub, col]) => {
+          const on = effMode === m;
+          return h("button", { key:m, onClick: () => { if (selMode !== m) { setSelMode(m); SFX.tap(); } },
+            className:"flex-1 rounded-xl py-1.5 font-bold",
+            style:{ background: on ? `${col}2e` : "rgba(255,255,255,.05)", border:`2px solid ${on ? col : "#3c3450"}`, color: on ? col : "#8a8296", fontFamily:"inherit", transition:"border-color .15s ease, color .15s ease" } },
+            h("span", { className:"text-sm block" }, label),
+            h("span", { className:"text-[9px] block", style:{ opacity:0.75, fontWeight:600 } }, sub));
+        })),
+        !uraOpen && selOpen && h("p", { className:"text-center text-[10px] mb-2", style:{ color:"#8a8296" } }, "表（全3章）をこのキャラでクリアすると、裏の冒険（全5章）に挑めるようになる"),
         // ―― 決定ボタン ――
-        h("button", { onClick: () => pickChar(selView), disabled: !selOpen,
+        h("button", { onClick: () => pickChar(selView, effMode), disabled: !selOpen,
           className:"w-full rounded-2xl py-3 font-bold",
-          style: selOpen
-            ? { background:`linear-gradient(180deg, ${ch.color} 0%, ${ch.color}bb 100%)`, border:"2px solid rgba(255,255,255,.35)", color:"#1a1424", fontSize:"1.05rem", boxShadow:`0 4px 16px ${ch.color}55`, textShadow:"0 1px 0 rgba(255,255,255,.25)", cursor:"pointer", fontFamily:"inherit" }
-            : { background:"rgba(255,255,255,.06)", border:"2px solid #3c3450", color:"#776f88", fontSize:"1.05rem", cursor:"default", fontFamily:"inherit" } },
-          selOpen ? "この仲間と冒険に出る ▶" : "🔒 未解放")));
+          style: !selOpen
+            ? { background:"rgba(255,255,255,.06)", border:"2px solid #3c3450", color:"#776f88", fontSize:"1.05rem", cursor:"default", fontFamily:"inherit" }
+            : effMode === "ura"
+            ? { background:`linear-gradient(180deg, ${URA_C} 0%, #6a3a9a 100%)`, border:"2px solid rgba(255,255,255,.35)", color:"#f4eafc", fontSize:"1.05rem", boxShadow:`0 4px 16px ${URA_C}55`, textShadow:"0 1px 2px rgba(0,0,0,.45)", cursor:"pointer", fontFamily:"inherit" }
+            : { background:`linear-gradient(180deg, ${ch.color} 0%, ${ch.color}bb 100%)`, border:"2px solid rgba(255,255,255,.35)", color:"#1a1424", fontSize:"1.05rem", boxShadow:`0 4px 16px ${ch.color}55`, textShadow:"0 1px 0 rgba(255,255,255,.25)", cursor:"pointer", fontFamily:"inherit" } },
+          !selOpen ? "🔒 未解放" : effMode === "ura" ? "裏の世界へ挑む ▶" : "この仲間と冒険に出る ▶")));
   }
 
   // ===== 共通オーバーレイ =====
@@ -3086,8 +3253,8 @@ function DropBattle() {
   if (actClear) {
     overlays.push(h("div", { key:"actclear", className:"fixed inset-0 flex items-center justify-center px-6 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:56 } },
       h("div", { className:"text-center pop-in rounded-2xl p-5 w-full", style:{ maxWidth:360, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
-        h("div", { className:"font-bold", style:{ fontSize:"1.6rem", color:"#f2e6c8", textShadow:"0 3px 0 rgba(0,0,0,.55)" } }, "🎉 第", act + 1, "章 クリア！"),
-        h("p", { className:"my-2 text-sm", style:{ opacity:0.85 } }, "「", ACT_NAMES[act], "」を制覇した！"),
+        h("div", { className:"font-bold", style:{ fontSize:"1.6rem", color:"#f2e6c8", textShadow:"0 3px 0 rgba(0,0,0,.55)" } }, "🎉 ", mode === "ura" ? "裏・" : "", "第", act + 1, "章 クリア！"),
+        h("p", { className:"my-2 text-sm", style:{ opacity:0.85 } }, "「", actNameOf(mode, act), "」を制覇した！"),
         h("div", { className:"rounded-xl py-2 px-3 mb-2 text-xs", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.4)", color:"#e8d8a8", lineHeight:1.9 } },
           "章クリアボーナス", h("br"), hasR("crown") ? "最大HP +50 ／ " : "", "HP全回復 ／ ", Ic("assets/icon_coin.png", 12), " +100"),
         actClear.picks && actClear.picks.length > 0 && h("div", { className:"mb-2" },
@@ -3107,11 +3274,12 @@ function DropBattle() {
     overlays.push(h("div", { key:"end", className:"fixed inset-0 flex items-center justify-center px-6 fade-in", style:{ background:"rgba(8,4,14,.9)", zIndex:55 } },
       h("div", { className:"text-center pop-in rounded-2xl w-full", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border: isClear ? "2px solid #e8c06a" : "2px solid #8a6f3c", padding:"18px 16px", boxShadow:"0 8px 28px rgba(0,0,0,.6)" } },
         h("div", { style:{ marginBottom:4, display:"flex", justifyContent:"center" } },
-          h(SpriteBox, { kind: isClear ? "hero" : "demon", size:84, idle:"b" })),
-        h("div", { className:"font-bold flex items-center justify-center gap-2", style:{ fontSize:"1.5rem", color: isClear ? "#ffd95c" : "#d8cfe8", textShadow:"0 3px 0 rgba(0,0,0,.55)" } },
-          isClear && Ic("assets/node_boss.png", 26), isClear ? "魔王討伐！" : "力尽きた…"),
+          h(SpriteBox, { kind: isClear ? "hero" : (mode === "ura" ? "demonx" : "demon"), size:84, idle:"b" })),
+        h("div", { className:"font-bold flex items-center justify-center gap-2", style:{ fontSize:"1.5rem", color: isClear ? (mode === "ura" ? "#cf9af8" : "#ffd95c") : "#d8cfe8", textShadow:"0 3px 0 rgba(0,0,0,.55)" } },
+          isClear && Ic("assets/node_boss.png", 26), isClear ? (mode === "ura" ? "真魔王討伐！" : "魔王討伐！") : "力尽きた…"),
         h("p", { className:"mt-1 mb-2 text-xs", style:{ opacity:0.85, lineHeight:1.7 } },
-          isClear ? "全3章を踏破し、魔の軍勢の王を打ち倒した！" : "第" + (act + 1) + "章 " + progRow + "層で冒険は終わった…"),
+          isClear ? (mode === "ura" ? "裏の全5章を踏破し、真の魔王をも打ち倒した！" : "全3章を踏破し、魔の軍勢の王を打ち倒した！")
+            : (mode === "ura" ? "裏・" : "") + "第" + (act + 1) + "章 " + progRow + "層で冒険は終わった…"),
         h("div", { className:"rounded-xl px-3 py-2 mb-1 text-[11px] flex justify-center", style:{ background:"rgba(255,255,255,.05)", border:"1px solid #453b5c", gap:16 } },
           h("span", null, h("span", { style:{ opacity:0.6 } }, "到達 "), h("b", { style:{ color:"#f0e4c8" } }, isClear ? "全章制覇" : (act + 1) + "章" + progRow + "層")),
           h("span", { className:"inline-flex items-center", style:{ gap:3 } }, h("span", { style:{ opacity:0.6 } }, "🏺"), h("b", { style:{ color:"#e8c06a" } }, relicsView.length)),
@@ -3211,7 +3379,7 @@ function DropBattle() {
               h("span", { className:"block", style:{ fontSize:"0.98rem", textShadow:"0 1px 2px #000" } }, "タップでルートを選んで進もう！"),
               h("span", { className:"block text-[11px] mt-0.5", style:{ color:"#8ce8b0" } }, "▼ 光っているマスをタップ"))
           : h("div", { className:"text-center text-xs mb-1 rounded-lg py-1 font-bold", style:{ background:"rgba(216,168,72,.12)", border:"1px solid rgba(216,168,72,.4)", color:"#e8c06a", letterSpacing:"0.1em" } }, curNodeId == null ? "▼ 出発地点を選ぼう" : "▼ 次に進む場所を選ぼう"),
-        h("div", { ref: mapBoxRef, className:"relative w-full mb-1", style:{ height:1560, borderRadius:16, overflow:"hidden", border:"2px solid #453b5c", background: MAP_GRAD[act] || MAP_GRAD[0] } },
+        h("div", { ref: mapBoxRef, className:"relative w-full mb-1", style:{ height:1560, borderRadius:16, overflow:"hidden", border: mode === "ura" ? "2px solid #6a4a8a" : "2px solid #453b5c", background: (mode === "ura" ? URA_MAP_GRAD : MAP_GRAD)[act] || MAP_GRAD[0] } },
           h("div", { className:"absolute inset-0 pointer-events-none", style:{ backgroundImage:'url("assets/bg_texture.jpg")', backgroundSize:"360px", opacity:.09, mixBlendMode:"soft-light" } }),
           h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"radial-gradient(125% 55% at 50% 42%, rgba(0,0,0,0) 52%, rgba(0,0,0,.42) 100%)" } }),
           h("svg", { className:"absolute inset-0", width:"100%", height:"100%", viewBox:"0 0 100 100", preserveAspectRatio:"none", style:{ pointerEvents:"none" } },
@@ -3272,7 +3440,7 @@ function DropBattle() {
       // 戦闘シーン
       h("div", { key:"scn" + shakeSeq, className:"relative w-full mb-1 scene-h" + (shakeSeq > 0 ? " scene-shake" : ""), style:{ borderRadius:16, overflow:"hidden", border: gtut === "warn" ? "2px solid #ff6b6b" : "2px solid #453b5c", background:"#191424", opacity: gSceneDim ? 0.34 : 1, transition:"opacity .3s ease, border-color .3s ease" } },
         flashSeq > 0 && h("div", { key:"fl" + flashSeq, className:"absolute inset-0 pointer-events-none impact-flash" }),
-        h("img", { src:BATTLE_BGS[act] || BATTLE_BGS[0], alt:"", draggable:false, className:"absolute pointer-events-none", style:{ left:0, top:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center bottom", opacity: gtut === "warn" ? 0.28 : .92, transition:"opacity .3s ease" } }),
+        h("img", { src: mode === "ura" ? (URA_BATTLE_BGS[act] || URA_BATTLE_BGS[0]).src : (BATTLE_BGS[act] || BATTLE_BGS[0]), alt:"", draggable:false, className:"absolute pointer-events-none", style:{ left:0, top:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center bottom", opacity: gtut === "warn" ? 0.28 : .92, transition:"opacity .3s ease", filter: mode === "ura" ? (URA_BATTLE_BGS[act] || URA_BATTLE_BGS[0]).filter : "none" } }),
         h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"linear-gradient(180deg, rgba(15,11,22,.5) 0%, rgba(15,11,22,.08) 45%, rgba(15,11,22,.42) 100%)" } }),
         // 攻撃予告チュートリアル: 敵と予告以外を暗くする暗幕（敵ボタンは zIndex を上げて明るく残す）
         gtut === "warn" && h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"rgba(6,4,12,.55)", zIndex:2 } }),
@@ -3399,7 +3567,7 @@ function DropBattle() {
             iconEl = h("span", { style:{ fontSize:16, marginTop:5, lineHeight:1 } }, smithMode === "stock" ? "📦" : smithMode === "gen" ? "✨" : "⚒️");
             valEl = h("span", { style:{ fontSize:"0.9rem", fontWeight:900 } }, "素材", stockView);
           } else if (curSkill === "buff") {
-            const inc = hasR("warforge2") ? "0.4" : hasR("warforge") ? "0.3" : "0.2";
+            const inc = hasR("warforge2") ? "0.3" : hasR("warforge") ? "0.2" : "0.1";
             title = "強化→" + tgtLabel;
             iconEl = h("span", { style:{ fontSize:16, marginTop:5, lineHeight:1 } }, "💪");
             valEl = h("span", { style:{ fontSize:"0.9rem", fontWeight:900 } }, "+" + inc + "/個");
