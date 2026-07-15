@@ -1839,12 +1839,12 @@ function DropBattle() {
     } else if (k === "colorize") {
       const b = boardRef.current;
       const counts = [0,0,0,0];
-      for (const c of b) if (c.type < 4 && !c.special) counts[c.type]++;
+      for (const c of b) if (c.type < 4) counts[c.type]++;
       const majT = counts.indexOf(Math.max(...counts));
       let minT = -1, minV = Infinity;
       for (let t = 0; t < 4; t++) if (t !== majT && counts[t] > 0 && counts[t] < minV) { minV = counts[t]; minT = t; }
       if (minT >= 0) {
-        commitBoard(b.map(c => (c.type === minT && !c.special) ? { id:UID++, type:majT, special:false } : c));
+        commitBoard(b.map(c => c.type === minT ? { ...c, id:UID++, type:majT } : c));
         addLog(["🎨 変換の書：盤面の色を寄せた"]); SFX.clear();
         used = true;
       }
@@ -2112,17 +2112,6 @@ function DropBattle() {
       const freePos = shuffle(newPositions.slice());
       genKinds.forEach((k, gi) => { if (gi < freePos.length) next[freePos[gi]] = { ...next[freePos[gi]], special: k, up: false, wild: true }; });
       addLog(["🌈 虹ドロップが生まれた！"]);
-    }
-    // 盤面の特殊ドロップ数を指定数(specialTarget)に収める。生成した虹を優先して残し、
-    // 超過分は通常特殊を間引く＝虹生成しても盤面の特殊が指定数以上に増え続けない
-    {
-      const cap = specialTarget();
-      let curSp = 0; const normPos = [];
-      for (let i = 0; i < next.length; i++) { if (next[i].special) { curSp++; if (!next[i].wild) normPos.push(i); } }
-      if (curSp > cap) {
-        const rm = shuffle(normPos);
-        for (let k = 0; k < rm.length && curSp > cap; k++) { next[rm[k]] = { ...next[rm[k]], special: false, up: false }; curSp--; }
-      }
     }
     let mainAdd = eff.main;
     if (act === "atk" && turnRef.current.atkBoost) mainAdd *= 2;
