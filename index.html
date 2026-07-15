@@ -151,7 +151,7 @@ const P_MAX = 300;
 const NUM_SPECIAL = 5;
 const STAR_THRESHOLD = 6;
 const ATK_PER = 10, DEF_PER = 10, HEAL_PER = 1;
-const POISON_DMG = 4, POISON_TURNS = 3; // 毒：防御無視で毎ターン固定ダメージ（1桁）× 持続ターン数
+const POISON_DMG = 4; // 毒：防御無視で毎ターン固定ダメージ。一度受けるとそのバトル中は治らない（バトル終了/章クリアで解除）
 const ROWS = 8; // マップの段数(固定高さに収まる上限)。近道エッジによりルート長は約6〜8で変動する
 const ACTS = 3;
 const ACT_NAMES = ["翠緑の森", "毒霧の沼窟", "灼熱の魔城"];
@@ -196,10 +196,10 @@ const URA_POOLS = [
   { light:["voids","kaos","gazer","banshee"],        mid:["voids","kaos","gazer","cosmo","dryad"],        heavy:["cosmo","drake","gazer","bonek","knight"] }
 ];
 // 裏の難度カーブ（雑魚HP/雑魚ATK/ボスHP/ボスATK、章ごと）。序盤ゆるめ→終盤急騰のインフレ型
-const URA_HP_ACT     = [1.25, 1.45, 1.7, 2.0, 2.35];
-const URA_ATK_ACT    = [1.55, 1.6, 1.6, 1.6, 1.65];    // 雑魚/強敵はD係数で章成長するため倍率はほぼ一定（強敵大技がボスを超えない範囲）
-const URA_BOSSHP_ACT = [1.1, 1.35, 1.65, 2.1, 2.65];   // 真魔王(2100×0.72×2.65)≒HP4000
-const URA_BOSSATK_ACT= [1.05, 1.2, 1.35, 1.5, 1.7];    // ボス大技の目安: 1章≒240/2章≒300/3章≒350(ロール込み300〜400)/4章≒420/5章≒500
+const URA_HP_ACT     = [1.15, 1.35, 1.55, 1.8, 2.1];
+const URA_ATK_ACT    = [1.45, 1.5, 1.5, 1.5, 1.55];    // 雑魚/強敵はD係数で章成長するため倍率はほぼ一定（強敵大技がボスを超えない範囲）
+const URA_BOSSHP_ACT = [1.05, 1.25, 1.55, 1.95, 2.65]; // 真魔王(2100×0.72×2.65)≒HP4000は維持
+const URA_BOSSATK_ACT= [1.0, 1.15, 1.3, 1.45, 1.6];    // ボス大技の目安: 1章≒226/2章≒302/3章≒335(ロール込み300〜400)/4章≒404/5章≒489
 const actsOf = mode => mode === "ura" ? URA_ACTS : ACTS;
 const actNameOf = (mode, a) => (mode === "ura" ? URA_ACT_NAMES : ACT_NAMES)[a] || "";
 
@@ -271,6 +271,9 @@ const RELICS = {
   crossgem:   { icon:"✚", name:"十字晶", desc:"ちょうど4個で消すと、タップ位置から十字1列を爆破（1ターンに1回）", rar:2, src:"boss" },
   xgem:       { icon:"❌", name:"X字晶", desc:"ちょうど5個で消すと、タップ位置から斜め4方向を爆破", rar:3 },
   redcore:    { icon:"🌋", name:"紅蓮の核", desc:"赤ドロップを消すと、消した各赤の上下も爆破", rar:2 },
+  ambercore:  { icon:"🟡", name:"琥珀の核", desc:"黄ドロップを消すと、消した各黄の上下も爆破", rar:2 },
+  violetcore: { icon:"🟣", name:"紫晶の核", desc:"紫ドロップを消すと、消した各紫の上下も爆破", rar:2 },
+  jadecore:   { icon:"🟢", name:"翠玉の核", desc:"翠ドロップを消すと、消した各翠の上下も爆破", rar:2 },
   swordbook:  { icon:"⚔", name:"剣術指南書", desc:"攻撃ドロップ1個の効果+2", rar:1 },
   guardbook:  { icon:"🧱", name:"守護の心得", desc:"防御ドロップ1個の効果+2", rar:1 },
   healbook:   { icon:"🌱", name:"薬草学の書", desc:"回復ドロップ1個の効果+2", rar:1 },
@@ -293,8 +296,8 @@ const RELICS = {
   prism:      { icon:"🔮", name:"プリズム", desc:"ターン開始時、盤面の最少色が他の色に変わる（3色になる）", rar:3 },
   crown:      { icon:"👑", name:"王家の印章", desc:"章クリア時に最大HP+50（通常はボーナスなし）", rar:3 },
   ironwill:   { icon:"⛓", name:"鉄の意志", desc:"余った防御の半分を次のターンに持ち越す", rar:3 },
-  linegem:    { icon:"↕️", name:"縦裂の宝珠", desc:"同じ色を5個以上消すと、消した所に虹ドロップ（消すと縦1列消し）が生まれる。どの色とも繋がるがお邪魔とは繋がらない", rar:2 },
-  linegemh:   { icon:"↔️", name:"横薙の宝珠", desc:"同じ色を5個以上消すと、消した所に虹ドロップ（消すと横1列消し）が生まれる。どの色とも繋がるがお邪魔とは繋がらない", rar:2 },
+  linegem:    { icon:"↕️", name:"縦裂の宝珠", desc:"同じ色をちょうど5個消すと、消した所に虹ドロップ（消すと縦1列消し）が生まれる。どの色とも繋がるがお邪魔とは繋がらない", rar:3 },
+  linegemh:   { icon:"↔️", name:"横薙の宝珠", desc:"同じ色をちょうど5個消すと、消した所に虹ドロップ（消すと横1列消し）が生まれる。どの色とも繋がるがお邪魔とは繋がらない", rar:3 },
   gachagem:   { icon:"🌈", name:"虹福の玉", desc:"同じ色を6個以上消すと、所持中の特殊から1つが虹ドロップになって生まれる。どの色とも繋がる", rar:3 },
   warforge:   { icon:"⚔️", name:"闘気の触媒", desc:"【ガレス専用】強化の増加量が1ドロップにつき+0.2になる（通常+0.1）", rar:2, char:2 },
   warforge2:  { icon:"🔥", name:"覇気の触媒", desc:"【ガレス専用】強化の増加量が1ドロップにつき+0.3になる（通常+0.1）", rar:3, char:2 },
@@ -306,6 +309,8 @@ const RGEM = {
   lineh: { glyph:"↔", name:"横薙の虹", desc:"消すと横1列をまとめて消す。どの色とも繋がる" }
 };
 const RELIC_KEYS = Object.keys(RELICS);
+// 核レリック（色ごとの上下爆破）: ドロップ色 → レリックキー
+const CORE_BY_COLOR = { 0:"redcore", 1:"ambercore", 2:"violetcore", 3:"jadecore" };
 const RELIC_PRICE = { 1:90, 2:130, 3:180 };
 let RELICSET = new Set();
 const hasR = k => RELICSET.has(k);
@@ -376,103 +381,103 @@ function saveCharStats(s) { try { localStorage.setItem("db_charstats", JSON.stri
 // ===== 敵定義 =====
 const KINDS = {
   slime: { name:"スライム", hp:130, atk:30, size:60, idle:"a",
-    pats:[["attack"], ["attack","attack","double"]] },
+    pats:[["attack"], ["attack","attack","double"], ["attack","double","attack"]] },
   bat:   { name:"コウモリ", hp:120, atk:30, size:58, idle:"f",
-    pats:[["double"], ["attack","double"], ["double","double","attack"]] },
+    pats:[["double"], ["attack","double"], ["double","double","attack"], ["attack","attack","double"]] },
   imp:   { name:"インプ",   hp:150, atk:34, size:64, idle:"b", bigMul:1.9,
-    pats:[["attack","attack","bigatk"], ["double","attack","bigatk"], ["attack","bigatk"]] },
+    pats:[["attack","attack","bigatk"], ["double","attack","bigatk"], ["attack","bigatk"], ["double","bigatk"]] },
   golem: { name:"ゴーレム", hp:230, atk:30, size:72, idle:"b", bigMul:3.2,
-    pats:[["charge","charge","bigatk"], ["charge","bigatk","attack"], ["attack","charge","bigatk"]] },
+    pats:[["charge","charge","bigatk"], ["charge","bigatk","attack"], ["attack","charge","bigatk"], ["attack","attack","charge","bigatk"]] },
   shade: { name:"シェイド", hp:150, atk:32, size:62, idle:"f", jamN:3, bigMul:1.8,
-    pats:[["jam","attack"], ["jamatk","attack"], ["jam","charge","bigatk"]] },
+    pats:[["jam","attack"], ["jamatk","attack"], ["jam","charge","bigatk"], ["jam","drain"], ["jamatk","charge","bigatk"]] },
   spore: { name:"スポア",   hp:120, atk:30, size:56, idle:"a", healMul:1.6,
-    pats:[["healally"], ["healally","attack"]] },
+    pats:[["healally"], ["healally","attack"], ["healally","healally","attack"]] },
   demon: { name:"魔王ヴァルガ", hp:1050, atk:95, size:112, idle:"b", bigMul:2.4, jamN:4,
-    pats:[["attack","jam","charge","bigatk"], ["jam","attack","charge","bigatk"], ["jamatk","charge","bigatk","attack"]] },
+    pats:[["attack","jam","charge","bigatk"], ["jam","attack","charge","bigatk"], ["jamatk","charge","bigatk","attack"], ["attack","double","charge","bigatk"]] },
   kslime:{ name:"キングスライム", hp:520, atk:70, size:104, idle:"a", bigMul:2.0, jamN:3,
-    pats:[["attack","jam","bigatk"], ["jamatk","attack","bigatk"]] },
+    pats:[["attack","jam","bigatk"], ["jamatk","attack","bigatk"], ["attack","attack","charge","bigatk"]] },
   vamp:  { name:"ヴァンピール", hp:780, atk:82, size:106, idle:"f", bigMul:2.4,
-    pats:[["drain","attack","charge","bigatk"]] },
+    pats:[["drain","attack","charge","bigatk"], ["drain","double","charge","bigatk"]] },
   wolf:  { name:"シルバウルフ", hp:125, atk:32, size:62, idle:"a",
-    pats:[["attack","double"], ["double","attack"], ["attack","attack","double"]] },
+    pats:[["attack","double"], ["double","attack"], ["attack","attack","double"], ["double","double"]] },
   mandra:{ name:"マンドレイク", hp:130, atk:30, size:56, idle:"a", jamN:2,
-    pats:[["jam","attack"], ["healally","jam"], ["jamatk","healally"]] },
+    pats:[["jam","attack"], ["healally","jam"], ["jamatk","healally"], ["healally","jamatk"]] },
   scorp: { name:"サソリオン",   hp:150, atk:33, size:62, idle:"b", bigMul:2.3,
-    pats:[["attack","charge","bigatk"], ["double","charge","bigatk"]] },
+    pats:[["attack","charge","bigatk"], ["double","charge","bigatk"], ["poison","charge","bigatk"]] },
   gargo: { name:"ガーゴイル",   hp:190, atk:31, size:66, idle:"b", bigMul:2.2,
-    pats:[["charge","bigatk"], ["attack","charge","bigatk"], ["charge","charge","bigatk"]] },
+    pats:[["charge","bigatk"], ["attack","charge","bigatk"], ["charge","charge","bigatk"], ["double","charge","bigatk"]] },
   treant:{ name:"古樹トレント", hp:580, atk:66, size:106, idle:"b", bigMul:2.8,
-    pats:[["charge","bigatk","attack"]] },
+    pats:[["charge","bigatk","attack"], ["attack","charge","bigatk"]] },
   lich:  { name:"死霊王リッチ", hp:740, atk:78, size:104, idle:"f", bigMul:2.2, jamN:4,
-    pats:[["jam","drain","charge","bigatk"], ["jamatk","drain","charge","bigatk"]] },
+    pats:[["jam","drain","charge","bigatk"], ["jamatk","drain","charge","bigatk"], ["drain","jam","charge","bigatk"]] },
   dragon:{ name:"黒竜ファヴニル", hp:1100, atk:98, size:114, idle:"b", bigMul:2.2,
-    pats:[["attack","charge","bigatk","double"]] },
-  boar:  { name:"タックボア",   hp:140, atk:31, size:64, idle:"b", bigMul:2.2, pats:[["charge","bigatk"], ["attack","charge","bigatk"]] },
-  bee:   { name:"キラービー",   hp:120, atk:30, size:52, idle:"f", pats:[["double"], ["double","double","attack"]] },
-  pixie: { name:"イタズラピクシー", hp:120, atk:30, size:52, idle:"f", jamN:2, pats:[["jam","attack"], ["jamatk","jam"]] },
-  snail: { name:"アイアンスネイル", hp:200, atk:30, size:60, idle:"b", pats:[["attack"], ["charge","bigatk","attack"]] },
-  fox:   { name:"妖狐コンコ",   hp:125, atk:31, size:60, idle:"a", pats:[["drain","attack"], ["drain"]] },
-  crow:  { name:"ヨルガラス",   hp:120, atk:30, size:56, idle:"f", pats:[["attack"], ["double","attack"]] },
-  toad:  { name:"ドクガエル",   hp:135, atk:31, size:60, idle:"a", jamN:3, pats:[["attack","jam"], ["jamatk","double"], ["poison","attack"]] },
-  eel:   { name:"ヌマウナギ",   hp:125, atk:30, size:60, idle:"f", pats:[["double"], ["double","attack"]] },
-  mudman:{ name:"マッドマン",   hp:170, atk:32, size:64, idle:"b", bigMul:2.5, pats:[["charge","bigatk","attack"]] },
-  wisp:  { name:"ウィルウィスプ", hp:120, atk:30, size:52, idle:"f", jamN:2, pats:[["drain"], ["drain","jam"]] },
-  crab:  { name:"シザークラブ", hp:160, atk:32, size:62, idle:"b", bigMul:2.0, pats:[["attack","attack","bigatk"]] },
-  sludge:{ name:"ヘドロスライム", hp:135, atk:30, size:58, idle:"a", jamN:3, pats:[["jam","attack"], ["jamatk","attack"]] },
-  turtle:{ name:"ロックタートル", hp:195, atk:30, size:62, idle:"b", bigMul:2.4, pats:[["charge","bigatk"], ["charge","charge","bigatk"]] },
-  sala:  { name:"サラマンドラ", hp:140, atk:35, size:60, idle:"a", bigMul:1.8, pats:[["attack","bigatk"]] },
-  bomber:{ name:"ボムデビル",   hp:130, atk:32, size:58, idle:"f", bigMul:3.0, pats:[["charge","bigatk"]] },
-  knight:{ name:"ダークナイト", hp:180, atk:34, size:66, idle:"b", bigMul:2.2, pats:[["attack","attack","bigatk"], ["double","charge","bigatk"]] },
-  hound: { name:"ヘルハウンド", hp:130, atk:31, size:60, idle:"a", bigMul:2.0, pats:[["double","attack","bigatk"]] },
-  ifrita:{ name:"フレイムメイジ", hp:135, atk:33, size:58, idle:"f", bigMul:2.4, jamN:3, pats:[["jam","charge","bigatk"], ["jamatk","charge","bigatk"]] },
-  skel:  { name:"スケルトン兵", hp:145, atk:31, size:62, idle:"b", pats:[["attack","attack","double"]] },
-  wraith:{ name:"亡霊騎士レイス", hp:155, atk:33, size:62, idle:"f", bigMul:2.2, pats:[["drain","charge","bigatk"]] },
-  alraune: { name:"森妃アルラウネ", hp:540, atk:68, size:104, idle:"a", bigMul:2.6, jamN:3, pats:[["jam","charge","bigatk"], ["jamatk","charge","bigatk"]] },
-  toadking:{ name:"大王ガマ",     hp:760, atk:80, size:108, idle:"a", bigMul:2.3, jamN:3, pats:[["double","jam","poison","charge","bigatk"]] },
-  ifrit:   { name:"炎魔イフリート", hp:1080, atk:96, size:110, idle:"b", bigMul:2.3, pats:[["attack","double","charge","bigatk"]] },
-  reaper:  { name:"死神モルス",   hp:1150, atk:100, size:110, idle:"f", bigMul:2.4, jamN:4, pats:[["drain","charge","bigatk","jam"], ["drain","charge","bigatk","jamatk"]] },
+    pats:[["attack","charge","bigatk","double"], ["double","charge","bigatk","attack"]] },
+  boar:  { name:"タックボア",   hp:140, atk:31, size:64, idle:"b", bigMul:2.2, pats:[["charge","bigatk"], ["attack","charge","bigatk"], ["double","charge","bigatk"]] },
+  bee:   { name:"キラービー",   hp:120, atk:30, size:52, idle:"f", pats:[["double"], ["double","double","attack"], ["poison","double"]] },
+  pixie: { name:"イタズラピクシー", hp:120, atk:30, size:52, idle:"f", jamN:2, pats:[["jam","attack"], ["jamatk","jam"], ["jam","double"]] },
+  snail: { name:"アイアンスネイル", hp:200, atk:30, size:60, idle:"b", pats:[["attack"], ["charge","bigatk","attack"], ["attack","attack","charge","bigatk"]] },
+  fox:   { name:"妖狐コンコ",   hp:125, atk:31, size:60, idle:"a", pats:[["drain","attack"], ["drain"], ["drain","double"]] },
+  crow:  { name:"ヨルガラス",   hp:120, atk:30, size:56, idle:"f", pats:[["attack"], ["double","attack"], ["double","double","attack"]] },
+  toad:  { name:"ドクガエル",   hp:135, atk:31, size:60, idle:"a", jamN:3, pats:[["attack","jam"], ["jamatk","double"], ["poison","attack"], ["poison","jam","attack"]] },
+  eel:   { name:"ヌマウナギ",   hp:125, atk:30, size:60, idle:"f", pats:[["double"], ["double","attack"], ["attack","double","double"]] },
+  mudman:{ name:"マッドマン",   hp:170, atk:32, size:64, idle:"b", bigMul:2.5, pats:[["charge","bigatk","attack"], ["attack","charge","bigatk"]] },
+  wisp:  { name:"ウィルウィスプ", hp:120, atk:30, size:52, idle:"f", jamN:2, pats:[["drain"], ["drain","jam"], ["drain","jamatk"]] },
+  crab:  { name:"シザークラブ", hp:160, atk:32, size:62, idle:"b", bigMul:2.0, pats:[["attack","attack","bigatk"], ["double","charge","bigatk"]] },
+  sludge:{ name:"ヘドロスライム", hp:135, atk:30, size:58, idle:"a", jamN:3, pats:[["jam","attack"], ["jamatk","attack"], ["poison","jam","attack"]] },
+  turtle:{ name:"ロックタートル", hp:195, atk:30, size:62, idle:"b", bigMul:2.4, pats:[["charge","bigatk"], ["charge","charge","bigatk"], ["attack","charge","charge","bigatk"]] },
+  sala:  { name:"サラマンドラ", hp:140, atk:35, size:60, idle:"a", bigMul:1.8, pats:[["attack","bigatk"], ["attack","attack","bigatk"], ["double","bigatk"]] },
+  bomber:{ name:"ボムデビル",   hp:130, atk:32, size:58, idle:"f", bigMul:3.0, pats:[["charge","bigatk"], ["attack","charge","bigatk"]] },
+  knight:{ name:"ダークナイト", hp:180, atk:34, size:66, idle:"b", bigMul:2.2, pats:[["attack","attack","bigatk"], ["double","charge","bigatk"], ["attack","charge","bigatk","double"]] },
+  hound: { name:"ヘルハウンド", hp:130, atk:31, size:60, idle:"a", bigMul:2.0, pats:[["double","attack","bigatk"], ["double","double","bigatk"]] },
+  ifrita:{ name:"フレイムメイジ", hp:135, atk:33, size:58, idle:"f", bigMul:2.4, jamN:3, pats:[["jam","charge","bigatk"], ["jamatk","charge","bigatk"], ["attack","jam","charge","bigatk"]] },
+  skel:  { name:"スケルトン兵", hp:145, atk:31, size:62, idle:"b", pats:[["attack","attack","double"], ["double","attack","attack"]] },
+  wraith:{ name:"亡霊騎士レイス", hp:155, atk:33, size:62, idle:"f", bigMul:2.2, pats:[["drain","charge","bigatk"], ["drain","double","charge","bigatk"]] },
+  alraune: { name:"森妃アルラウネ", hp:540, atk:68, size:104, idle:"a", bigMul:2.6, jamN:3, pats:[["jam","charge","bigatk"], ["jamatk","charge","bigatk"], ["jam","healally","charge","bigatk"]] },
+  toadking:{ name:"大王ガマ",     hp:760, atk:80, size:108, idle:"a", bigMul:2.3, jamN:3, pats:[["double","jam","poison","charge","bigatk"], ["poison","double","charge","bigatk"]] },
+  ifrit:   { name:"炎魔イフリート", hp:1080, atk:96, size:110, idle:"b", bigMul:2.3, pats:[["attack","double","charge","bigatk"], ["double","attack","charge","bigatk"]] },
+  reaper:  { name:"死神モルス",   hp:1150, atk:100, size:110, idle:"f", bigMul:2.4, jamN:4, pats:[["drain","charge","bigatk","jam"], ["drain","charge","bigatk","jamatk"], ["jamatk","drain","charge","bigatk"]] },
   // ===== 裏ステージ 雑魚25種 =====
   // 裏1章 月影の森
-  moth:  { name:"ヤミモスラ",     hp:160, atk:36, size:56, idle:"f", jamN:2, pats:[["poison","attack"], ["poison","double"]] },
-  thorn: { name:"イバラビースト", hp:185, atk:38, size:64, idle:"a", pats:[["attack","double"], ["attack","attack","double"]] },
-  owl:   { name:"ヨミフクロウ",   hp:155, atk:36, size:56, idle:"f", bigMul:2.2, pats:[["charge","bigatk"], ["attack","charge","bigatk"]] },
-  dryad: { name:"ダークドライアド", hp:165, atk:35, size:60, idle:"a", healMul:1.7, jamN:3, pats:[["healally","jam"], ["jam","attack"], ["healally","attack"]] },
-  mant:  { name:"シャドウマンティス", hp:170, atk:40, size:62, idle:"b", pats:[["double"], ["double","attack"]] },
+  moth:  { name:"ヤミモスラ",     hp:160, atk:36, size:56, idle:"f", jamN:2, pats:[["poison","attack"], ["poison","double"], ["poison","jam","double"]] },
+  thorn: { name:"イバラビースト", hp:185, atk:38, size:64, idle:"a", pats:[["attack","double"], ["attack","attack","double"], ["double","double","attack"]] },
+  owl:   { name:"ヨミフクロウ",   hp:155, atk:36, size:56, idle:"f", bigMul:2.2, pats:[["charge","bigatk"], ["attack","charge","bigatk"], ["double","charge","bigatk"]] },
+  dryad: { name:"ダークドライアド", hp:165, atk:35, size:60, idle:"a", healMul:1.7, jamN:3, pats:[["healally","jam"], ["jam","attack"], ["healally","attack"], ["healally","jamatk"]] },
+  mant:  { name:"シャドウマンティス", hp:170, atk:40, size:62, idle:"b", pats:[["double"], ["double","attack"], ["double","double","attack"]] },
   // 裏2章 氷晶の霊窟
-  yeti:   { name:"イエティ",         hp:240, atk:38, size:70, idle:"b", bigMul:2.4, pats:[["charge","bigatk"], ["attack","charge","bigatk"]] },
-  icewolf:{ name:"フロストウルフ",   hp:180, atk:40, size:62, idle:"a", pats:[["double","attack"], ["attack","double"]] },
-  fgolem: { name:"アイスゴーレム",   hp:280, atk:36, size:72, idle:"b", bigMul:3.0, pats:[["charge","charge","bigatk"]] },
-  peng:   { name:"ブリザードペンギン", hp:170, atk:36, size:56, idle:"a", jamN:3, pats:[["jam","attack"], ["jamatk","double"]] },
-  frost:  { name:"フロストウィスプ", hp:150, atk:36, size:52, idle:"f", jamN:2, pats:[["drain"], ["drain","jam"]] },
+  yeti:   { name:"イエティ",         hp:240, atk:38, size:70, idle:"b", bigMul:2.4, pats:[["charge","bigatk"], ["attack","charge","bigatk"], ["double","charge","bigatk"]] },
+  icewolf:{ name:"フロストウルフ",   hp:180, atk:40, size:62, idle:"a", pats:[["double","attack"], ["attack","double"], ["double","double","attack"]] },
+  fgolem: { name:"アイスゴーレム",   hp:280, atk:36, size:72, idle:"b", bigMul:3.0, pats:[["charge","charge","bigatk"], ["attack","charge","charge","bigatk"]] },
+  peng:   { name:"ブリザードペンギン", hp:170, atk:36, size:56, idle:"a", jamN:3, pats:[["jam","attack"], ["jamatk","double"], ["jam","double","attack"]] },
+  frost:  { name:"フロストウィスプ", hp:150, atk:36, size:52, idle:"f", jamN:2, pats:[["drain"], ["drain","jam"], ["drain","jamatk"]] },
   // 裏3章 雷鳴の砂海
-  djinn: { name:"サンドジン",     hp:190, atk:40, size:62, idle:"f", bigMul:2.3, jamN:3, pats:[["jam","charge","bigatk"], ["jamatk","charge","bigatk"]] },
-  cobra: { name:"サンダーコブラ", hp:175, atk:42, size:60, idle:"a", pats:[["poison","attack"], ["attack","poison","double"]] },
-  scarab:{ name:"ゴールドスカラベ", hp:210, atk:36, size:60, idle:"b", bigMul:2.0, pats:[["attack","attack","bigatk"]] },
-  mummy: { name:"ミイラ兵",       hp:200, atk:38, size:62, idle:"b", jamN:3, pats:[["jamatk","attack"], ["attack","jam","double"]] },
-  raiju: { name:"雷獣ライジュウ", hp:180, atk:44, size:60, idle:"a", bigMul:1.9, pats:[["attack","bigatk"], ["double","bigatk"]] },
+  djinn: { name:"サンドジン",     hp:190, atk:40, size:62, idle:"f", bigMul:2.3, jamN:3, pats:[["jam","charge","bigatk"], ["jamatk","charge","bigatk"], ["attack","jam","charge","bigatk"]] },
+  cobra: { name:"サンダーコブラ", hp:175, atk:42, size:60, idle:"a", pats:[["poison","attack"], ["attack","poison","double"], ["poison","double","attack"]] },
+  scarab:{ name:"ゴールドスカラベ", hp:210, atk:36, size:60, idle:"b", bigMul:2.0, pats:[["attack","attack","bigatk"], ["charge","bigatk","attack"]] },
+  mummy: { name:"ミイラ兵",       hp:200, atk:38, size:62, idle:"b", jamN:3, pats:[["jamatk","attack"], ["attack","jam","double"], ["jam","attack","double"]] },
+  raiju: { name:"雷獣ライジュウ", hp:180, atk:44, size:60, idle:"a", bigMul:1.9, pats:[["attack","bigatk"], ["double","bigatk"], ["attack","double","bigatk"]] },
   // 裏4章 奈落の霊廟
-  ghoul:  { name:"グール",       hp:210, atk:40, size:62, idle:"a", pats:[["drain","attack"], ["drain","double"]] },
-  banshee:{ name:"バンシー",     hp:185, atk:40, size:60, idle:"f", bigMul:2.4, jamN:4, pats:[["jam","charge","bigatk"], ["jamatk","drain"]] },
-  bonek:  { name:"ボーンナイト", hp:250, atk:42, size:66, idle:"b", bigMul:2.2, pats:[["attack","attack","bigatk"], ["double","charge","bigatk"]] },
-  eye:    { name:"邪眼オクルス", hp:190, atk:40, size:58, idle:"f", bigMul:2.6, jamN:3, pats:[["charge","bigatk"], ["jam","charge","bigatk"]] },
-  mare:   { name:"ナイトメア",   hp:195, atk:42, size:64, idle:"a", bigMul:2.0, pats:[["double","attack","bigatk"]] },
+  ghoul:  { name:"グール",       hp:210, atk:40, size:62, idle:"a", pats:[["drain","attack"], ["drain","double"], ["drain","attack","double"]] },
+  banshee:{ name:"バンシー",     hp:185, atk:40, size:60, idle:"f", bigMul:2.4, jamN:4, pats:[["jam","charge","bigatk"], ["jamatk","drain"], ["jam","drain","charge","bigatk"]] },
+  bonek:  { name:"ボーンナイト", hp:250, atk:42, size:66, idle:"b", bigMul:2.2, pats:[["attack","attack","bigatk"], ["double","charge","bigatk"], ["attack","charge","bigatk","double"]] },
+  eye:    { name:"邪眼オクルス", hp:190, atk:40, size:58, idle:"f", bigMul:2.6, jamN:3, pats:[["charge","bigatk"], ["jam","charge","bigatk"], ["jamatk","charge","bigatk"]] },
+  mare:   { name:"ナイトメア",   hp:195, atk:42, size:64, idle:"a", bigMul:2.0, pats:[["double","attack","bigatk"], ["double","charge","bigatk"]] },
   // 裏5章 星淵の魔殿
-  voids: { name:"ヴォイドスライム", hp:230, atk:40, size:60, idle:"a", bigMul:2.0, jamN:4, pats:[["jamatk","attack"], ["jam","attack","bigatk"]] },
-  cosmo: { name:"コスモビースト",   hp:260, atk:44, size:68, idle:"b", bigMul:2.3, pats:[["attack","charge","bigatk"]] },
-  gazer: { name:"ボイドゲイザー",   hp:210, atk:42, size:58, idle:"f", bigMul:2.8, jamN:3, pats:[["charge","charge","bigatk"], ["jam","charge","bigatk"]] },
-  kaos:  { name:"カオスインプ",     hp:200, atk:44, size:58, idle:"f", jamN:3, pats:[["double","double","attack"], ["jamatk","double"]] },
-  drake: { name:"ヴォイドドレイク", hp:270, atk:44, size:68, idle:"b", bigMul:2.4, pats:[["attack","charge","bigatk","double"]] },
+  voids: { name:"ヴォイドスライム", hp:230, atk:40, size:60, idle:"a", bigMul:2.0, jamN:4, pats:[["jamatk","attack"], ["jam","attack","bigatk"], ["jam","jamatk","bigatk"]] },
+  cosmo: { name:"コスモビースト",   hp:260, atk:44, size:68, idle:"b", bigMul:2.3, pats:[["attack","charge","bigatk"], ["double","attack","charge","bigatk"]] },
+  gazer: { name:"ボイドゲイザー",   hp:210, atk:42, size:58, idle:"f", bigMul:2.8, jamN:3, pats:[["charge","charge","bigatk"], ["jam","charge","bigatk"], ["jamatk","charge","charge","bigatk"]] },
+  kaos:  { name:"カオスインプ",     hp:200, atk:44, size:58, idle:"f", jamN:3, pats:[["double","double","attack"], ["jamatk","double"], ["jam","double","double"]] },
+  drake: { name:"ヴォイドドレイク", hp:270, atk:44, size:68, idle:"b", bigMul:2.4, pats:[["attack","charge","bigatk","double"], ["double","charge","bigatk","attack"]] },
   // ===== 裏ステージ ボス10種 =====
-  fenrir: { name:"月狼王フェンリル",   hp:1250, atk:100, size:112, idle:"a", bigMul:2.4, pats:[["double","attack","charge","bigatk"]] },
-  titania:{ name:"幻妖女王ティターニア", hp:1150, atk:95, size:108, idle:"f", bigMul:2.3, jamN:4, pats:[["jam","drain","charge","bigatk"], ["jamatk","attack","charge","bigatk"]] },
-  skadi:  { name:"氷魔女スカディ",     hp:1300, atk:100, size:108, idle:"f", bigMul:2.5, jamN:4, pats:[["jam","charge","bigatk","attack"]] },
-  jotun:  { name:"霜巨人ヨトゥン",     hp:1500, atk:105, size:116, idle:"b", bigMul:2.6, pats:[["charge","bigatk","attack","double"]] },
-  behemot:{ name:"雷獣王ベヒモス",     hp:1600, atk:108, size:116, idle:"b", bigMul:2.4, pats:[["attack","double","charge","bigatk"]] },
-  sphinx: { name:"砂王スフィンクス",   hp:1450, atk:102, size:112, idle:"a", bigMul:2.5, jamN:4, pats:[["jam","poison","charge","bigatk"]] },
-  bdragon:{ name:"屍竜ドラクリッチ",   hp:1750, atk:110, size:116, idle:"f", bigMul:2.5, jamN:4, pats:[["drain","jam","charge","bigatk"]] },
-  noct:   { name:"夜の女王ノクターナ", hp:1650, atk:108, size:110, idle:"f", bigMul:2.6, jamN:4, pats:[["drain","charge","bigatk","jamatk"]] },
-  vorax:  { name:"星喰龍ヴォラクス",   hp:1950, atk:112, size:118, idle:"b", bigMul:2.5, jamN:4, pats:[["attack","charge","bigatk","double","jam"]] },
-  demonx: { name:"真魔王ヴァルガ",     hp:2100, atk:115, size:120, idle:"b", bigMul:2.6, jamN:5, pats:[["jamatk","charge","bigatk","attack","drain","charge","bigatk"]] }
+  fenrir: { name:"月狼王フェンリル",   hp:1250, atk:100, size:112, idle:"a", bigMul:2.4, pats:[["double","attack","charge","bigatk"], ["attack","double","charge","bigatk"]] },
+  titania:{ name:"幻妖女王ティターニア", hp:1150, atk:95, size:108, idle:"f", bigMul:2.3, jamN:4, pats:[["jam","drain","charge","bigatk"], ["jamatk","attack","charge","bigatk"], ["healally","jam","charge","bigatk"]] },
+  skadi:  { name:"氷魔女スカディ",     hp:1300, atk:100, size:108, idle:"f", bigMul:2.5, jamN:4, pats:[["jam","charge","bigatk","attack"], ["jamatk","charge","bigatk","drain"]] },
+  jotun:  { name:"霜巨人ヨトゥン",     hp:1500, atk:105, size:116, idle:"b", bigMul:2.6, pats:[["charge","bigatk","attack","double"], ["attack","charge","charge","bigatk"]] },
+  behemot:{ name:"雷獣王ベヒモス",     hp:1600, atk:108, size:116, idle:"b", bigMul:2.4, pats:[["attack","double","charge","bigatk"], ["double","double","charge","bigatk"]] },
+  sphinx: { name:"砂王スフィンクス",   hp:1450, atk:102, size:112, idle:"a", bigMul:2.5, jamN:4, pats:[["jam","poison","charge","bigatk"], ["poison","jamatk","charge","bigatk"]] },
+  bdragon:{ name:"屍竜ドラクリッチ",   hp:1750, atk:110, size:116, idle:"f", bigMul:2.5, jamN:4, pats:[["drain","jam","charge","bigatk"], ["jam","drain","charge","bigatk","double"]] },
+  noct:   { name:"夜の女王ノクターナ", hp:1650, atk:108, size:110, idle:"f", bigMul:2.6, jamN:4, pats:[["drain","charge","bigatk","jamatk"], ["jamatk","drain","charge","bigatk"]] },
+  vorax:  { name:"星喰龍ヴォラクス",   hp:1950, atk:112, size:118, idle:"b", bigMul:2.5, jamN:4, pats:[["attack","charge","bigatk","double","jam"], ["double","jam","charge","bigatk","attack"]] },
+  demonx: { name:"真魔王ヴァルガ",     hp:2100, atk:115, size:120, idle:"b", bigMul:2.6, jamN:5, pats:[["jamatk","charge","bigatk","attack","drain","charge","bigatk"], ["drain","jamatk","charge","bigatk","double","charge","bigatk"]] }
 };
 const PATTERNS = {
   attack:  { icon:"⚔",  label:"こうげき",   color:"#ffb3a8" },
@@ -676,8 +681,8 @@ const encounterFor = (node, act, mode) => {
     return { id:"e"+(UID++), kind:e.kind, name:k.name, hp, max:hp,
       atk: Math.max(1, Math.round(k.atk * as * e.atkM * (e.boss ? bossAtk : atkAct))), bigX: e.boss ? 1 : (act >= 1 ? 1.0 : 1.1), alive:true, pi:0,
       pat: pick(k.pats), rollMul: rollDmg(),
-      atkFloor: (act >= 1 && e.elite) ? (ura ? 70 : 60) : 0, bigFloor: (act >= 1 && e.elite) ? (ura ? 140 : 120) : 0, // 2章以降エリートの火力下限
-      enr: 0, enrEvery: SIM_MODE ? 0 : (ura ? 3 + Math.floor(Math.random() * 2) : 4 + Math.floor(Math.random() * 3)), // 裏は激昂が早い
+      atkFloor: (act >= 1 && e.elite) ? (ura ? 65 : 60) : 0, bigFloor: (act >= 1 && e.elite) ? (ura ? 130 : 120) : 0, // 2章以降エリートの火力下限
+      enr: 0, enrEvery: SIM_MODE ? 0 : (ura ? 4 + Math.floor(Math.random() * 2) : 4 + Math.floor(Math.random() * 3)), // 裏は激昂がやや早い(4-5T)
       shd, shdMax: si ? si.sh : 0, shdC: si ? si.c : 0,
       // 上限ダメージ＝最大HPの約1/4〜1/5をキリよく10刻みに。ボス/強敵の"一部だけ"が持つ特殊耐性
       dcap: ((e.boss && Math.random() < 0.5) || (e.elite && Math.random() < 0.35)) ? Math.max(10, Math.round(hp / 4.5 / 10) * 10) : 0,
@@ -891,10 +896,12 @@ const expandClear = (b, idx, blastOk, crossOk) => {
       });
     }
   }
-  if (hasR("redcore") && b[idx].type === 0) {
-    const redIdx = b.map((c, i) => (ids0.has(c.id) && c.type === 0) ? i : -1).filter(i => i >= 0);
-    redIdx.forEach(i => { addIdx(i - SIZE); addIdx(i + SIZE); });
-    red = redIdx;
+  // 核レリック: タップした色の核を持っていれば、消した同色の上下も爆破（赤/黄/紫/翠の4色）
+  const coreK = CORE_BY_COLOR[b[idx].type];
+  if (coreK && hasR(coreK)) {
+    const coreIdx = b.map((c, i) => (ids0.has(c.id) && c.type === b[idx].type) ? i : -1).filter(i => i >= 0);
+    coreIdx.forEach(i => { addIdx(i - SIZE); addIdx(i + SIZE); });
+    red = coreIdx;
   }
   let ids = expandIds(b, ids0);
   let changed = true;
@@ -1597,13 +1604,13 @@ function DropBattle() {
         continue;
       }
       if (iv.act === "poison") {
-        poisonRef.current = POISON_TURNS; // 再度受けても持続は上書き（加算はしない）。表示は同ターン後半の毒ダメージ処理でまとめて更新
+        poisonRef.current = 1; // 毒状態フラグ。一度受けるとこのバトル中は解除されない
         seq.push({ text: `${en.name}の毒霧！`, color: "#8ce87c",
           run: () => {
             setAnim(en.id, "attack");
-            setTimeout(() => { SFX.jam(); addPop("hero", "🐍毒", "#8ce87c"); }, 220);
+            setTimeout(() => { SFX.jam(); addPop("hero", "🐍毒", "#8ce87c"); setPoisonView(1); }, 220);
           } });
-        logs.push(`🐍 ${en.name}の毒霧！${POISON_TURNS}ターンの間、毎ターン${POISON_DMG}ダメージ`);
+        logs.push(`🐍 ${en.name}の毒霧！このバトル中、毎ターン${POISON_DMG}ダメージ`);
         continue;
       }
       if (iv.act === "healally") {
@@ -1708,20 +1715,17 @@ function DropBattle() {
       }
       php = np;
     }
-    // ④ 毒ダメージ（防御無視・持続ターン中は毎ターン発生）
+    // ④ 毒ダメージ（防御無視・このバトル中は毎ターン発生し続ける）
     if (php > 0 && poisonRef.current > 0) {
       const pdmg = Math.min(php, POISON_DMG);
       php -= pdmg;
       const np = php;
-      const turnsLeft = poisonRef.current - 1;
       seq.push({ text: `毒 ${pdmg}！`, color: "#8ce87c", act: "def",
         run: () => {
           setPHP(np); setAnim("hero","hit"); SFX.hurt(); flash("player");
           addPop("hero", "-" + pdmg, "#8ce87c");
-          setPoisonView(turnsLeft);
         } });
-      logs.push(`🐍 毒ダメージ ${pdmg}` + (turnsLeft > 0 ? `（残り${turnsLeft}ターン）` : "（毒が治った）"));
-      poisonRef.current = turnsLeft;
+      logs.push(`🐍 毒ダメージ ${pdmg}`);
     }
     const finalHp = php;
     addLog(logs);
@@ -2222,8 +2226,8 @@ function DropBattle() {
     const { next, newPositions } = refill(boardRef.current, ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
     // レリック生成の虹（ワイルド）特殊。消した位置(新規落下)へ置く
     const genKinds = [];
-    if (hasR("linegem") && pureCount >= 5) genKinds.push("linev");
-    if (hasR("linegemh") && pureCount >= 5) genKinds.push("lineh");
+    if (hasR("linegem") && pureCount === 5) genKinds.push("linev");
+    if (hasR("linegemh") && pureCount === 5) genKinds.push("lineh");
     if (hasR("gachagem") && pureCount >= 6) {
       const ownedSp = REWARD_KEYS.filter(k => ownedRef.current[k] > 0);
       if (ownedSp.length) genKinds.push(pick(ownedSp));
@@ -2331,7 +2335,7 @@ function DropBattle() {
       linehRows.forEach(r => { barBlast("h", rowCells(r)); sweptLine = true; });
       // 十字晶(cross): 縦バー＋横バー＋中心の爆発でクロス状の爆破に
       if (cross) { barBlast("v", colCells(c0)); barBlast("h", rowCells(r0)); boomAt([idx]); sweptLine = true; }
-      // 紅蓮の核(redcore): 消した各赤の上下を、縦の棒状爆破で見せる
+      // 核レリック(redcore等4色): 消した各同色の上下を、縦の棒状爆破で見せる
       if (red && red.length) {
         const N2 = SIZE * SIZE;
         red.forEach(i => barBlast("v", [i - SIZE, i, i + SIZE].filter(k => k >= 0 && k < N2 && (k % SIZE) === (i % SIZE))));
@@ -2652,7 +2656,7 @@ function DropBattle() {
         coins: coinsRef.current, items: itemsRef.current.slice(),
         shop: shopRef.current ? shopRef.current.offers.slice() : null,
         campfire: campfireRef.current,
-        act: actRef.current, mode: modeRef.current, pmax: pMaxRef.current, actClear: !!actClearRef.current,
+        act: actRef.current, mode: modeRef.current, pmax: pMaxRef.current, actClear: !!actClearRef.current, poison: poisonRef.current,
         relics: relicsRef.current.slice(),
         rewardPicks: rewardsRef.current ? (rewardsRef.current.picks || []).length : 0,
         specials: boardRef.current.filter(c => c.special).length,
@@ -2753,6 +2757,10 @@ function DropBattle() {
       relicPool: () => RELIC_KEYS.filter(k => !relicsRef.current.includes(k) && (RELICS[k].char === undefined || RELICS[k].char === curCharRef.current)),
       charState: () => ({ u:charStateRef.current.u.slice(), c:charStateRef.current.c.slice(), cu:(charStateRef.current.cu || []).slice() }),
       setMode: m => setMode(m),
+      // 仕様書生成用の生データダンプ（gen_docs.py が使用）
+      data: () => ({ RELICS, RELIC_PRICE, ITEMS, DESC_UP, RGEM, KINDS, SHIELDS, PATTERNS, CONSUM,
+        ACT_NAMES, URA_ACT_NAMES, ACT_POOLS, URA_POOLS, BOSS_BY_ACT, URA_BOSS_BY_ACT,
+        URA_HP_ACT, URA_ATK_ACT, URA_BOSSHP_ACT, URA_BOSSATK_ACT, CHARS }),
       setCleared: i => setCharState(s => { const c = s.c.includes(i) ? s.c : [...s.c, i]; const ns = { u:s.u, c, cu:s.cu }; saveCharState(ns); return ns; }),
       charInfo: () => ({ cur:curCharRef.current, skill:charSkillRef.current, paint:paintColorRef.current, target:skillTargetRef.current, store:storeRef.current, smithMode:smithModeRef.current, stock:stockRef.current }),
       setPaint: c => setPaintColor(c),
@@ -3456,10 +3464,10 @@ function DropBattle() {
               animation: sv === 0 ? "hitShake .45s ease" : "none", zIndex:2 } },
               h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:15, height:15, style:{ width:15, height:15, maxWidth:15, maxHeight:15, flexShrink:0, objectFit:"contain" } }),
               sv !== null ? sv : tv.def),
-            poisonView > 0 && h("span", { title:"毒", className:"absolute font-bold flex items-center", style:{ left:-14, top:-6, gap:2, padding:"2px 6px", borderRadius:10,
+            poisonView > 0 && h("span", { title:"毒（このバトル中、毎ターン受ける）", className:"absolute font-bold flex items-center", style:{ left:-14, top:-6, gap:2, padding:"2px 6px", borderRadius:10,
               background:"rgba(46,92,40,.92)", border:"1px solid rgba(140,232,124,.7)",
               fontSize:12, color:"#c8f5b8", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", zIndex:2 } },
-              "🐍", poisonView)),
+              "🐍", POISON_DMG)),
           h("div", { style:{ width:40, height:7, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-5, filter:"blur(2px)" } }),
           h("div", { className:"w-full mt-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:8 })),
           h("span", { className:"text-[10px] font-bold mt-1", style:{ color: hit === "player" ? "#ff9a9a" : hit === "heal" ? "#7cffb0" : "#cfe9d8", fontVariantNumeric:"tabular-nums", transition:"color .3s" } }, pHP, "/", pMax)),
@@ -3479,7 +3487,7 @@ function DropBattle() {
               : iv.act === "jamatk" ? "⚔" + iv.dmg + " 🌀" + iv.jamN
               : iv.act === "healally" ? pm.icon + iv.heal
               : iv.act === "double" ? "⚔" + iv.hit + "×" + iv.hits
-              : iv.act === "poison" ? pm.icon + POISON_DMG + "×" + POISON_TURNS
+              : iv.act === "poison" ? pm.icon + POISON_DMG
               : pm.icon + iv.dmg) + (twice ? "⚡×2" : "");
             const isDmgIntent = iv.act === "attack" || iv.act === "double" || iv.act === "bigatk" || iv.act === "drain" || iv.act === "jamatk";
             return h("button", { key:en.id,

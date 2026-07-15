@@ -68,7 +68,7 @@ with sync_playwright() as p:
         return t / n; };
       return { omote: s(undefined), ura: s('ura') };
     })()""")
-    assert avg["ura"] > avg["omote"] * 1.2, f"ura not harder: {avg}"
+    assert avg["ura"] > avg["omote"] * 1.1, f"ura not harder: {avg}"
     print(f"3 ura atk avg {avg['ura']:.1f} > omote {avg['omote']:.1f} OK")
 
     # 4. 裏1章のバトル: 敵が裏プール

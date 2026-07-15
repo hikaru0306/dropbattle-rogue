@@ -12,6 +12,15 @@ URL = "file:///C:/Users/2000h/Downloads/dropbattle-rogue/index.html?test=1"
 
 def st(page): return page.evaluate("window.__test.state()")
 
+def wait_status(page, want, timeout=15):
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        s = st(page)
+        if s["status"] == want:
+            return s
+        time.sleep(0.25)
+    raise SystemExit(f"TIMEOUT waiting status={want}, now={st(page)['status']}")
+
 def fresh_battle(page):
     page.evaluate("window.__test.restart()")
     time.sleep(0.5)
@@ -156,6 +165,70 @@ with sync_playwright() as p:
     assert tv1["atk"] == 52, f"gareth buff x(1+0.1*3): want 52 got {tv1['atk']}"
     print("10 gareth +0.1/drop OK (40 -> 52)")
     page.evaluate("window.__test.setChar(0)")
+
+    # 11. 縦裂の宝珠: ちょうど5個で虹生成・6個では生成されない
+    def count_linev(page):
+        return sum(1 for c in st(page)["board"] if c["sp"] == "linev")
+    fresh_battle(page)
+    page.evaluate("window.__test.giveRelic('linegem')")
+    clear_row(page, 5)
+    n5 = count_linev(page)
+    assert n5 == 1, f"linegem at exactly 5: want 1 got {n5}"
+    fresh_battle(page)
+    page.evaluate("window.__test.giveRelic('linegem')")
+    clear_row(page, 6)
+    n6 = count_linev(page)
+    assert n6 == 0, f"linegem at 6 should not fire: got {n6}"
+    print("11 linegem exact-5 OK (5clear->1, 6clear->0)")
+
+    # 12. 核レリック4色: 翠(3)の核で上下巻き込み（3個消し+上段3個 → 6個分の回復）
+    fresh_battle(page)
+    page.evaluate("window.__test.giveRelic('jadecore')")
+    for i in range(36):
+        page.evaluate(f"window.__test.setCellType({i}, {1 if (i // 6) % 2 else 2})")
+    for i in (30, 31, 32):   # 最下段に翠3連
+        page.evaluate(f"window.__test.setCellType({i}, 3)")
+    page.evaluate("window.__test.setAct('heal')")
+    tv0 = st(page)["tv"]["heal"]
+    page.evaluate("window.__test.commit(30)")
+    time.sleep(0.8)
+    got = st(page)["tv"]["heal"] - tv0
+    assert got == 6, f"jadecore: want heal 6 (3+上3) got {got}"
+    print("12 core relics all colors OK (jadecore 3clear -> 6 cells)")
+
+    # 13. 毒: バトル中は永続（毎ターン4・解除されない）→ 次バトルで解除
+    fresh_battle(page)
+    s = st(page)
+    for i in range(len(s["enemies"])):
+        page.evaluate(f"window.__test.setPat({i}, ['charge'])")  # 敵は何もしない
+    page.evaluate("window.__test.setPoison(1)")
+    hp0 = st(page)["php"]
+    for _ in range(3):
+        page.evaluate("window.__test.resolve()")
+        time.sleep(1.8)
+    s = st(page)
+    assert s["php"] == hp0 - 12, f"poison 3 ticks: want {hp0-12} got {s['php']}"
+    assert s["poison"] > 0, "poison should persist within battle"
+    time.sleep(1.5)
+    page.evaluate("window.__test.weaken()")
+    for _ in range(12):
+        s = st(page)
+        if s["status"] != "battle": break
+        if s["locked"]: time.sleep(0.6); continue
+        page.evaluate("window.__test.commit(0)")
+        time.sleep(0.8)
+    wait_status(page, "reward", 25)
+    page.evaluate("window.__test.declineReward()")
+    time.sleep(0.8)
+    if st(page).get("shop"):  # 群れノードだった場合はショップが開く
+        page.evaluate("window.__test.closeShop()")
+    s = wait_status(page, "map")
+    nodes = {n["id"]: n for n in s["map"]}
+    cand = [i for i in s["selectable"] if nodes[i]["type"] in ("battle", "horde", "elite")]
+    page.evaluate(f"window.__test.enter({(cand or s['selectable'])[0]})")
+    s = wait_status(page, "battle")
+    assert s["poison"] == 0, f"poison should reset next battle: {s['poison']}"
+    print("13 poison permanent-in-battle & reset-next-battle OK")
 
     b.close()
 
