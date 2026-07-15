@@ -1122,7 +1122,17 @@ function DropBattle() {
     if (CHAR_ALL.every(i => c.includes(i))) u.add(4);    // 全員で突破 → 5体目
     const ns = { u:[...u], c }; saveCharState(ns); return ns;
   });
-  const [charStats, setCharStats] = useState(() => loadCharStats());
+  const [charStats, setCharStats] = useState(() => {
+    const st = loadCharStats();
+    // 旧バージョンで既にクリア済み（db_chars.c）だがdb_charstatsに記録がないキャラは突破1回として補完
+    let changed = false;
+    const merged = { ...st };
+    for (const idx of charState.c) {
+      if (!merged[idx]) { merged[idx] = { clears:1, maxAtk:0, maxDef:0 }; changed = true; }
+    }
+    if (changed) saveCharStats(merged);
+    return merged;
+  });
   const bumpCharClear = idx => setCharStats(s => {
     const prev = s[idx] || { clears:0, maxAtk:0, maxDef:0 };
     const ns = { ...s, [idx]: { ...prev, clears: prev.clears + 1 } };
