@@ -698,6 +698,26 @@ const findGroup = (cells, idx) => {
   }
   return ids;
 };
+// 色変え用グループ探索：findGroupと違い、虹(wild)を橋渡しに使わない＝虹に当たったらそこで止まる（虹自体も含めない）
+const findGroupStopAtWild = (cells, idx) => {
+  const start = cells[idx];
+  const ids = new Set();
+  if (start.type === JUNK || start.wild) return ids; // お邪魔・虹からは塗り広げない
+  const seen = new Set(), stack = [idx];
+  const push = i => { const r = Math.floor(i/SIZE), c = i%SIZE;
+    if (r > 0) stack.push(i-SIZE); if (r < SIZE-1) stack.push(i+SIZE);
+    if (c > 0) stack.push(i-1); if (c < SIZE-1) stack.push(i+1); };
+  const base = start.type;
+  while (stack.length) {
+    const i = stack.pop();
+    if (seen.has(i)) continue; seen.add(i);
+    const cell = cells[i];
+    if (cell.type === JUNK || cell.wild) continue; // お邪魔・虹はここで止まる（含めない）
+    if (cell.type !== base) continue;
+    ids.add(cell.id); push(i);
+  }
+  return ids;
+};
 // プリズム: 盤面の最少色を他の色へ変換して3色にする（ターン開始時のみ）
 const prismBoard = cells => {
   const counts = [0, 0, 0, 0];
@@ -2039,8 +2059,8 @@ function DropBattle() {
     // 色変えキャラ：3つ目のアクションは「タップした1個を現在のインク色へ塗り替える」（消さない）
     if (act === "heal" && skill === "recolor") {
       const cell = boardRef.current[idx];
-      if (cell.type === JUNK) { SFX.tap(); return; } // お邪魔は塗れない（アクション消費なし）
-      const grp = findGroup(boardRef.current, idx); // つながった同色グループ全体を塗り替える
+      if (cell.type === JUNK || cell.wild) { SFX.tap(); return; } // お邪魔・虹は塗れない（アクション消費なし）
+      const grp = findGroupStopAtWild(boardRef.current, idx); // つながった同色グループを塗り替える（虹で止まる）
       const paint = paintColorRef.current;
       let painted = 0;
       const nb = boardRef.current.map(c => {
@@ -2370,8 +2390,11 @@ function DropBattle() {
     // 宝箱パズルはレリックの消し方拡張を無効化（プレーンな同色グループのみ）＝実消去(puzzleTap)と一致
     if (statusRef.current === "puzzle") { const ids = findGroup(b, idx); return { ids, over:true, info: groupInfo(b, ids) }; }
     // 色変え／鍛冶(生成・強化)の3つ目アクションは「つながった同色グループ全体」を対象にする（消さない）
+    if (statusRef.current === "battle" && actionRef.current === "heal" && charSkillRef.current === "recolor") {
+      const grp = findGroupStopAtWild(b, idx); return { ids:grp, over:true, info: groupInfo(b, grp) }; // 色変えは虹で止まる
+    }
     if (statusRef.current === "battle" && actionRef.current === "heal" &&
-        (charSkillRef.current === "recolor" || (charSkillRef.current === "smith" && smithModeRef.current !== "stock"))) {
+        charSkillRef.current === "smith" && smithModeRef.current !== "stock") {
       const grp = findGroup(b, idx); return { ids:grp, over:true, info: groupInfo(b, grp) };
     }
     const { ids } = expandClear(b, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed);
