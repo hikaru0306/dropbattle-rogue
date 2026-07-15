@@ -332,6 +332,12 @@ function loadCharState() {
   return { u:[0], c:[] };
 }
 function saveCharState(s) { try { localStorage.setItem("db_chars", JSON.stringify(s)); } catch (e) {} }
+// キャラごとの記録（突破数・最大攻撃力・最大防御力）
+function loadCharStats() {
+  try { const j = JSON.parse(localStorage.getItem("db_charstats")); if (j && typeof j === "object") return j; } catch (e) {}
+  return {};
+}
+function saveCharStats(s) { try { localStorage.setItem("db_charstats", JSON.stringify(s)); } catch (e) {} }
 
 // ===== 敵定義 =====
 const KINDS = {
@@ -1116,6 +1122,18 @@ function DropBattle() {
     if (CHAR_ALL.every(i => c.includes(i))) u.add(4);    // 全員で突破 → 5体目
     const ns = { u:[...u], c }; saveCharState(ns); return ns;
   });
+  const [charStats, setCharStats] = useState(() => loadCharStats());
+  const bumpCharClear = idx => setCharStats(s => {
+    const prev = s[idx] || { clears:0, maxAtk:0, maxDef:0 };
+    const ns = { ...s, [idx]: { ...prev, clears: prev.clears + 1 } };
+    saveCharStats(ns); return ns;
+  });
+  const recordCharStats = (idx, atk, def) => setCharStats(s => {
+    const prev = s[idx] || { clears:0, maxAtk:0, maxDef:0 };
+    if (atk <= prev.maxAtk && def <= prev.maxDef) return s;
+    const ns = { ...s, [idx]: { clears:prev.clears, maxAtk:Math.max(prev.maxAtk, atk), maxDef:Math.max(prev.maxDef, def) } };
+    saveCharStats(ns); return ns;
+  });
   const [preview, setPreview] = useState(null);
   const [clearing, setClearing] = useState(new Set());
   const [locked, setLocked] = useState(false);
@@ -1301,6 +1319,7 @@ function DropBattle() {
   // ===== ターン解決：自攻撃 → 敵攻撃(全員) → 回復 =====
   const resolveTurn = useCallback(() => {
     const { atk, def, heal } = turnRef.current;
+    recordCharStats(curCharRef.current, atk, def); // このターンの攻撃力/防御力で記録更新
     const seq = [];
     const logs = [`― ターン ${turnNumRef.current} ―`];
     const ens = enemiesRef.current.map(e => ({ ...e }));
@@ -1602,6 +1621,7 @@ function DropBattle() {
       if (actRef.current === 1) unlockChar(1); // 2章ボス撃破 → 2体目解放
       if (actRef.current < ACTS - 1) { setActClear({ picks: pickRelics(3, "boss") }); return; }
       recordClear();                            // 最終章ボス撃破 → クリア記録＆解放判定
+      bumpCharClear(curCharRef.current);         // このキャラの突破数+1
       setStatus("clear"); statusRef.current = "clear";
       return;
     }
@@ -2694,6 +2714,16 @@ function DropBattle() {
           selOpen
             ? h("p", { className:"text-[11px]", style:{ opacity:0.85, lineHeight:1.6 } }, ch.desc)
             : h("p", { className:"text-[11px]", style:{ color:"#c99", lineHeight:1.6 } }, "🔒 ", ch.unlock)),
+        // ―― キャラ別スコア ――
+        selOpen && h("div", { key:"chstats" + selView, className:"fade-in flex justify-center gap-1.5 mb-3" },
+          [
+            ["assets/node_boss.png", "突破", (charStats[selView] || {}).clears || 0, "回", "#e8c06a"],
+            ["assets/icon_atk.png", "最大攻撃力", (charStats[selView] || {}).maxAtk || 0, "", "#e05a50"],
+            ["assets/icon_def.png", "最大防御力", (charStats[selView] || {}).maxDef || 0, "", "#5a8fd0"]
+          ].map(([icon, label, val, unit, color]) => h("div", { key:label, className:"flex items-center gap-1 rounded-xl px-2 py-1", style:{ background:"rgba(255,255,255,.06)", border:`1px solid ${color}55` } },
+            Ic(icon, 13),
+            h("span", { className:"text-[9px]", style:{ opacity:0.75 } }, label),
+            h("span", { className:"font-bold text-xs", style:{ color, fontVariantNumeric:"tabular-nums" } }, val, unit)))),
         // ―― 下：キャラ一覧タイル ――
         h("div", { className:"flex justify-center gap-2 mb-3" }, CHARS.map((c, i) => {
           const open = unlocked.includes(i);
