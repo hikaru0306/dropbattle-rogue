@@ -2640,7 +2640,7 @@ function DropBattle() {
   const numCell = { display:"inline-block", minWidth:40, textAlign:"right", fontVariantNumeric:"tabular-nums" };
   const curNode = map.nodes.find(n => n.id === curNodeId);
   const progRow = pendingNodeRef.current ? pendingNodeRef.current.row + 1 : curNode ? curNode.row + 1 : 0;
-  const incomingPreview = Math.max(0, enemies.filter(e => e.alive).reduce((s,e) => s + intentOf(e, enemies).dmg * ((e.enr || 0) >= 3 ? 2 : 1), 0) - tv.def);
+  const incomingPreview = Math.max(0, enemies.filter(e => e.alive).reduce((s,e) => s + intentOf(e, enemies).dmg * ((e.enr || 0) >= 3 ? 2 : 1), 0) - tv.def) + (poisonView > 0 ? POISON_DMG : 0); // 毒は防御無視で確定発生するため別枠で加算
   const rootStyle = {
     fontFamily: FONT,
     minHeight: "calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
