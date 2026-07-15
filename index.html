@@ -3306,7 +3306,7 @@ function DropBattle() {
             const pm = PATTERNS[iv.act];
             const charging = en.alive && iv.act === "bigatk";
             const twice = (en.enr || 0) >= 3;
-            const intentTxt = (iv.act === "charge" ? pm.icon + "あと" + chargeLeft(en)
+            const intentTxt = (iv.act === "charge" ? pm.icon + (chargeLeft(en) === "" ? "" : "あと" + chargeLeft(en))
               : iv.act === "jam" ? pm.icon + iv.jamN
               : iv.act === "jamatk" ? "⚔" + iv.dmg + " 🌀" + iv.jamN
               : iv.act === "healally" ? pm.icon + iv.heal
