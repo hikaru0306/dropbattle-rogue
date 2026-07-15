@@ -3319,10 +3319,10 @@ function DropBattle() {
               className:"relative flex flex-col items-center", style:{ width:Math.max(sz + 4, 58), cursor: en.alive ? "pointer" : "default",
                 filter: gtut === "warn" && en.alive ? "drop-shadow(0 0 12px rgba(255,190,90,.95)) drop-shadow(0 0 5px rgba(255,120,60,.85))" : "none",
                 transition:"filter .3s ease" } },
-              // 名前はスプライトの上に置く（下に積むと表示量で足元が浮くため）
-              h("span", { className:"flex items-center justify-center", style:{ gap:3, marginTop:2, marginBottom:2, maxWidth:"none" } },
+              // 名前は表示しない。激昂・強敵の状態だけスプライトの上にバッジで出す（下に積むと表示量で足元が浮くため）
+              ((en.enr || 0) > 0 || en.elite) && h("span", { className:"flex items-center justify-center", style:{ gap:3, marginTop:2, marginBottom:2, maxWidth:"none" } },
                 h("span", { className:"text-[9px] font-bold", style:{ padding:"0 7px", borderRadius:6, background:"rgba(10,8,16,.72)", border:"1px solid rgba(255,255,255,.12)", color: en.boss ? "#ff5c7a" : en.elite ? "#d05cff" : "#d8cbe8", opacity: en.alive ? 0.95 : 0.35, textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } },
-                  ((en.enr || 0) > 0 ? "🔥" + en.enr + " " : "") + (en.elite ? "💀" : "") + en.name)),
+                  ((en.enr || 0) > 0 ? "🔥" + en.enr + " " : "") + (en.elite ? "💀" : ""))),
               h("span", { style:{ position:"relative", display:"block" } },
                 // 予告（攻撃など）はスプライトに重ねて表示。ボスは縦に高く、別の行として積むと低い画面高で見切れるため
                 en.alive && h("span", { className:"absolute text-[10px] font-bold", style:{ top:-28, left:"50%",
