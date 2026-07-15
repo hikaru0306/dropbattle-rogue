@@ -1113,10 +1113,12 @@ const SFX = {
 };
 
 // ===== BGM（CC0実音源: cynicmusic / Juhani Junkala）=====
-const BGM_FILES = { title:"assets/bgm/title.mp3", map:"assets/bgm/map.mp3", battle:"assets/bgm/battle.mp3", boss:"assets/bgm/boss.mp3" };
+const BGM_FILES = { title:"assets/bgm/title.mp3", map:"assets/bgm/map.mp3", battle:"assets/bgm/battle.mp3", boss:"assets/bgm/boss.mp3",
+  result:"assets/bgm/result.mp3", bossclear:"assets/bgm/bossclear.mp3" }; // result=勝利ジングル(CC0 Victory)/bossclear=達成ファンファーレ(CC0 Juhani Junkala "Ending")
+const BGM_NOLOOP = { result:true, bossclear:true }; // ジングル系は1回再生（ループしない）
 let bgmOn = true, bgmVol = 0.6, bgmAudio = null, bgmTrack = null;
 try { const v = parseFloat(localStorage.getItem("db_bgmvol")); if (v >= 0 && v <= 1) bgmVol = v; } catch (e) {}
-const bgmBase = name => (name === "battle" ? 0.26 : 0.3);
+const bgmBase = name => (name === "battle" ? 0.26 : name === "result" || name === "bossclear" ? 0.34 : 0.3);
 const bgmApplyVol = () => { if (bgmAudio && bgmTrack) bgmAudio.volume = bgmBase(bgmTrack) * bgmVol; };
 const bgmStop = () => {
   bgmTrack = null;
@@ -1127,7 +1129,8 @@ const bgmPlay = name => {
   if (bgmTrack === name && bgmAudio && !bgmAudio.paused) return;
   bgmTrack = name;
   try {
-    if (!bgmAudio) { bgmAudio = new Audio(); bgmAudio.loop = true; bgmAudio.preload = "auto"; }
+    if (!bgmAudio) { bgmAudio = new Audio(); bgmAudio.preload = "auto"; }
+    bgmAudio.loop = !BGM_NOLOOP[name];
     bgmAudio.src = BGM_FILES[name];
     bgmAudio.volume = bgmBase(name) * bgmVol;
     const p = bgmAudio.play();
@@ -1197,6 +1200,7 @@ function DropBattle() {
   const [curNodeId, setCurNodeId] = useState(null);
   const curNodeRef = useRef(null); curNodeRef.current = curNodeId;
   const [visited, setVisited] = useState(new Set());
+  const visitedRef = useRef(visited); visitedRef.current = visited;
   const pendingNodeRef = useRef(null); // 攻略中のノード
 
   // バトル
@@ -1227,6 +1231,7 @@ function DropBattle() {
   const [stockView, setStockView] = useState(0);
   const [selView, setSelView] = useState(0);               // キャラ選択画面で眺めているキャラ
   const [selMode, setSelMode] = useState("omote");         // キャラ選択画面のモード（表/裏）
+  const [resumeAsk, setResumeAsk] = useState(null);        // 中断データの再開確認 {save, mode}
   const [charState, setCharState] = useState(() => loadCharState());
   const charStateRef = useRef(charState); charStateRef.current = charState;
   const unlockChar = idx => setCharState(s => {
@@ -2619,11 +2624,89 @@ function DropBattle() {
     turnRef.current = freshTurn(); syncTurn();
   };
 
+  // ===== 中断セーブ（マップ到達ごとに自動保存・キャラごとに1スロット） =====
+  const saveKey = ci => "db_save_" + ci;
+  const RESUME_UI = !TEST_MODE || location.search.indexOf("resume=1") >= 0; // 既存テストを壊さないようTEST_MODEでは resume=1 指定時のみ再開モーダルを出す
+  const loadSave = ci => { try { const j = JSON.parse(localStorage.getItem(saveKey(ci))); return j && j.v === 1 ? j : null; } catch (e) { return null; } };
+  const clearSave = ci => { try { localStorage.removeItem(saveKey(ci)); } catch (e) {} };
+  const saveRun = () => {
+    try {
+      if (!visitedRef.current.size && actRef.current === 0) return; // 進行ゼロは保存しない（再開する意味がない）
+      const m = mapRef.current;
+      localStorage.setItem(saveKey(curCharRef.current), JSON.stringify({
+        v: 1, char: curCharRef.current, mode: modeRef.current, act: actRef.current,
+        php: pRef.current, pmax: pMaxRef.current, coins: coinsRef.current, uid: UID,
+        items: itemsRef.current.slice(), relics: relicsRef.current.slice(),
+        owned: { ...ownedRef.current }, ownedUp: { ...ownedUpRef.current },
+        bag: { ...bagRef.current }, bagUp: { ...bagUpRef.current },
+        nodes: m.nodes.map(n => ({ id:n.id, row:n.row, col:n.col, n:n.n, type:n.type })),
+        edges: m.edges.map(e => ({ from:e.from, to:e.to })),
+        cur: curNodeRef.current, visited: [...visitedRef.current],
+        battleNum: battleNumRef.current }));
+    } catch (e) {}
+  };
+  const resumeRun = sv => {
+    UID = Math.max(UID, (sv.uid || 1) + 1);
+    setCurChar(sv.char);
+    setMode(sv.mode === "ura" ? "ura" : "omote");
+    storeRef.current = 0; setStoreView(0);
+    stockRef.current = 0; setStockView(0); setSmithMode("stock");
+    setPaintColor(0); setSkillTarget("atk");
+    ownedRef.current = { ...initZero(), ...sv.owned };
+    bagRef.current = { ...initZero(), ...sv.bag };
+    ownedUpRef.current = { ...initZero(), ...sv.ownedUp };
+    bagUpRef.current = { ...initZero(), ...sv.bagUp };
+    syncOwned();
+    const nodes = sv.nodes.map(n => ({ ...n }));
+    const rows = [];
+    for (const n of nodes) (rows[n.row] = rows[n.row] || []).push(n);
+    rows.forEach(r => r.sort((a, b) => a.col - b.col));
+    const m = { nodes, edges: sv.edges, rows };
+    setMap(m); mapRef.current = m;
+    setCurNodeId(sv.cur); curNodeRef.current = sv.cur;
+    setVisited(new Set(sv.visited));
+    pendingNodeRef.current = null;
+    setEnemiesBoth([]);
+    setPMax(sv.pmax); setPHP(sv.php); setPoison(0);
+    setAct(sv.act);
+    relicsRef.current = (sv.relics || []).filter(k => RELICS[k]);
+    RELICSET = new Set(relicsRef.current);
+    setRelicsView(relicsRef.current.slice());
+    setCoinsBoth(sv.coins || 0);
+    setItemsBoth((sv.items || []).filter(k => CONSUM[k]));
+    battleNumRef.current = sv.battleNum || 1;
+    commitBoard(makeBoard(bagRef, ownedRef, bagUpRef, ownedUpRef));
+    syncBag(); setPops({});
+    setAction("atk"); actionRef.current = "atk";
+    setUsed(new Set()); usedRef.current = new Set();
+    setPreview(null); setClearing(new Set());
+    setLocked(false); lockedRef.current = false;
+    setTurn(1);
+    setRewards(null); setRestMsg(null); setAnims({});
+    setShop(null); setCampfire(null); setActClear(null);
+    setGuide(null);
+    setStatus("map"); statusRef.current = "map";
+    setLog(["― 冒険を再開した ―"]);
+    setFx([]);
+    turnRef.current = freshTurn(); syncTurn();
+  };
+  // マップ到達（ノード踏破）ごとに自動保存。決着したら中断データは消す
+  useEffect(() => {
+    if (status === "map") saveRun();
+    else if (status === "clear" || status === "lose") clearSave(curCharRef.current);
+  }, [status, visited]);
+  const suspendRun = () => { // 中断してタイトルへ（進行はマップ到達時点まで保存済み）
+    saveRun();
+    setSoundOpen(false);
+    setStatus("title"); statusRef.current = "title";
+    SFX.tap();
+  };
+
   const toggleSfx = () => { sfxEnabled = !sfxEnabled; setSfxOn(sfxEnabled); if (sfxEnabled) SFX.tap(); };
   const toggleBgm = () => {
     bgmOn = !bgmOn; setBgmOnView(bgmOn);
     if (!bgmOn) bgmStop();
-    else { const s = statusRef.current; bgmPlay(s === "map" ? "map" : s === "battle" ? (enemiesRef.current.some(e => e.boss && e.alive) ? "boss" : "battle") : "title"); }
+    else { const s = statusRef.current; bgmPlay(s === "map" ? "map" : s === "battle" ? (actClearRef.current ? "bossclear" : enemiesRef.current.some(e => e.boss) ? "boss" : "battle") : s === "reward" ? "result" : s === "clear" ? "bossclear" : "title"); }
   };
   const changeSfxVol = v => { sfxVol = v; setSfxVolView(v); try { localStorage.setItem("db_sfxvol", v); } catch (e) {} };
   const changeBgmVol = v => { bgmVol = v; setBgmVolView(v); bgmApplyVol(); try { localStorage.setItem("db_bgmvol", v); } catch (e) {} };
@@ -2632,10 +2715,13 @@ function DropBattle() {
   useEffect(() => {
     if (status === "title" || status === "select") bgmPlay("title");
     else if (status === "map") bgmPlay("map");
-    else if (status === "battle") bgmPlay(enemies.some(e => e.boss && e.alive) ? "boss" : "battle");
-    else if (status === "clear" || status === "lose") bgmStop();
+    // ボス戦はボスを倒して雑魚が残っていてもボスBGMを維持（e.boss は死亡後もリストに残る）
+    else if (status === "battle") bgmPlay(actClear ? "bossclear" : enemies.some(e => e.boss) ? "boss" : "battle");
+    else if (status === "reward") bgmPlay("result");   // 戦闘リザルト＝勝利ジングル
+    else if (status === "clear") bgmPlay("bossclear"); // 全章制覇＝達成ファンファーレ
+    else if (status === "lose") bgmStop();
     // reward中は直前の曲を継続
-  }, [status, enemies, bgmOnView]);
+  }, [status, enemies, bgmOnView, actClear]);
   useEffect(() => () => bgmStop(), []);
   useEffect(() => { syncBag(); }, []); // 初期盤面生成後の袋表示同期
 
@@ -2717,7 +2803,7 @@ function DropBattle() {
       restart: () => restart(false),
       resolve: () => resolveTurn(),
       commit: i => commitRef.current(i),
-      sound: () => ({ sfxOn: sfxEnabled, bgmOn, sfxVol, bgmVol }),
+      sound: () => ({ sfxOn: sfxEnabled, bgmOn, sfxVol, bgmVol, track: bgmTrack }),
       previewSize: idx => makePreview(boardRef.current, idx).ids.size,
       previewIdxs: idx => { const ids = makePreview(boardRef.current, idx).ids; return boardRef.current.map((c,i)=>ids.has(c.id)?i:-1).filter(i=>i>=0); },
       groupSize: idx => findGroup(boardRef.current, idx).size,
@@ -2757,6 +2843,12 @@ function DropBattle() {
       relicPool: () => RELIC_KEYS.filter(k => !relicsRef.current.includes(k) && (RELICS[k].char === undefined || RELICS[k].char === curCharRef.current)),
       charState: () => ({ u:charStateRef.current.u.slice(), c:charStateRef.current.c.slice(), cu:(charStateRef.current.cu || []).slice() }),
       setMode: m => setMode(m),
+      // 中断セーブ
+      suspend: () => suspendRun(),
+      hasSave: i => !!loadSave(i),
+      saveData: i => loadSave(i),
+      resumeSave: i => { const sv = loadSave(i); if (sv) resumeRun(sv); },
+      clearSave: i => clearSave(i),
       // 仕様書生成用の生データダンプ（gen_docs.py が使用）
       data: () => ({ RELICS, RELIC_PRICE, ITEMS, DESC_UP, RGEM, KINDS, SHIELDS, PATTERNS, CONSUM,
         ACT_NAMES, URA_ACT_NAMES, ACT_POOLS, URA_POOLS, BOSS_BY_ACT, URA_BOSS_BY_ACT,
@@ -2891,22 +2983,20 @@ function DropBattle() {
   // ===== キャラクター選択画面 =====
   if (status === "select") {
     const unlocked = charState.u;
+    const startChar = (i, m) => {
+      clearSave(i); // 新規開始＝そのキャラの中断データは破棄
+      setMode(m === "ura" ? "ura" : "omote");
+      setCurChar(i);
+      setPaintColor(0); setSkillTarget("atk"); setSmithMode("stock");
+      restart(false); // 冒険を完全初期化（中断→タイトル経由でも状態が残らないように）
+      SFX.pick();
+    };
     const pickChar = (i, m) => {
       if (!unlocked.includes(i)) { SFX.tap(); return; }
       if (m === "ura" && !charState.c.includes(i)) { SFX.tap(); return; } // 裏は表クリア済みキャラのみ
-      setMode(m === "ura" ? "ura" : "omote");
-      setCurChar(i);
-      storeRef.current = 0; setStoreView(0);
-      stockRef.current = 0; setStockView(0); setSmithMode("stock");
-      // キャラ別の初期特殊ドロップを袋にセット（ノアは蓄積石3＋剣盾回復2ずつ）
-      ownedRef.current = initOwned(i);
-      bagRef.current = refillBag(ownedRef.current);
-      ownedUpRef.current = initZero(); bagUpRef.current = initZero();
-      syncOwned();
-      setPaintColor(0); setSkillTarget("atk");
-      setStatus("map"); statusRef.current = "map";
-      setLog(["― ルートを選んで進もう ―"]);
-      SFX.pick();
+      const sv = RESUME_UI ? loadSave(i) : null;
+      if (sv) { setResumeAsk({ save: sv, mode: m }); SFX.open(); return; } // 中断データあり→確認
+      startChar(i, m);
     };
     const ch = CHARS[selView];
     const selOpen = unlocked.includes(selView);
@@ -2984,7 +3074,27 @@ function DropBattle() {
             : effMode === "ura"
             ? { background:`linear-gradient(180deg, ${URA_C} 0%, #6a3a9a 100%)`, border:"2px solid rgba(255,255,255,.35)", color:"#f4eafc", fontSize:"1.05rem", boxShadow:`0 4px 16px ${URA_C}55`, textShadow:"0 1px 2px rgba(0,0,0,.45)", cursor:"pointer", fontFamily:"inherit" }
             : { background:`linear-gradient(180deg, ${ch.color} 0%, ${ch.color}bb 100%)`, border:"2px solid rgba(255,255,255,.35)", color:"#1a1424", fontSize:"1.05rem", boxShadow:`0 4px 16px ${ch.color}55`, textShadow:"0 1px 0 rgba(255,255,255,.25)", cursor:"pointer", fontFamily:"inherit" } },
-          !selOpen ? "🔒 未解放" : effMode === "ura" ? "裏の世界へ挑む ▶" : "この仲間と冒険に出る ▶")));
+          !selOpen ? "🔒 未解放" : effMode === "ura" ? "裏の世界へ挑む ▶" : "この仲間と冒険に出る ▶")),
+      // ―― 中断データの再開確認 ――
+      resumeAsk && h("div", { className:"fade-in", style:{ position:"fixed", inset:0, zIndex:60, background:"rgba(8,4,14,.85)", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 24px" } },
+        h("div", { className:"pop-in rounded-2xl p-4 w-full text-center", style:{ maxWidth:320, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
+          h("p", { className:"font-bold mb-1", style:{ color:"#ffcf5d", fontSize:"1.02rem" } }, "📜 中断中のデータがあります"),
+          h("div", { className:"rounded-xl px-3 py-2 mb-2 text-[12px]", style:{ background:"rgba(255,255,255,.05)", border:"1px solid #453b5c", lineHeight:1.9 } },
+            h("span", { className:"font-bold", style:{ color: resumeAsk.save.mode === "ura" ? "#cf9af8" : "#f0e4c8" } },
+              resumeAsk.save.mode === "ura" ? "裏・" : "", "第", resumeAsk.save.act + 1, "章"),
+            h("span", { style:{ opacity:0.85 } }, "　HP ", resumeAsk.save.php, "/", resumeAsk.save.pmax, "　"),
+            Ic("assets/icon_coin.png", 12), h("span", { style:{ color:"#e8c06a", fontWeight:800 } }, " ", resumeAsk.save.coins),
+            h("span", { className:"block text-[10px]", style:{ opacity:0.6 } }, "🏺", (resumeAsk.save.relics || []).length, "個のレリックを所持")),
+          h("p", { className:"text-sm mb-3", style:{ opacity:0.9 } }, "続きから進めますか？"),
+          h("button", { onClick: () => { const sv = resumeAsk.save; setResumeAsk(null); resumeRun(sv); SFX.pick(); },
+            className:"w-full rounded-xl py-2.5 font-bold mb-2",
+            style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a", fontFamily:"inherit" } }, "▶ 続きから"),
+          h("button", { onClick: () => { const a = resumeAsk; setResumeAsk(null); startChar(a.save.char, a.mode); },
+            className:"w-full rounded-xl py-2.5 font-bold mb-2",
+            style:{ background:"rgba(255,255,255,.08)", color:"#c9bfe0", border:"2px solid #453b5c", fontFamily:"inherit" } }, "最初から（中断データを削除）"),
+          h("button", { onClick: () => { setResumeAsk(null); SFX.tap(); },
+            className:"w-full rounded-xl py-2 text-sm",
+            style:{ background:"transparent", color:"#8a8296", border:"1px solid #3c3450", fontFamily:"inherit" } }, "やめる"))));
   }
 
   // ===== 共通オーバーレイ =====
@@ -3006,7 +3116,12 @@ function DropBattle() {
         h("button", { onClick: () => setSoundOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
       soundRow("BGM", "assets/icon_note.png", bgmOnView, toggleBgm, bgmVolView, changeBgmVol, null),
       soundRow("効果音", "assets/icon_speaker.png", sfxOn, toggleSfx, sfxVolView, changeSfxVol, () => SFX.tap()),
-      h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } }, "アイコンでON/OFF・スライダーで音量。設定は端末に保存されます。"))));
+      h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } }, "アイコンでON/OFF・スライダーで音量。設定は端末に保存されます。"),
+      (status === "map" || status === "battle" || status === "reward") && h("button", { onClick: suspendRun,
+        className:"w-full rounded-xl py-2.5 font-bold text-sm mt-3",
+        style:{ background:"rgba(255,255,255,.08)", color:"#c9bfe0", border:"2px solid #453b5c", fontFamily:"inherit" } }, "冒険を中断してタイトルへ"),
+      (status === "map" || status === "battle" || status === "reward") && h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } },
+        "進行はマップ到達時点まで自動保存。キャラ選択で「続きから」再開できます（バトル中の進行は保存されません）。"))));
   if (relicOpen) overlays.push(h("div", { key:"relics", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setRelicOpen(false) },
     h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, maxHeight:"78vh", overflowY:"auto", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-2" },
