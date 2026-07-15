@@ -2640,7 +2640,13 @@ function DropBattle() {
   const numCell = { display:"inline-block", minWidth:40, textAlign:"right", fontVariantNumeric:"tabular-nums" };
   const curNode = map.nodes.find(n => n.id === curNodeId);
   const progRow = pendingNodeRef.current ? pendingNodeRef.current.row + 1 : curNode ? curNode.row + 1 : 0;
-  const willPoison = poisonView > 0 || enemies.some(e => e.alive && intentOf(e, enemies).act === "poison"); // 既に毒 or このターン新たに毒を受ける
+  const willPoison = poisonView > 0 || enemies.some(e => {
+    if (!e.alive) return false;
+    const pat = e.pat || KINDS[e.kind].pats[0];
+    const actsN = (e.enr || 0) >= 3 ? 2 : 1; // 激昂3以上は1ターンに2回行動するため両方チェック
+    for (let ai = 0; ai < actsN; ai++) if (pat[(e.pi + ai) % pat.length] === "poison") return true;
+    return false;
+  }); // 既に毒 or このターン新たに毒を受ける
   const incomingPreview = Math.max(0, enemies.filter(e => e.alive).reduce((s,e) => s + intentOf(e, enemies).dmg * ((e.enr || 0) >= 3 ? 2 : 1), 0) - tv.def) + (willPoison ? POISON_DMG : 0); // 毒は防御無視で確定発生するため別枠で加算
   const rootStyle = {
     fontFamily: FONT,
