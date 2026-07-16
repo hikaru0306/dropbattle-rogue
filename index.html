@@ -1335,7 +1335,16 @@ function DropBattle() {
   const recordCharStats = (idx, atk, def) => setCharStats(s => {
     const prev = s[idx] || { clears:0, maxAtk:0, maxDef:0 };
     if (atk <= prev.maxAtk && def <= prev.maxDef) return s;
-    const ns = { ...s, [idx]: { clears:prev.clears, maxAtk:Math.max(prev.maxAtk, atk), maxDef:Math.max(prev.maxDef, def) } };
+    const ns = { ...s, [idx]: { ...prev, maxAtk:Math.max(prev.maxAtk, atk), maxDef:Math.max(prev.maxDef, def) } };
+    saveCharStats(ns); return ns;
+  });
+  // 最深到達（章・層）をキャラ×モード別に記録。reach/reachU = [act, row(1始まり)]
+  const recordReach = (idx, mode, act, row) => setCharStats(s => {
+    const prev = s[idx] || { clears:0, maxAtk:0, maxDef:0 };
+    const key = mode === "ura" ? "reachU" : "reach";
+    const cur = prev[key];
+    if (cur && (cur[0] > act || (cur[0] === act && cur[1] >= row))) return s;
+    const ns = { ...s, [idx]: { ...prev, [key]: [act, row] } };
     saveCharStats(ns); return ns;
   });
   const [preview, setPreview] = useState(null);
@@ -2200,6 +2209,7 @@ function DropBattle() {
     if (statusRef.current !== "map" || lockedRef.current || shopRef.current || campfireRef.current) return;
     if (!selectableIds().includes(node.id)) return;
     pendingNodeRef.current = node;
+    recordReach(curCharRef.current, modeRef.current, actRef.current, node.row + 1); // 最深到達を更新
     SFX.step();
     if (node.type === "rest") {
       if (hasR("adventmap")) { setCoinsBoth(coinsRef.current + 30); addLog(["🗺 冒険者の地図: コイン+30"]); }
@@ -3155,7 +3165,7 @@ function DropBattle() {
           h("h2", { className:"font-bold", style:{ fontSize:"1.15rem", color:"#f2e6c8", textShadow:"0 2px 0 rgba(0,0,0,.5)" } }, "キャラクター選択"),
           h("span", { className:"text-[11px]", style:{ opacity:0.6 } }, "解放 ", unlocked.length, " / ", CHARS.length)),
         // ―― 上：選択中キャラのアップ＋横にスコア ――
-        h("div", { style:{ flex:1, display:"flex", flexDirection:"row", alignItems:"flex-end", justifyContent:"center", position:"relative", minHeight:0, paddingTop:4, gap:2 } },
+        h("div", { style:{ flex:1, display:"flex", flexDirection:"row", alignItems:"flex-end", justifyContent:"center", position:"relative", minHeight:0, paddingTop:4, gap:"clamp(10px,4vw,22px)" } },
           // キャラの立ち位置はキャラ・解放状態によらず固定（ステージ幅を固定し、記録パネルも常に同じ幅を確保する）
           h("div", { style:{ position:"relative", display:"flex", flexDirection:"column", alignItems:"center", width:"min(56vw,250px)", flexShrink:0 } },
             h("div", { style:{ position:"absolute", left:"50%", top:"54%", transform:"translate(-50%,-50%)", width:"min(62vw,300px)", height:"min(62vw,300px)", borderRadius:"50%", background:`radial-gradient(circle, ${selOpen ? ch.color : "#544a6a"}36 0%, transparent 62%)`, pointerEvents:"none" } }),
@@ -3169,8 +3179,16 @@ function DropBattle() {
           h("div", { key:"chstats" + selView, className:"fade-in rounded-xl px-2.5 py-2", style:{ visibility: selOpen ? "visible" : "hidden", background:"rgba(24,19,34,.92)", border:"1px solid #55486e", boxShadow:"0 3px 10px rgba(0,0,0,.35)", display:"flex", flexDirection:"column", gap:5, marginBottom:18, width:138, flexShrink:0 } },
             h("span", { className:"text-[9px] font-bold text-center", style:{ color:"#c9bfe0", letterSpacing:"0.3em", borderBottom:"1px solid #3c3450", paddingBottom:3, paddingLeft:"0.3em" } }, "記録"),
             [
-              ["assets/node_boss.png", "突破", (charStats[selView] || {}).clears || 0, "回", "#e8c06a", 1],
-              ["assets/node_elite.png", "裏突破", uraOpen ? ((charStats[selView] || {}).uraClears || 0) : "－", uraOpen ? "回" : "", URA_C, uraOpen ? 1 : 0.4],
+              // 到達 = 制覇済みなら「制覇 N回」、未制覇なら最深到達の「X章Y層」
+              ["assets/node_boss.png", "到達",
+                charState.c.includes(selView) ? `制覇 ${(charStats[selView] || {}).clears || 1}回`
+                : (charStats[selView] || {}).reach ? `${(charStats[selView] || {}).reach[0] + 1}章${(charStats[selView] || {}).reach[1]}層` : "－",
+                "", "#e8c06a", 1],
+              ["assets/node_elite.png", "裏到達",
+                !uraOpen ? "－"
+                : (charState.cu || []).includes(selView) ? `制覇 ${(charStats[selView] || {}).uraClears || 1}回`
+                : (charStats[selView] || {}).reachU ? `${(charStats[selView] || {}).reachU[0] + 1}章${(charStats[selView] || {}).reachU[1]}層` : "－",
+                "", URA_C, uraOpen ? 1 : 0.4],
               ["assets/icon_atk.png", "最大ダメージ", (charStats[selView] || {}).maxAtk || 0, "", "#e05a50", 1],
               ["assets/icon_def.png", "最大ガード", (charStats[selView] || {}).maxDef || 0, "", "#5a8fd0", 1]
             ].map(([icon, label, val, unit, color, op]) => h("div", { key:label, className:"flex items-center gap-1.5", style:{ opacity: op } },
@@ -3178,12 +3196,14 @@ function DropBattle() {
               h("span", { className:"text-[9px] flex-1", style:{ opacity:0.8, whiteSpace:"nowrap", marginRight:6 } }, label),
               h("span", { className:"font-bold text-[11px]", style:{ color, fontVariantNumeric:"tabular-nums" } }, val, unit))))),
         // ―― 中：名前と説明 ――
-        h("div", { key:"chinfo" + selView, className:"fade-in rounded-2xl px-4 mt-2 mb-3 text-center", style:{ background:"rgba(24,19,34,.92)", border:`2px solid ${selOpen ? ch.color : "#3c3450"}`, boxShadow:"0 3px 14px rgba(0,0,0,.4)", height:104, display:"flex", flexDirection:"column", justifyContent:"center" } },
-          h("div", { className:"flex items-center justify-center gap-2 mb-1" },
+        h("div", { key:"chinfo" + selView, className:"fade-in rounded-2xl px-4 mt-2 mb-3 text-center", style:{ background:"rgba(24,19,34,.92)", border:`2px solid ${selOpen ? ch.color : "#3c3450"}`, boxShadow:"0 3px 14px rgba(0,0,0,.4)", height:122, display:"flex", flexDirection:"column", justifyContent:"center" } },
+          h("div", { className:"flex items-center justify-center gap-2 mb-0.5" },
             h("span", { className:"font-bold", style:{ fontSize:"1.12rem", color: selOpen ? "#f0e4c8" : "#8a8296", textShadow:"0 1px 0 rgba(0,0,0,.5)" } }, selOpen ? ch.name : "？？？"),
-            selOpen && h("span", { className:"text-[10px] px-1.5 py-0.5 rounded-md", style:{ background:"rgba(255,255,255,.08)", color:ch.color, border:`1px solid ${ch.color}` } }, ch.tag),
-            selOpen && charState.c.includes(selView) && h("span", { className:"text-[10px] px-1.5 py-0.5 rounded-md font-bold", style:{ background:"rgba(140,232,176,.16)", color:"#8ce8b0", border:"1px solid #4fae7a" } }, "✓ クリア済み"),
-            selOpen && (charState.cu || []).includes(selView) && h("span", { className:"text-[10px] px-1.5 py-0.5 rounded-md font-bold", style:{ background:"rgba(176,106,240,.16)", color:"#cf9af8", border:"1px solid #8a4fc0" } }, "✓ 裏制覇")),
+            selOpen && h("span", { className:"text-[10px] px-1.5 py-0.5 rounded-md", style:{ background:"rgba(255,255,255,.08)", color:ch.color, border:`1px solid ${ch.color}` } }, ch.tag)),
+          // 制覇チップは名前の下の専用行に（高さはキャラによらず常に確保＝位置が動かない）
+          h("div", { className:"flex items-center justify-center", style:{ gap:6, minHeight:22, marginBottom:2 } },
+            selOpen && charState.c.includes(selView) && h("span", { className:"text-[10px] px-2 py-0.5 rounded-full font-bold", style:{ background:"linear-gradient(160deg,#ffedaa,#e8b84a 65%,#cf9430)", color:"#5c3c0c", border:"1px solid #a87824", boxShadow:"inset 0 1px 1px rgba(255,255,255,.7), 0 1px 3px rgba(0,0,0,.4)", textShadow:"0 1px 0 rgba(255,255,255,.4)" } }, "✓ クリア済み"),
+            selOpen && (charState.cu || []).includes(selView) && h("span", { className:"text-[10px] px-2 py-0.5 rounded-full font-bold", style:{ background:"linear-gradient(160deg,#dcbcfc,#a86ae0 65%,#8443c4)", color:"#2e1246", border:"1px solid #6a3aa0", boxShadow:"inset 0 1px 1px rgba(255,255,255,.55), 0 1px 3px rgba(0,0,0,.4)", textShadow:"0 1px 0 rgba(255,255,255,.3)" } }, "✓ 裏制覇")),
           selOpen
             ? h("p", { className:"text-[11px]", style:{ opacity:0.85, lineHeight:1.6 } }, ch.desc)
             : h("p", { className:"text-[11px]", style:{ color:"#c99", lineHeight:1.6 } }, "🔒 ", ch.unlock)),
@@ -3192,14 +3212,25 @@ function DropBattle() {
           const open = unlocked.includes(i);
           const sel = i === selView;
           return h("button", { key:i, onClick: () => { if (i !== selView) { setSelView(i); SFX.tap(); } },
-            style:{ width:"clamp(44px,12.5vw,58px)", height:"clamp(50px,14vw,66px)", borderRadius:14, flexShrink:0, position:"relative", overflow:"hidden", padding:3,
+            style:{ width:"clamp(44px,12.5vw,58px)", height:"clamp(50px,14vw,66px)", borderRadius:14, flexShrink:0, position:"relative", padding:3,
               background: sel ? "rgba(42,34,58,.98)" : "rgba(22,17,30,.92)",
               border: sel ? `2.5px solid ${open ? c.color : "#6f6880"}` : "2px solid #3c3450",
               boxShadow: sel ? `0 0 12px ${open ? c.color : "#000"}55, 0 3px 8px rgba(0,0,0,.4)` : "none",
               transform: sel ? "translateY(-4px)" : "none", transition:"transform .15s ease, box-shadow .15s ease, border-color .15s ease", cursor:"pointer" } },
             h("img", { src:c.img, alt:"", draggable:false, onError: e => { e.target.style.display = "none"; }, style:{ width:"100%", height:"100%", objectFit:"contain", filter: open ? "none" : "brightness(0) opacity(.75)" } }),
             !open && h("span", { style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.2rem", textShadow:"0 1px 3px #000" } }, "🔒"),
-            open && charState.c.includes(i) && h("span", { title:"クリア済み", style:{ position:"absolute", top:-3, right:-3, width:18, height:18, borderRadius:"50%", background:"linear-gradient(180deg,#8ce8b0,#3ea866)", border:"1.5px solid rgba(255,255,255,.9)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:900, color:"#0d2015", boxShadow:"0 1px 3px rgba(0,0,0,.5)" } }, "✓"));
+            open && charState.c.includes(i) && h("span", { title:"クリア済み", style:{ position:"absolute", top:-8, right:-5, zIndex:2, width:19, height:19, borderRadius:"50%",
+              background:"linear-gradient(160deg,#fff3c0 0%,#ffd75e 38%,#e8a93a 70%,#c07f22 100%)",
+              border:"1.5px solid #8a5c16",
+              boxShadow:"inset 0 1px 2px rgba(255,255,255,.85), inset 0 -2px 3px rgba(122,72,10,.5), 0 2px 4px rgba(0,0,0,.55)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:11, fontWeight:900, color:"#6e4408", textShadow:"0 1px 0 rgba(255,255,255,.5)" } }, "✓"),
+            open && (charState.cu || []).includes(i) && h("span", { title:"裏制覇", style:{ position:"absolute", top:-8, left:-5, zIndex:2, width:19, height:19, borderRadius:"50%",
+              background:"linear-gradient(160deg,#ead1ff 0%,#c084f8 40%,#9450d8 72%,#6a2fa8 100%)",
+              border:"1.5px solid #55217e",
+              boxShadow:"inset 0 1px 2px rgba(255,255,255,.75), inset 0 -2px 3px rgba(60,18,96,.6), 0 2px 4px rgba(0,0,0,.55)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:9, fontWeight:900, color:"#f4e8ff", textShadow:"0 1px 1px rgba(40,10,66,.8)" } }, "裏"));
         })),
         // ―― モード切替（表クリア済みキャラのみ裏を選べる） ――
         uraOpen && h("div", { className:"flex gap-2 mb-2" }, [
