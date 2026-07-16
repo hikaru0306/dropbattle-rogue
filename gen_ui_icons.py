@@ -40,7 +40,7 @@ JOBS = {
     "mk_aoe":    "Two short crossed steel swords forming a clean X shape, gold crossguards.",
     "mk_gold":   "Three shiny thick gold coins in a small stack, top coin slightly offset, each with visible rim edge.",
     "mk_bolt":   "A bold bright yellow lightning bolt symbol, sharp clean zigzag shape with a pointed bottom tip.",
-    "mk_bombx":  "A classic round black cartoon bomb with a highlight, short brown lit fuse with a small flame on top, and a small bright orange plus cross mark painted on the front.",
+    "mk_bombx":  "A round dark iron bomb with a short lit fuse, a bold bright orange plus cross emblem painted on its body.",
     "mk_bombd":  "A round dark purple iron bomb with a short lit fuse, a bold bright violet X cross emblem painted on its body.",
     "mk_atkx":   "A sword pointing straight up completely engulfed in bright vivid orange and yellow flames, red leather grip.",
     "mk_defx":   "A gold heater shield with a flat top and pointed bottom, a large glossy round red gem set in the center.",
