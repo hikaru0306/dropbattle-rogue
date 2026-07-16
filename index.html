@@ -228,7 +228,12 @@ const ITEMS = {
   atk:  { mark:"剣", img:"assets/icon_atk.png", color:"#ffd9d9", ring:"rgba(255,90,90,.95)", glowc:"#ff5a5a", name:"ソード", desc:"同時に消したドロップ1つにつき攻撃+5" },
   atkx: { mark:"攻", img:"assets/mk_atkx.png", color:"#ffe8cc", ring:"rgba(255,140,0,.95)", glowc:"#ff8c00", name:"猛攻", desc:"攻撃で消すと効果×2" },
   defx: { mark:"防", img:"assets/mk_defx.png", color:"#cce4ff", ring:"rgba(0,160,255,.95)", glowc:"#00a0ff", name:"鉄壁", desc:"防御で消すと効果×2" },
-  store:{ mark:"蓄", img:"assets/mk_store.png", color:"#e6dcff", ring:"rgba(141,99,207,.95)", glowc:"#8d63cf", name:"蓄積石", desc:"【ノア専用】どの色で消しても蓄積が+1される", exclusive:"store" }
+  store:{ mark:"蓄", img:"assets/mk_store.png", color:"#e6dcff", ring:"rgba(141,99,207,.95)", glowc:"#8d63cf", name:"蓄積石", desc:"【ノア専用】どの色で消しても蓄積が+1される", exclusive:"store" },
+  holy: { mark:"聖", img:"assets/mk_holy.png", color:"#fff6d0", ring:"rgba(255,215,120,.95)", glowc:"#ffd764", name:"聖光", desc:"【アルド専用】消すと今ターン、回復量の半分ぶん攻撃が上がる", exclusive:"heal" },
+  ink:  { mark:"彩", img:"assets/mk_ink.png", color:"#ffe0f4", ring:"rgba(240,120,220,.95)", glowc:"#e86ad0", name:"彩雫", desc:"【イリス専用】消すと盤面のランダム3個が消した色に染まる", exclusive:"recolor" },
+  warcry:{ mark:"闘", img:"assets/mk_warcry.png", color:"#ffd8c0", ring:"rgba(255,120,60,.95)", glowc:"#f07038", name:"闘魂", desc:"【ガレス専用】消すと現在の攻撃・防御が1.2倍になる", exclusive:"buff" },
+  wildstar:{ mark:"雫", img:"assets/mk_stardust.png", color:"#fff0d0", ring:"rgba(255,210,100,.95)", glowc:"#ffcf5d", name:"星のしずく", desc:"【ルクス専用】消すと盤面のランダム1個が虹ドロップになる", exclusive:"healx" },
+  ore:  { mark:"鉱", img:"assets/mk_ore.png", color:"#dce8f4", ring:"rgba(120,170,220,.95)", glowc:"#6f9fd8", name:"魔鉱石", desc:"【ブロム専用】消すと鍛冶の素材が+2される", exclusive:"smith" }
 };
 const ITEM_KEYS = Object.keys(ITEMS);
 // 報酬・虹福などランダム入手の対象（専用ドロップは初期所持限定なので除外）
@@ -249,9 +254,14 @@ const DESC_UP = {
   atk:  "【強化】同時に消したドロップ1つにつき攻撃+10",
   atkx: "【強化】攻撃で消すと効果×2.5",
   defx: "【強化】防御で消すと効果×2.5",
-  store:"【強化】消すと蓄積が+2される"
+  store:"【強化】消すと蓄積が+2される",
+  holy: "【強化】回復と同量ぶん攻撃が上がる",
+  ink:  "【強化】盤面のランダム6個を染める",
+  warcry:"【強化】現在の攻撃・防御が1.4倍になる",
+  wildstar:"【強化】盤面のランダム2個が虹になる",
+  ore:  "【強化】消すと素材が+4される"
 };
-const initZero = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0, store:0 });
+const initZero = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0, store:0, holy:0, ink:0, warcry:0, wildstar:0, ore:0 });
 // ===== レリック（パッシブ遺物）=====
 const RELICS = {
   // rar1=コモン rar2=レア rar3=ボス級
@@ -301,7 +311,12 @@ const RELICS = {
   gachagem:   { icon:"🌈", name:"虹福の玉", desc:"同じ色を6個以上消すと、所持中の特殊から1つが虹ドロップになって生まれる。どの色とも繋がる", rar:3 },
   warforge:   { icon:"⚔️", name:"闘気の触媒", desc:"【ガレス専用】強化の増加量が1ドロップにつき+0.2になる（通常+0.1）", rar:2, char:2 },
   warforge2:  { icon:"🔥", name:"覇気の触媒", desc:"【ガレス専用】強化の増加量が1ドロップにつき+0.3になる（通常+0.1）", rar:3, char:2 },
-  storegem:   { icon:"🧮", name:"累積の指輪", desc:"【ノア専用】蓄積の増加量が1ドロップにつき+2になる（通常+1）", rar:2, char:3 }
+  storegem:   { icon:"🧮", name:"累積の指輪", desc:"【ノア専用】蓄積の増加量が1ドロップにつき+2になる（通常+1）", rar:2, char:3 },
+  prayerbook: { icon:"📿", name:"聖者の祈祷書", desc:"【アルド専用】回復が最大HPを超えたぶん、次のターンの防御になる（最大30）", rar:2, char:0 },
+  palette:    { icon:"🎨", name:"虹のパレット", desc:"【イリス専用】色変えで塗ったグループが6個以上なら、その中の1個が虹ドロップになる", rar:2, char:1 },
+  warhorn:    { icon:"📯", name:"軍神の号令", desc:"【ガレス専用】強化が、選んでいない側のステータスにも半分かかる", rar:2, char:2 },
+  starstaff:  { icon:"🌠", name:"星辰の錫杖", desc:"【ルクス専用】ターン開始時、盤面に虹ドロップが無ければランダム1個が虹になる", rar:2, char:4 },
+  anvil:      { icon:"🛠", name:"名工の金床", desc:"【ブロム専用】補充で得る素材が2倍になる", rar:2, char:5 }
 };
 // レリック生成の虹（ワイルド）特殊ドロップ。ITEM_KEYS(袋)には含めない＝袋からは出ない
 const RGEM = {
@@ -703,9 +718,11 @@ const makeTutorialEnemy = () => { const k = KINDS.slime; return [{ id:"e"+(UID++
 
 // ===== 袋（抽選プール）=====
 const initOwned = ci => {
-  const base = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:3, def:3, atk:3, atkx:0, defx:0, store:0 };
-  // 蓄積キャラ（ノア）専用スタート: 剣/盾/回復を2ずつ＋蓄積石3つ
-  if (ci != null && CHARS[ci] && CHARS[ci].skill === "store") return { ...base, heal:2, def:2, atk:2, store:3 };
+  const base = { ...initZero(), heal:3, def:3, atk:3 };
+  // キャラ専用ドロップ: 剣/盾/回復を2ずつ＋専用ドロップ3つでスタート（報酬では手に入らない）
+  const sk = ci != null && CHARS[ci] ? CHARS[ci].skill : null;
+  const excl = ITEM_KEYS.find(k => ITEMS[k].exclusive === sk);
+  if (excl) return { ...base, heal:2, def:2, atk:2, [excl]:3 };
   return base;
 };
 const refillBag = owned => ({ ...owned });
@@ -854,8 +871,8 @@ const expandIds = (cells, ids) => {
   return out;
 };
 const groupInfo = (cells, ids) => {
-  const sp = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0, store:0 };
-  const spu = { star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0, store:0 };
+  const sp = initZero();
+  const spu = initZero();
   let junkCnt = 0;
   for (const cell of cells) if (ids.has(cell.id)) {
     if (cell.special && sp[cell.special] !== undefined) { sp[cell.special]++; if (cell.up) spu[cell.special]++; }
@@ -1121,12 +1138,28 @@ const SFX = {
 
 // ===== BGM（CC0実音源: cynicmusic / Juhani Junkala）=====
 const BGM_FILES = { title:"assets/bgm/title.mp3", map:"assets/bgm/map.mp3", battle:"assets/bgm/battle.mp3", boss:"assets/bgm/boss.mp3",
-  result:"assets/bgm/result.mp3", bossclear:"assets/bgm/bossclear.mp3" }; // result=勝利ジングル(CC0 Victory)/bossclear=達成ファンファーレ(CC0 Juhani Junkala "Ending")
+  result:"assets/bgm/result.mp3", bossclear:"assets/bgm/bossclear.mp3" }; // result=勝利ファンファーレ(CC0 cynicmusic "Victory Fanfare Short")/bossclear=達成テーマ(CC0 cynicmusic "Victory Theme for RPG")
 const BGM_NOLOOP = { result:true, bossclear:true }; // ジングル系は1回再生（ループしない）
-let bgmOn = true, bgmVol = 0.6, bgmAudio = null, bgmTrack = null;
+let bgmOn = true, bgmVol = 0.6, bgmAudio = null, bgmTrack = null, bgmGain = null, bgmWired = false;
 try { const v = parseFloat(localStorage.getItem("db_bgmvol")); if (v >= 0 && v <= 1) bgmVol = v; } catch (e) {}
 const bgmBase = name => (name === "battle" ? 0.26 : name === "result" || name === "bossclear" ? 0.34 : 0.3);
-const bgmApplyVol = () => { if (bgmAudio && bgmTrack) bgmAudio.volume = bgmBase(bgmTrack) * bgmVol; };
+// iOS Safari は audio.volume を変更できない（常に1）ため、WebAudio の GainNode 経由で音量制御する
+const bgmWire = () => {
+  if (bgmWired || !bgmAudio) return;
+  const c = ac(); if (!c) return;
+  try {
+    const src = c.createMediaElementSource(bgmAudio);
+    bgmGain = c.createGain();
+    src.connect(bgmGain); bgmGain.connect(c.destination);
+    bgmWired = true;
+  } catch (e) { bgmGain = null; }
+};
+const bgmApplyVol = () => {
+  if (!bgmAudio || !bgmTrack) return;
+  const v = bgmBase(bgmTrack) * bgmVol;
+  if (bgmGain) { bgmGain.gain.value = v; try { bgmAudio.volume = 1; } catch (e) {} }
+  else { try { bgmAudio.volume = v; } catch (e) {} }
+};
 const bgmStop = () => {
   bgmTrack = null;
   if (bgmAudio) { try { bgmAudio.pause(); } catch (e) {} }
@@ -1137,9 +1170,10 @@ const bgmPlay = name => {
   bgmTrack = name;
   try {
     if (!bgmAudio) { bgmAudio = new Audio(); bgmAudio.preload = "auto"; }
+    bgmWire();
     bgmAudio.loop = !BGM_NOLOOP[name];
     bgmAudio.src = BGM_FILES[name];
-    bgmAudio.volume = bgmBase(name) * bgmVol;
+    bgmApplyVol();
     const p = bgmAudio.play();
     if (p && p.catch) p.catch(() => {});
   } catch (e) {}
@@ -1148,6 +1182,7 @@ const bgmPlay = name => {
 const bgmOnHide = () => { if (bgmAudio) { try { bgmAudio.pause(); } catch (e) {} } };
 const bgmOnShow = () => {
   if (bgmTrack && bgmOn && bgmAudio) {
+    ac(); // 復帰時にAudioContextを再開（GainNode経由の再生に必要）
     try { const p = bgmAudio.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
   }
 };
@@ -1358,6 +1393,7 @@ function DropBattle() {
   const [sfxOn, setSfxOn] = useState(sfxEnabled);
   const [bgmOnView, setBgmOnView] = useState(bgmOn);
   const [soundOpen, setSoundOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [sfxVolView, setSfxVolView] = useState(sfxVol);
   const [bgmVolView, setBgmVolView] = useState(bgmVol);
   const [tut, setTut] = useState(null); // チュートリアル 0..2
@@ -1471,10 +1507,15 @@ function DropBattle() {
 
   // ===== ターン解決：自攻撃 → 敵攻撃(全員) → 回復 =====
   const resolveTurn = useCallback(() => {
-    const { atk, def, heal } = turnRef.current;
+    let { atk, def, heal } = turnRef.current;
+    // 聖光（アルド専用ドロップ）: 回復量の50%（強化100%・合計100%まで）を攻撃に加算
+    const holyRate = Math.min(1, (turnRef.current.holy || 0) * 0.5 + (turnRef.current.holyUp || 0));
+    const holyAdd = heal > 0 ? Math.round(heal * holyRate) : 0;
+    atk += holyAdd;
     recordCharStats(curCharRef.current, atk, def); // このターンの攻撃力/防御力で記録更新
     const seq = [];
     const logs = [`― ターン ${turnNumRef.current} ―`];
+    if (holyAdd > 0) logs.push(`聖 聖光: 攻撃+${holyAdd}（回復の${Math.round(holyRate * 100)}%）`);
     const ens = enemiesRef.current.map(e => ({ ...e }));
     const tn = turnNumRef.current;
 
@@ -1717,7 +1758,9 @@ function DropBattle() {
     }
 
     // ③ 回復
+    let overheal = 0; // 聖者の祈祷書: 最大HPを超えた回復ぶんを次ターンの防御へ（最大30）
     if (php > 0 && heal > 0) {
+      if (hasR("prayerbook") && php + heal > pMaxRef.current) overheal = Math.min(30, php + heal - pMaxRef.current);
       const np = Math.min(pMaxRef.current, php + heal);
       if (np - php > 0) {
         const healed = np - php;
@@ -1777,8 +1820,20 @@ function DropBattle() {
       }
       turnRef.current = freshTurn();
       if (hasR("ironwill") && shield > 0) turnRef.current.def += Math.floor(shield / 2);
+      if (overheal > 0) { turnRef.current.def += overheal; addLog([`📿 祈祷書: あふれた回復${overheal}が防御に`]); }
       if (hasR("regen")) setPHP(Math.min(pMaxRef.current, pRef.current + 2));
       if (hasR("prism")) { commitBoard(prismBoard(boardRef.current)); addLog(["🔮 プリズム: 盤面が3色になった"]); }
+      // 星辰の錫杖（ルクス専用）: 盤面に虹が無ければランダム1個が虹になる
+      if (hasR("starstaff") && !boardRef.current.some(c => c.wild)) {
+        const cand = boardRef.current.map((c, i) => (!c.special && !c.wild && c.type !== JUNK) ? i : -1).filter(i => i >= 0);
+        if (cand.length) {
+          const wi = cand[Math.floor(Math.random() * cand.length)];
+          const nb = boardRef.current.slice();
+          nb[wi] = { ...nb[wi], wild: true };
+          commitBoard(nb);
+          addLog(["🌠 錫杖が輝き、虹ドロップが生まれた"]);
+        }
+      }
       syncTurn();
       setUsed(new Set()); usedRef.current = new Set();
       setAction("atk"); actionRef.current = "atk";
@@ -2179,10 +2234,17 @@ function DropBattle() {
       const grp = findGroupStopAtWild(boardRef.current, idx); // つながった同色グループを塗り替える（虹で止まる）
       const paint = paintColorRef.current;
       let painted = 0;
-      const nb = boardRef.current.map(c => {
-        if (grp.has(c.id) && c.type !== JUNK && !c.wild) { painted++; return { ...c, id:UID++, type:paint }; }
+      const paintedIdx = [];
+      const nb = boardRef.current.map((c, ci) => {
+        if (grp.has(c.id) && c.type !== JUNK && !c.wild) { painted++; paintedIdx.push(ci); return { ...c, id:UID++, type:paint }; }
         return c;
       });
+      // 虹のパレット（イリス専用）: 6個以上のグループを塗ったら、その中の1個が虹になる
+      if (hasR("palette") && painted >= 6) {
+        const wi = paintedIdx[Math.floor(Math.random() * paintedIdx.length)];
+        nb[wi] = { ...nb[wi], wild: true };
+        addLog(["🎨 パレットが輝き、虹ドロップが生まれた！"]);
+      }
       commitBoard(nb); syncBag();
       SFX.clear();
       addLog([`🎨 つながった${painted}個を${["赤","金","紫","碧","青"][paint] || ""}色に塗り替えた`]);
@@ -2249,6 +2311,24 @@ function DropBattle() {
       genKinds.forEach((k, gi) => { if (gi < freePos.length) next[freePos[gi]] = { ...next[freePos[gi]], special: k, up: false, wild: true }; });
       addLog(["🌈 虹ドロップが生まれた！"]);
     }
+    // ―― キャラ専用ドロップ: 補充後の盤面に作用するもの ――
+    // 彩雫（イリス）: 盤面のランダムN個を消した色に染める
+    const inkCol = (!boardRef.current[idx].wild && boardRef.current[idx].type !== JUNK) ? boardRef.current[idx].type : null;
+    if (info.sp.ink > 0 && inkCol != null) {
+      const n = (info.sp.ink - info.spu.ink) * 3 + info.spu.ink * 6;
+      const cand = shuffle(next.map((c, i) => (!c.special && !c.wild && c.type !== JUNK && c.type !== inkCol) ? i : -1).filter(i => i >= 0));
+      const painted = cand.slice(0, n);
+      painted.forEach(i => { next[i] = { ...next[i], id: UID++, type: inkCol }; });
+      turnRef.current.inkPainted = (turnRef.current.inkPainted || 0) + painted.length;
+      if (painted.length) addLog([`彩 ランダム${painted.length}個が染まった！`]);
+    }
+    // 星のしずく（ルクス）: 盤面のランダムN個を虹ドロップにする
+    if (info.sp.wildstar > 0) {
+      const n = (info.sp.wildstar - info.spu.wildstar) + info.spu.wildstar * 2;
+      const cand = shuffle(next.map((c, i) => (!c.special && !c.wild && c.type !== JUNK) ? i : -1).filter(i => i >= 0));
+      cand.slice(0, n).forEach(i => { next[i] = { ...next[i], wild: true }; });
+      if (Math.min(n, cand.length) > 0) addLog(["雫 虹ドロップが生まれた！"]);
+    }
     let mainAdd = eff.main;
     if (act === "atk" && turnRef.current.atkBoost) mainAdd *= 2;
     if (act === "def" && turnRef.current.defBoost) mainAdd *= 2;
@@ -2259,6 +2339,13 @@ function DropBattle() {
       const factor = 1 + inc * info.count; // 1ドロップにつき+inc の加算式（1個・+0.1 → 1.1倍、5個 → 1.5倍）
       turnRef.current[st] = Math.round(turnRef.current[st] * factor);
       addLog([`✨ ${st === "atk" ? "攻撃" : "防御"}を強化！ +${inc}×${info.count}個 → ×${factor.toFixed(1)}`]);
+      // 軍神の号令（ガレス専用）: 選んでいない側にも半分の強化がかかる
+      if (hasR("warhorn")) {
+        const other = st === "atk" ? "def" : "atk";
+        const half = 1 + (inc * info.count) / 2;
+        turnRef.current[other] = Math.round(turnRef.current[other] * half);
+        addLog([`📯 号令: ${other === "atk" ? "攻撃" : "防御"}も ×${half.toFixed(2)}`]);
+      }
     } else if (act === "heal" && skill === "store") {
       // 蓄積キャラ：消した数を累積し、選んだステータスへ加算（累積はバトルごとにリセット）
       const st = skillTargetRef.current;
@@ -2268,10 +2355,11 @@ function DropBattle() {
       turnRef.current[st] += storeRef.current;
       addLog([`📚 蓄積 ${storeRef.current}（${st === "atk" ? "攻撃" : "防御"}へ加算）`]);
     } else if (act === "heal" && skill === "smith") {
-      // 鍛冶キャラ・補充：消した数だけ素材を貯める（回復はしない）
-      stockRef.current += info.count;
+      // 鍛冶キャラ・補充：消した数だけ素材を貯める（回復はしない）。名工の金床で2倍
+      const sAdd = info.count * (hasR("anvil") ? 2 : 1);
+      stockRef.current += sAdd;
       setStockView(stockRef.current);
-      addLog([`📦 素材 +${info.count}（計 ${stockRef.current}）`]);
+      addLog([`📦 素材 +${sAdd}（計 ${stockRef.current}）`]);
     } else {
       turnRef.current[act] += mainAdd;
     }
@@ -2296,6 +2384,25 @@ function DropBattle() {
       SFX.coin();
       addLog([`金 コイン+${g}`]);
     }
+    // 聖光（アルド）: ターン解決時、回復量の50%（強化100%）を攻撃に加算（合計100%まで）
+    if (info.sp.holy > 0) {
+      turnRef.current.holy = (turnRef.current.holy || 0) + (info.sp.holy - info.spu.holy);
+      turnRef.current.holyUp = (turnRef.current.holyUp || 0) + info.spu.holy;
+    }
+    // 闘魂（ガレス）: 消した時点の攻撃・防御を1.2倍（強化1.4倍）
+    if (info.sp.warcry > 0) {
+      const wf = Math.pow(1.2, info.sp.warcry - info.spu.warcry) * Math.pow(1.4, info.spu.warcry);
+      turnRef.current.atk = Math.round(turnRef.current.atk * wf);
+      turnRef.current.def = Math.round(turnRef.current.def * wf);
+      addLog([`闘 攻撃・防御が×${wf.toFixed(1)}！`]);
+    }
+    // 魔鉱石（ブロム）: 鍛冶素材を+2（強化+4）
+    if (skill === "smith" && info.sp.ore > 0) {
+      const oAdd = (info.sp.ore - info.spu.ore) * 2 + info.spu.ore * 4;
+      stockRef.current += oAdd;
+      setStockView(stockRef.current);
+      addLog([`鉱 素材 +${oAdd}（計 ${stockRef.current}）`]);
+    }
     syncTurn();
     if (info.junk) SFX.tap();
     else SFX.clear();
@@ -2309,6 +2416,7 @@ function DropBattle() {
     if (info.sp.pierce > 0) ll.push("貫 攻撃が貫通化！");
     if (act === "atk" && info.sp.aoe > 0) ll.push("全 攻撃が全体化！");
     if (info.sp.bolt > 0) ll.push("雷 同色を全消し！");
+    if (info.sp.holy > 0) ll.push("聖 回復が剣に宿る！");
     if (ll.length) addLog([ll.join(" / ")]);
     const newUsed = new Set(usedRef.current);
     newUsed.add(act);
@@ -2704,7 +2812,7 @@ function DropBattle() {
   }, [status, visited]);
   const suspendRun = () => { // 中断してタイトルへ（進行はマップ到達時点まで保存済み）
     saveRun();
-    setSoundOpen(false);
+    setSoundOpen(false); setMenuOpen(false);
     setStatus("title"); statusRef.current = "title";
     SFX.tap();
   };
@@ -2761,6 +2869,7 @@ function DropBattle() {
         puzzle: puzzleRef.current ? { targets: puzzleRef.current.targets.slice(), moves: puzzleRef.current.moves, cleared: puzzleRef.current.cleared, done: puzzleRef.current.done ? puzzleRef.current.done.kind : null } : null,
         selectable: statusRef.current === "map" ? selectableIds() : [],
         edges: mapRef.current.edges,
+        owned: { ...ownedRef.current },
         map: mapRef.current.nodes.map(n => ({ id:n.id, row:n.row, type:n.type })) }),
       start: () => { setStatus("map"); statusRef.current = "map"; },
       enter: id => { const n = mapRef.current.nodes.find(n => n.id === id); if (n) enterNode(n); },
@@ -2810,7 +2919,7 @@ function DropBattle() {
       restart: () => restart(false),
       resolve: () => resolveTurn(),
       commit: i => commitRef.current(i),
-      sound: () => ({ sfxOn: sfxEnabled, bgmOn, sfxVol, bgmVol, track: bgmTrack }),
+      sound: () => ({ sfxOn: sfxEnabled, bgmOn, sfxVol, bgmVol, track: bgmTrack, wired: bgmWired, gain: bgmGain ? bgmGain.gain.value : null }),
       previewSize: idx => makePreview(boardRef.current, idx).ids.size,
       previewIdxs: idx => { const ids = makePreview(boardRef.current, idx).ids; return boardRef.current.map((c,i)=>ids.has(c.id)?i:-1).filter(i=>i>=0); },
       groupSize: idx => findGroup(boardRef.current, idx).size,
@@ -2958,7 +3067,10 @@ function DropBattle() {
         Ic("assets/icon_speaker.png", 15, (bgmOnView || sfxOn) ? null : { filter:"grayscale(1) drop-shadow(0 1px 1px rgba(0,0,0,.45))", opacity:0.4 })),
       h("button", { onClick: () => { setBagOpen(true); SFX.open(); }, className:"relative rounded-xl px-3 py-1.5 flex items-center gap-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c" } },
         Ic("assets/icon_bag.png", 16),
-        h("span", { className:"font-bold text-sm", style:{ color:"#ffcf5d", fontVariantNumeric:"tabular-nums" } }, "残", bagLeft))));
+        h("span", { className:"font-bold text-sm", style:{ color:"#ffcf5d", fontVariantNumeric:"tabular-nums" } }, "残", bagLeft)),
+      h("button", { onClick: () => { setMenuOpen(true); SFX.open(); }, className:"rounded-xl px-2 py-1.5", "aria-label":"メニュー",
+        style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", lineHeight:1 } },
+        h("span", { style:{ display:"block", fontSize:15, lineHeight:"15px", color:"#c9bfe0", fontWeight:800 } }, "☰"))));
 
   // ===== タイトル =====
   if (status === "title") {
@@ -3025,16 +3137,17 @@ function DropBattle() {
                 filter: selOpen ? `drop-shadow(0 10px 18px rgba(0,0,0,.55)) drop-shadow(0 0 22px ${ch.color}44)` : "brightness(0) opacity(.85)",
                 animation: selOpen ? "breathA 3.4s ease-in-out infinite" : "none", transformOrigin:"bottom center" } }),
             h("div", { style:{ width:"min(48vw,210px)", height:12, borderRadius:"50%", background:"radial-gradient(ellipse, rgba(0,0,0,.5) 0%, transparent 70%)", marginTop:-5 } })),
-          // ―― キャラ別スコア（そのキャラで出した最大値。上限や相手のガードは無視した値）――
-          selOpen && h("div", { key:"chstats" + selView, className:"fade-in", style:{ display:"flex", flexDirection:"column", gap:6, paddingBottom:18 } },
+          // ―― キャラ別スコア（そのキャラで出した最大値。上限や相手のガードは無視した値）。1枚のパネルにまとめて表示 ――
+          selOpen && h("div", { key:"chstats" + selView, className:"fade-in rounded-xl px-2.5 py-2", style:{ background:"rgba(24,19,34,.92)", border:"1px solid #55486e", boxShadow:"0 3px 10px rgba(0,0,0,.35)", display:"flex", flexDirection:"column", gap:5, marginBottom:18, minWidth:128 } },
+            h("span", { className:"text-[9px] font-bold text-center", style:{ color:"#c9bfe0", letterSpacing:"0.3em", borderBottom:"1px solid #3c3450", paddingBottom:3, paddingLeft:"0.3em" } }, "記録"),
             [
               ["assets/node_boss.png", "突破", (charStats[selView] || {}).clears || 0, "回", "#e8c06a"],
               ...(uraOpen ? [["assets/node_elite.png", "裏突破", (charStats[selView] || {}).uraClears || 0, "回", URA_C]] : []),
               ["assets/icon_atk.png", "最大ダメージ", (charStats[selView] || {}).maxAtk || 0, "", "#e05a50"],
               ["assets/icon_def.png", "最大ガード", (charStats[selView] || {}).maxDef || 0, "", "#5a8fd0"]
-            ].map(([icon, label, val, unit, color]) => h("div", { key:label, className:"flex flex-col items-center rounded-xl px-1.5 py-1", style:{ background:"rgba(24,19,34,.88)", border:`1px solid ${color}77`, minWidth:52 } },
-              Ic(icon, 14),
-              h("span", { className:"text-[8px] mt-0.5", style:{ opacity:0.8, whiteSpace:"nowrap" } }, label),
+            ].map(([icon, label, val, unit, color]) => h("div", { key:label, className:"flex items-center gap-1.5" },
+              Ic(icon, 13),
+              h("span", { className:"text-[9px] flex-1", style:{ opacity:0.8, whiteSpace:"nowrap", marginRight:6 } }, label),
               h("span", { className:"font-bold text-[11px]", style:{ color, fontVariantNumeric:"tabular-nums" } }, val, unit))))),
         // ―― 中：名前と説明 ――
         h("div", { key:"chinfo" + selView, className:"fade-in rounded-2xl px-4 mt-2 mb-3 text-center", style:{ background:"rgba(24,19,34,.92)", border:`2px solid ${selOpen ? ch.color : "#3c3450"}`, boxShadow:"0 3px 14px rgba(0,0,0,.4)", height:104, display:"flex", flexDirection:"column", justifyContent:"center" } },
@@ -3106,16 +3219,25 @@ function DropBattle() {
 
   // ===== 共通オーバーレイ =====
   const overlays = [];
+  // スライダーはネイティブのドラッグに頼らずポインター座標から値を計算する（iOS Safariでrangeのドラッグが反応しない対策）
+  const sliderPos = (e, change) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const v = Math.max(0, Math.min(100, Math.round((e.clientX - r.left) / r.width * 100)));
+    change(v / 100);
+  };
   const soundRow = (label, icon, on, toggle, vol, change, preview) => h("div", { key:label, className:"rounded-xl px-3 py-3 mb-2", style:{ background:"rgba(255,255,255,.05)", border:"1px solid #3c3450" } },
     h("div", { className:"flex items-center gap-2 mb-2" },
       h("button", { onClick: toggle, className:"rounded-lg px-2 py-1", style:{ background: on ? "rgba(232,192,106,.18)" : "rgba(255,255,255,.06)", border:`1.5px solid ${on ? "#8a6f3c" : "#3c3450"}`, lineHeight:1 } },
         Ic(icon, 16, on ? null : { filter:"grayscale(1)", opacity:0.4 })),
       h("span", { className:"font-bold text-sm flex-1", style:{ color: on ? "#f0e4c8" : "#776f88" } }, label, on ? "" : "（OFF）"),
       h("span", { className:"text-xs font-bold", style:{ color:"#8ce8b0", fontVariantNumeric:"tabular-nums", minWidth:40, textAlign:"right" } }, Math.round(vol * 100), "%")),
-    h("input", { type:"range", min:0, max:100, value:Math.round(vol * 100), disabled: !on,
-      onInput: e => change(parseInt(e.target.value, 10) / 100),
-      onChange: e => { change(parseInt(e.target.value, 10) / 100); if (on && preview) preview(); },
-      style:{ width:"100%", accentColor:"#e8c06a", height:24, opacity: on ? 1 : 0.4, cursor: on ? "pointer" : "default" } }));
+    h("div", { style:{ touchAction:"none", padding:"4px 0", cursor: on ? "pointer" : "default" },
+      onPointerDown: e => { if (!on) return; try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {} sliderPos(e, change); },
+      onPointerMove: e => { if (!on || e.buttons === 0) return; sliderPos(e, change); },
+      onPointerUp: () => { if (on && preview) preview(); } },
+      h("input", { type:"range", min:0, max:100, value:Math.round(vol * 100), disabled: !on, readOnly: true,
+        onChange: () => {},
+        style:{ width:"100%", accentColor:"#e8c06a", height:24, opacity: on ? 1 : 0.4, pointerEvents:"none", display:"block" } })));
   if (soundOpen) overlays.push(h("div", { key:"sound", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setSoundOpen(false) },
     h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-3" },
@@ -3123,12 +3245,24 @@ function DropBattle() {
         h("button", { onClick: () => setSoundOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
       soundRow("BGM", "assets/icon_note.png", bgmOnView, toggleBgm, bgmVolView, changeBgmVol, null),
       soundRow("効果音", "assets/icon_speaker.png", sfxOn, toggleSfx, sfxVolView, changeSfxVol, () => SFX.tap()),
-      h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } }, "アイコンでON/OFF・スライダーで音量。設定は端末に保存されます。"),
-      (status === "map" || status === "battle" || status === "reward") && h("button", { onClick: suspendRun,
-        className:"w-full rounded-xl py-2.5 font-bold text-sm mt-3",
+      h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } }, "アイコンでON/OFF・スライダーで音量。設定は端末に保存されます。"))));
+  if (menuOpen) overlays.push(h("div", { key:"menu", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setMenuOpen(false) },
+    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+      h("div", { className:"flex justify-between items-center mb-3" },
+        h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, "☰ メニュー"),
+        h("button", { onClick: () => setMenuOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
+      h("button", { onClick: () => { setMenuOpen(false); setSoundOpen(true); SFX.open(); },
+        className:"w-full rounded-xl py-2.5 font-bold text-sm mb-2 flex items-center justify-center gap-1.5",
+        style:{ background:"rgba(255,255,255,.08)", color:"#f0e4c8", border:"2px solid #453b5c", fontFamily:"inherit" } },
+        Ic("assets/icon_speaker.png", 15), "サウンド設定"),
+      h("button", { onClick: suspendRun,
+        className:"w-full rounded-xl py-2.5 font-bold text-sm",
         style:{ background:"rgba(255,255,255,.08)", color:"#c9bfe0", border:"2px solid #453b5c", fontFamily:"inherit" } }, "冒険を中断してタイトルへ"),
-      (status === "map" || status === "battle" || status === "reward") && h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } },
-        "進行はマップ到達時点まで自動保存。キャラ選択で「続きから」再開できます（バトル中の進行は保存されません）。"))));
+      h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } },
+        "進行はマップ到達時点まで自動保存。キャラ選択で「続きから」再開できます（バトル中の進行は保存されません）。"),
+      h("button", { onClick: () => { setMenuOpen(false); SFX.tap(); },
+        className:"w-full rounded-xl py-2.5 font-bold text-sm mt-3",
+        style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a", fontFamily:"inherit" } }, "▶ 冒険にもどる"))));
   if (relicOpen) overlays.push(h("div", { key:"relics", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setRelicOpen(false) },
     h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, maxHeight:"78vh", overflowY:"auto", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-2" },

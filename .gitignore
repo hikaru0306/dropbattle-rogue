@@ -9,3 +9,5 @@ assets_raw_ura/
 gen_ura.log
 sim_ura_*.log
 sim_omote_*.log
+assets_raw_ui/
+assets_ui_new/
