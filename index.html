@@ -152,7 +152,7 @@ const NUM_SPECIAL = 5;
 const STAR_THRESHOLD = 6;
 const ATK_PER = 10, DEF_PER = 10, HEAL_PER = 1;
 const POISON_DMG = 4; // 毒：防御無視で毎ターン固定ダメージ。一度受けるとそのバトル中は治らない（バトル終了/章クリアで解除）
-const ROWS = 8; // マップの段数(固定高さに収まる上限)。近道エッジによりルート長は約6〜8で変動する
+const ROWS = 8; // マップの段数（1章=8層固定）
 const ACTS = 3;
 const ACT_NAMES = ["翠緑の森", "毒霧の沼窟", "灼熱の魔城"];
 const BOSS_BY_ACT = [["kslime","treant","alraune"], ["vamp","lich","toadking"], ["demon","dragon","ifrit","reaper"]];
@@ -609,17 +609,6 @@ const genMap = (simpleStart) => {
       const js = Math.floor(i*n1/n0), je = Math.floor(((i+1)*n1-1)/n0);
       for (let j=js; j<=je; j++) edges.push({ from:na.id, to:b[j].id });
       if (n0===n1 && i+1<n1) edges.push({ from:na.id, to:b[i+1].id });
-    });
-  }
-  // ===== 近道エッジ: ルートによって通過する層数が変わるよう、一部ノードに1層飛ばす分岐を足す =====
-  // 開始直後(row0)とボス手前(row ROWS-2 以降)は除外。近道を多く通るルートほど短くなる（約7〜10層）。
-  for (let r = 1; r < ROWS - 3; r++) {
-    const a = rows[r], c = rows[r + 2];
-    a.forEach((na, i) => {
-      if (Math.random() < 0.34) {
-        const j = c.length === 1 ? 0 : Math.min(c.length - 1, Math.round(i * (c.length - 1) / Math.max(1, a.length - 1)));
-        if (!edges.some(e => e.from === na.id && e.to === c[j].id)) edges.push({ from: na.id, to: c[j].id });
-      }
     });
   }
   // ===== 強敵(elite)の配置制約: 1章あたり最大5つ / 詰み禁止 / 1ルート最大3つ =====
@@ -2863,7 +2852,7 @@ function DropBattle() {
   const toggleBgm = () => {
     bgmOn = !bgmOn; setBgmOnView(bgmOn);
     if (!bgmOn) bgmStop();
-    else { const s = statusRef.current; bgmPlay(s === "map" ? "map" : s === "battle" ? (actClearRef.current ? "bossclear" : enemiesRef.current.some(e => e.boss) ? "boss" : "battle") : s === "reward" ? "result" : s === "clear" ? "bossclear" : "title"); }
+    else { const s = statusRef.current, pn = pendingNodeRef.current; bgmPlay(s === "map" ? "map" : s === "battle" ? (actClearRef.current ? "bossclear" : enemiesRef.current.some(e => e.boss) ? "boss" : "battle") : s === "reward" ? (pn && pn.type === "boss" ? "result" : pn && pn.type === "treasure" ? "map" : "battle") : s === "clear" ? "bossclear" : "title"); }
   };
   const changeSfxVol = v => { sfxVol = v; setSfxVolView(v); try { localStorage.setItem("db_sfxvol", v); } catch (e) {} };
   const changeBgmVol = v => { bgmVol = v; setBgmVolView(v); bgmApplyVol(); try { localStorage.setItem("db_bgmvol", v); } catch (e) {} };
@@ -2874,7 +2863,8 @@ function DropBattle() {
     else if (status === "map") bgmPlay("map");
     // ボス戦はボスを倒して雑魚が残っていてもボスBGMを維持（e.boss は死亡後もリストに残る）
     else if (status === "battle") bgmPlay(actClear ? "bossclear" : enemies.some(e => e.boss) ? "boss" : "battle");
-    else if (status === "reward") bgmPlay("result");   // 戦闘リザルト＝勝利ジングル
+    // 勝利ジングルはボス戦後のみ。通常/群れ/強敵/宝箱の報酬はBGMを変えない（据え置き）
+    else if (status === "reward") { if (pendingNodeRef.current && pendingNodeRef.current.type === "boss") bgmPlay("result"); }
     else if (status === "clear") bgmPlay("bossclear"); // 全章制覇＝達成ファンファーレ
     else if (status === "lose") bgmStop();
     // reward中は直前の曲を継続
@@ -3099,12 +3089,11 @@ function DropBattle() {
       mode === "ura" ? "裏・" : "", "第", act + 1, "章"),
     h("div", { className:"flex items-center gap-2" },
       h("span", { className:"rounded-xl px-2 py-1.5 text-sm font-bold flex items-center gap-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c", color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, Ic("assets/icon_coin.png", 15), coins),
-      h("button", { onClick: () => { setSoundOpen(true); SFX.open(); }, className:"rounded-xl px-2 py-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", lineHeight:1 } },
-        Ic("assets/icon_speaker.png", 15, (bgmOnView || sfxOn) ? null : { filter:"grayscale(1) drop-shadow(0 1px 1px rgba(0,0,0,.45))", opacity:0.4 })),
       h("button", { onClick: () => { setBagOpen(true); SFX.open(); }, className:"relative rounded-xl px-3 py-1.5 flex items-center gap-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c" } },
         Ic("assets/icon_bag.png", 16),
         h("span", { className:"font-bold text-sm", style:{ color:"#ffcf5d", fontVariantNumeric:"tabular-nums" } }, "残", bagLeft)),
-      h("button", { onClick: () => { setMenuOpen(true); SFX.open(); }, className:"rounded-xl px-2 py-1.5", "aria-label":"メニュー",
+      // サウンド設定は☰メニュー内から（ヘッダーの🔊ボタンは撤去）
+      h("button", { onClick: () => { setMenuOpen(true); SFX.open(); }, className:"rounded-xl px-4 py-1.5", "aria-label":"メニュー",
         style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", lineHeight:1 } },
         h("span", { style:{ display:"block", fontSize:15, lineHeight:"15px", color:"#c9bfe0", fontWeight:800 } }, "☰"))));
 
@@ -3180,21 +3169,20 @@ function DropBattle() {
             h("span", { className:"text-[9px] font-bold text-center", style:{ color:"#c9bfe0", letterSpacing:"0.3em", borderBottom:"1px solid #3c3450", paddingBottom:3, paddingLeft:"0.3em" } }, "記録"),
             [
               // 到達 = 制覇済みなら「制覇 N回」、未制覇なら最深到達の「X章Y層」
-              ["assets/node_boss.png", "到達",
+              ["到達",
                 charState.c.includes(selView) ? `制覇 ${(charStats[selView] || {}).clears || 1}回`
                 : (charStats[selView] || {}).reach ? `${(charStats[selView] || {}).reach[0] + 1}章${(charStats[selView] || {}).reach[1]}層` : "－",
-                "", "#e8c06a", 1],
-              ["assets/node_elite.png", "裏到達",
+                "#e8c06a", 1],
+              ["裏到達",
                 !uraOpen ? "－"
                 : (charState.cu || []).includes(selView) ? `制覇 ${(charStats[selView] || {}).uraClears || 1}回`
                 : (charStats[selView] || {}).reachU ? `${(charStats[selView] || {}).reachU[0] + 1}章${(charStats[selView] || {}).reachU[1]}層` : "－",
-                "", URA_C, uraOpen ? 1 : 0.4],
-              ["assets/icon_atk.png", "最大ダメージ", (charStats[selView] || {}).maxAtk || 0, "", "#e05a50", 1],
-              ["assets/icon_def.png", "最大ガード", (charStats[selView] || {}).maxDef || 0, "", "#5a8fd0", 1]
-            ].map(([icon, label, val, unit, color, op]) => h("div", { key:label, className:"flex items-center gap-1.5", style:{ opacity: op } },
-              Ic(icon, 13),
-              h("span", { className:"text-[9px] flex-1", style:{ opacity:0.8, whiteSpace:"nowrap", marginRight:6 } }, label),
-              h("span", { className:"font-bold text-[11px]", style:{ color, fontVariantNumeric:"tabular-nums" } }, val, unit))))),
+                URA_C, uraOpen ? 1 : 0.4],
+              ["最大ダメージ", (charStats[selView] || {}).maxAtk || 0, "#e05a50", 1],
+              ["最大ガード", (charStats[selView] || {}).maxDef || 0, "#5a8fd0", 1]
+            ].map(([label, val, color, op]) => h("div", { key:label, className:"flex items-center", style:{ opacity: op } },
+              h("span", { className:"text-[9px] flex-1", style:{ opacity:0.8, whiteSpace:"nowrap", marginRight:8 } }, label),
+              h("span", { className:"font-bold text-[11px]", style:{ color, fontVariantNumeric:"tabular-nums" } }, val))))),
         // ―― 中：名前と説明 ――
         h("div", { key:"chinfo" + selView, className:"fade-in rounded-2xl px-4 mt-2 mb-3 text-center", style:{ background:"rgba(24,19,34,.92)", border:`2px solid ${selOpen ? ch.color : "#3c3450"}`, boxShadow:"0 3px 14px rgba(0,0,0,.4)", height:122, display:"flex", flexDirection:"column", justifyContent:"center" } },
           h("div", { className:"flex items-center justify-center gap-2 mb-0.5" },
@@ -3704,16 +3692,16 @@ function DropBattle() {
           : h("div", { className:"text-center text-xs mb-1 rounded-lg py-1 font-bold", style:{ background:"rgba(216,168,72,.12)", border:"1px solid rgba(216,168,72,.4)", color:"#e8c06a", letterSpacing:"0.1em" } }, curNodeId == null ? "▼ 出発しよう！" : "▼ 次に進む場所を選ぼう"),
         h("div", { className:"relative w-full mb-1 px-3 pt-4 pb-3", style:{ flex:1, display:"flex", flexDirection:"column", borderRadius:16, overflow:"hidden", border: mode === "ura" ? "2px solid #6a4a8a" : "2px solid #453b5c", background: (mode === "ura" ? URA_MAP_GRAD : MAP_GRAD)[act] || MAP_GRAD[0] } },
           h("div", { className:"absolute inset-0 pointer-events-none", style:{ backgroundImage:'url("assets/bg_texture.jpg")', backgroundSize:"360px", opacity:.09, mixBlendMode:"soft-light" } }),
-          // 進行ドット: 左=出発 → 右=ボス。現在地はキャラアイコン
+          // 進行ドット: 左=出発 → 右=ボス。ミニキャラは「今から挑む層」に表示（突破済みの場所ではない）
           h("div", { className:"relative flex items-center justify-center" },
             Array.from({ length: ROWS }, (_, r) => {
-              const passed = r < progRow, curHere = r === progRow - 1;
+              const passed = r < progRow, curHere = r === progRow;
               return h("div", { key:r, className:"flex items-center" },
                 r > 0 && h("div", { style:{ width:16, height:2, background: passed ? "rgba(150,220,170,.75)" : "rgba(240,228,200,.28)" } }),
-                r === ROWS - 1
-                  ? h("img", { src:NODE_META.boss.img, alt:"ボス", draggable:false, width:20, height:20, style:{ width:20, height:20, maxWidth:20, maxHeight:20, objectFit:"contain", opacity:.9, filter:"drop-shadow(0 1px 1px rgba(0,0,0,.6))" } })
-                  : curHere
-                    ? h("img", { src:CHARS[curChar].img, alt:"現在地", draggable:false, width:22, height:22, style:{ width:22, height:22, maxWidth:22, maxHeight:22, objectFit:"contain", filter:"drop-shadow(0 0 4px rgba(255,224,138,.9))" } })
+                curHere
+                  ? h("img", { src:CHARS[curChar].img, alt:"現在地", draggable:false, width:22, height:22, style:{ width:22, height:22, maxWidth:22, maxHeight:22, objectFit:"contain", filter:"drop-shadow(0 0 4px rgba(255,224,138,.9))" } })
+                  : r === ROWS - 1
+                    ? h("img", { src:NODE_META.boss.img, alt:"ボス", draggable:false, width:20, height:20, style:{ width:20, height:20, maxWidth:20, maxHeight:20, objectFit:"contain", opacity:.9, filter:"drop-shadow(0 1px 1px rgba(0,0,0,.6))" } })
                     : h("div", { style:{ width:10, height:10, borderRadius:"50%", background: passed ? "#96dcaa" : "rgba(240,228,200,.3)", boxShadow:"0 1px 2px rgba(0,0,0,.4)" } }));
             })),
           // 行き先カード（次の選択肢のみ表示）: 残りの縦空間の中央に置く（内側の行はitems-stretchで等高を維持）
@@ -3722,7 +3710,6 @@ function DropBattle() {
             cardNodes.map(n => {
               const meta = NODE_META[n.type];
               const isBoss = n.type === "boss";
-              const shortcut = curNode && (n.row - curNode.row) >= 2; // 1層とばす近道エッジ
               const imgSz = isBoss ? 78 : 64;
               return h("button", { key:n.id, "data-mapcard":n.id, onClick: () => enterNode(n),
                 className:"relative flex flex-col items-center justify-center pop-in",
@@ -3736,13 +3723,11 @@ function DropBattle() {
                     : "0 4px 0 rgba(10,8,16,.55), inset 0 0 0 2px rgba(255,255,255,.08)",
                   cursor:"pointer"
                 } },
-                shortcut && h("span", { className:"absolute font-bold pointer-events-none", style:{ top:4, right:4, fontSize:9, color:"#2c2030", background:"linear-gradient(180deg,#ffe08a,#e8b84a)", border:"1px solid #b8862e", borderRadius:8, padding:"1px 6px" } }, "近道"),
                 h("img", { src:meta.img, alt:meta.label, draggable:false, width:imgSz, height:imgSz,
                   className:"pointer-events-none",
                   style:{ width:imgSz, height:imgSz, maxWidth:imgSz, maxHeight:imgSz, objectFit:"contain", filter:"drop-shadow(0 2px 2px rgba(0,0,0,.55))" } }),
                 h("span", { className:"font-bold pointer-events-none", style:{ marginTop:8, fontSize:"1.05rem", color:meta.color, textShadow:"0 1px 2px #000" } }, meta.label),
-                h("span", { className:"text-[11px] pointer-events-none", style:{ marginTop:4, color:"#d8d0e8", opacity:.85, lineHeight:1.4, minHeight:31 } }, NODE_DESC[n.type]),
-                shortcut && h("span", { className:"text-[10px] font-bold pointer-events-none", style:{ marginTop:2, color:"#8ce8b0" } }, "1層とばして進む"));
+                h("span", { className:"text-[11px] pointer-events-none", style:{ marginTop:4, color:"#d8d0e8", opacity:.85, lineHeight:1.4, minHeight:31 } }, NODE_DESC[n.type]));
             }))),
           // 章の地名（パネル下部の雰囲気づけ）
           h("div", { className:"relative text-center font-bold", style:{ fontSize:11, letterSpacing:"0.35em", paddingLeft:"0.35em", color:"rgba(240,228,200,.55)", textShadow:"0 1px 2px rgba(0,0,0,.5)" } },
@@ -3886,10 +3871,14 @@ function DropBattle() {
             iconEl = h("span", { style:{ fontSize:16, marginTop:5, lineHeight:1 } }, smithMode === "stock" ? "📦" : smithMode === "gen" ? "✨" : "⚒️");
             valEl = h("span", { style:{ fontSize:"0.9rem", fontWeight:900 } }, "素材", stockView);
           } else if (curSkill === "buff") {
-            const inc = hasR("warforge2") ? "0.3" : hasR("warforge") ? "0.2" : "0.1";
+            const incN = hasR("warforge2") ? 0.3 : hasR("warforge") ? 0.2 : 0.1;
             title = "強化→" + tgtLabel;
             iconEl = h("span", { style:{ fontSize:16, marginTop:5, lineHeight:1 } }, "💪");
-            valEl = h("span", { style:{ fontSize:"0.9rem", fontWeight:900 } }, "+" + inc + "/個");
+            // ドロップ選択中は「この消去で掛かる実倍率」を表示（1 + inc×個数）。未選択時は単価表示
+            const selN = isSel && info ? info.count : 0;
+            valEl = selN > 0
+              ? h("span", { style:{ fontSize:"1rem", fontWeight:900, color:"#ffd75e" } }, "×" + (1 + incN * selN).toFixed(1))
+              : h("span", { style:{ fontSize:"0.9rem", fontWeight:900 } }, "+" + incN + "/個");
           } else {
             title = "蓄積→" + tgtLabel;
             iconEl = h("span", { style:{ fontSize:16, marginTop:5, lineHeight:1 } }, "📚");

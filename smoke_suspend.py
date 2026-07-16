@@ -55,8 +55,9 @@ with sync_playwright() as p:
     wait_status(page, "battle")
     page.evaluate("window.__test.giveRelic('piggy')")
     win_battle(page)
-    assert snd(page)["track"] == "result", f"reward bgm: {snd(page)['track']}"
-    print("2 reward BGM=result OK")
+    # 通常バトルのリザルトはBGM据え置き（勝利ジングルはボス戦後のみ）
+    assert snd(page)["track"] == "battle", f"reward bgm: {snd(page)['track']}"
+    print("2 reward BGM stays battle OK")
     page.evaluate("window.__test.declineReward()")
     time.sleep(0.8)
     if st(page).get("shop"): page.evaluate("window.__test.closeShop()")

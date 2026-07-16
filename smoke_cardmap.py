@@ -53,28 +53,13 @@ with sync_playwright() as p:
     assert page.evaluate("!!document.querySelector('img[alt=\"ボス\"]')"), "no boss icon in progress dots"
     print("2 progress dots OK")
 
-    # 3) 近道バッジ: row差2のエッジを探して from に立つ（無いマップなら restart で引き直し）
-    found = None
-    for _ in range(12):
-        s = st(page)
-        rowof = {n["id"]: n["row"] for n in s["map"]}
-        sc = [e for e in s["edges"] if rowof[e["to"]] - rowof[e["from"]] >= 2]
-        if sc:
-            found = sc[0]
-            break
-        page.evaluate("window.__test.restart()")
-        wait_status(page, "map")
-    assert found, "no shortcut edge after 12 maps"
-    page.evaluate(f"window.__test.setCur({found['from']})")
-    time.sleep(0.3)
+    # 3) 近道エッジは廃止: 全エッジが1層ずつ進む（row差1のみ）
     s = st(page)
-    assert found["to"] in s["selectable"], "shortcut target not selectable"
-    ids = cards(page)
-    assert sorted(ids) == sorted(s["selectable"]), f"cards {ids} != selectable {s['selectable']}"
-    t = body_text(page)
-    assert "近道" in t and "1層とばして進む" in t, "shortcut badge missing"
-    page.screenshot(path=SHOT + r"\cm2_shortcut.png")
-    print("3 shortcut badge OK", found)
+    rowof = {n["id"]: n["row"] for n in s["map"]}
+    bad = [e for e in s["edges"] if rowof[e["to"]] - rowof[e["from"]] != 1]
+    assert not bad, f"skip edges must not exist: {bad}"
+    assert "近道" not in body_text(page), "shortcut badge should be removed"
+    print("3 no shortcut edges OK")
 
     # 4) ボス手前 → ボスカード + 現在地アイコン
     s = st(page)
