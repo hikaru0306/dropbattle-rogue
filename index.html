@@ -598,7 +598,9 @@ const genMap = (simpleStart) => {
       }
     });
   }
-  // ===== 強敵(elite)の配置制約: 1章あたり最大5つ / 1ルート最大3つ =====
+  // ===== 強敵(elite)の配置制約: 1章あたり最大5つ / 詰み禁止 / 1ルート最大3つ =====
+  // カード選択UI（次の2〜3択のみ見える1手先読み）を前提に、
+  // 「見えている選択肢が全部強敵」という事故だけ機械的に潰す（連戦は許容する）。
   const nodes = rows.flat();
   const byId = new Map(nodes.map(n => [n.id, n]));
   const succ = new Map(nodes.map(n => [n.id, []]));
@@ -608,7 +610,12 @@ const genMap = (simpleStart) => {
   // (1) 総数を5以下に（超過分をランダムに通常戦へ）
   let es = elites();
   while (es.length > 5) { demote(es[Math.floor(Math.random() * es.length)]); es = elites(); }
-  // (2) どのルートでも強敵は最大3つまで。各ノードから最下層までの最大強敵数をDPで求め、
+  // (2) 分岐先の全部が強敵という「選択肢なしの詰み」を作らない（必ず1つは避けられる道を残す）
+  for (const n of nodes) {
+    const kids = succ.get(n.id);
+    if (kids.length > 1 && kids.every(k => byId.get(k).type === "elite")) demote(byId.get(kids[0]));
+  }
+  // (3) 保険：どのルートでも強敵は最大3つまで。各ノードから最下層までの最大強敵数をDPで求め、
   //     最大ルート上の強敵を1つ通常戦に落とす、を上限内に収まるまで繰り返す
   const routeMax = () => {
     const memo = new Map();
