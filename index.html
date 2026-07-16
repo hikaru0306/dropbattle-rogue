@@ -1200,6 +1200,18 @@ const bgmOnShow = () => {
 document.addEventListener("visibilitychange", () => { document.hidden ? bgmOnHide() : bgmOnShow(); });
 window.addEventListener("pagehide", bgmOnHide);
 window.addEventListener("pageshow", bgmOnShow);
+// 無音状態からの復帰保険: 自動再生ブロック（初回ロード時のタイトルBGM等）や
+// OS割り込み（着信・Siri・他アプリ音声）でAudioContextがsuspendedになった場合、
+// bgmPlayは「同曲再生中」とみなしてリトライしないため、タップのたびに蹴り直す。
+// ジングル系(BGM_NOLOOP)は自然終了後のpausedを再生し直さないよう除外
+const bgmKick = () => {
+  if (document.hidden) return;
+  ac(); // suspended/interrupted の AudioContext を再開（GainNode経由の出音に必須）
+  if (bgmOn && bgmTrack && bgmAudio && bgmAudio.paused && !BGM_NOLOOP[bgmTrack]) {
+    try { const p = bgmAudio.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+  }
+};
+window.addEventListener("pointerdown", bgmKick, { passive: true });
 
 // ===== キャラ画像スプライト（ComfyUI生成・透過PNG） =====
 const CharImg = ({ kind, size }) => h("img", {
@@ -2939,7 +2951,7 @@ function DropBattle() {
       restart: () => restart(false),
       resolve: () => resolveTurn(),
       commit: i => commitRef.current(i),
-      sound: () => ({ sfxOn: sfxEnabled, bgmOn, sfxVol, bgmVol, track: bgmTrack, wired: bgmWired, gain: bgmGain ? bgmGain.gain.value : null }),
+      sound: () => ({ sfxOn: sfxEnabled, bgmOn, sfxVol, bgmVol, track: bgmTrack, wired: bgmWired, gain: bgmGain ? bgmGain.gain.value : null, paused: bgmAudio ? bgmAudio.paused : null, acState: AC ? AC.state : null }),
       previewSize: idx => makePreview(boardRef.current, idx).ids.size,
       previewIdxs: idx => { const ids = makePreview(boardRef.current, idx).ids; return boardRef.current.map((c,i)=>ids.has(c.id)?i:-1).filter(i=>i>=0); },
       groupSize: idx => findGroup(boardRef.current, idx).size,
