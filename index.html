@@ -3693,15 +3693,15 @@ function DropBattle() {
       className:"fixed inset-0 flex flex-col items-center justify-center fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:58 } },
       h("div", { style:{ position:"relative", width:96, height:96 } },
         h("div", { style:{ position:"absolute", inset:0, borderRadius:"50%", border:"3px solid rgba(232,192,106,.8)", animation:"merchRing .8s ease-out .1s forwards", opacity:0 } }),
-        h("img", { src:"assets/node_treasure.png", alt:"行商人", draggable:false,
-          style:{ width:96, height:96, objectFit:"contain", animation:"merchPop .7s cubic-bezier(.3,1.5,.5,1) both",
+        h("img", { src:"assets/merchant.png", alt:"行商人", draggable:false,
+          style:{ width:132, height:132, objectFit:"contain", animation:"merchPop .7s cubic-bezier(.3,1.5,.5,1) both",
             filter:"drop-shadow(0 0 18px rgba(232,192,106,.55))" } })),
       h("p", { className:"font-bold mt-5", style:{ color:"#e8c06a", fontSize:"1.35rem", textShadow:"0 2px 0 #000, 0 0 12px rgba(232,192,106,.4)", animation:"merchTxt .9s ease .3s both" } }, "行商人が現れた！")));
   } else if (shop) {
     overlays.push(h("div", { key:"shop", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:58 } },
       h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:370, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
         h("div", { className:"flex justify-between items-center mb-1" },
-          h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#e8c06a", fontSize:"1.05rem" } }, Ic("assets/node_treasure.png", 18), "行商人"),
+          h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#e8c06a", fontSize:"1.05rem" } }, Ic("assets/merchant.png", 20), "行商人"),
           h("span", { className:"text-sm font-bold flex items-center gap-1", style:{ color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, Ic("assets/icon_coin.png", 14), coins)),
         h("p", { className:"text-[10px] mb-2", style:{ opacity:0.7 } }, "コインでアイテムと交換できる（所持 ", items.length, "/", itemCap(), "）"),
         shop.relic && (() => {
