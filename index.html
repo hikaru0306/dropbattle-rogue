@@ -4102,9 +4102,28 @@ function DropBattle() {
           } else if (curSkill === "smith") {
             title = smithMode === "stock" ? "補充" : smithMode === "gen" ? "生成" : "強化＋";
             iconEl = h("span", { style:{ fontSize:16, marginTop:5, lineHeight:1 } }, smithMode === "stock" ? "📦" : smithMode === "gen" ? "✨" : "⚒️");
+            // 素材の増減プレビュー（ドロップ選択中・金色で消した/使った後の値を表示）:
+            //   補充=+消す数（金床2倍）+魔鉱石分 / 生成・強化=使う素材を差し引いた残り / 攻・防でも魔鉱石分は増加を予測
+            let stPrev = null;
+            if (info && !isUsed) {
+              const oreN = (info.sp.ore || 0) - (info.spu.ore || 0) + (info.spu.ore || 0) * 2;
+              if (isSel && smithMode === "stock") stPrev = stockView + info.count * (hasR("anvil") ? 2 : 1) + oreN;
+              else if (isSel && preview && preview.ids) {
+                const cells = board.filter(c => preview.ids.has(c.id));
+                let n = 0;
+                if (smithMode === "gen") {
+                  const targets = cells.filter(c => c.type !== JUNK && !c.wild && !c.special).length;
+                  const avail = ITEM_KEYS.reduce((s, k) => s + ownedView[k], 0) - board.filter(c => c.special).length;
+                  n = avail <= 0 ? Math.min(stockView, targets) : Math.min(stockView, targets, avail); // 枯渇時は魔鉱石生成なのでavailに縛られない
+                } else n = Math.min(stockView, cells.filter(c => c.special && !c.up).length);
+                if (n > 0) stPrev = stockView - n;
+              } else if (!isSel && oreN > 0 && (action === "atk" || action === "def")) stPrev = stockView + oreN;
+            }
             // 素材数はチュートリアルのプレゼント演出中（gift/giftfx）に金色で強調＋値変化でパルス
-            valEl = h("span", { id:"smith-stockval", key:"sv" + stockView, className: stockView > 0 ? "val-pulse" : "",
-              style:{ fontSize:"0.9rem", fontWeight:900, color: ctut && (ctut.step === "gift" || ctut.step === "giftfx") ? "#ffd75e" : undefined } }, "素材", stockView);
+            valEl = stPrev != null
+              ? h("span", { id:"smith-stockval", style:{ fontSize:"0.9rem", fontWeight:900, color:"#ffd75e" } }, "素材", stPrev)
+              : h("span", { id:"smith-stockval", key:"sv" + stockView, className: stockView > 0 ? "val-pulse" : "",
+                style:{ fontSize:"0.9rem", fontWeight:900, color: ctut && (ctut.step === "gift" || ctut.step === "giftfx") ? "#ffd75e" : undefined } }, "素材", stockView);
           } else if (curSkill === "buff") {
             const incN = hasR("warforge2") ? 0.3 : hasR("warforge") ? 0.2 : 0.1;
             title = "強化→" + tgtLabel;
