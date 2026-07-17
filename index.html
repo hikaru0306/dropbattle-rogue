@@ -269,13 +269,13 @@ const RELICS = {
   jadecore:   { icon:"🟢", rar:2 },
   swordbook:  { icon:"⚔", rar:1 },
   guardbook:  { icon:"🧱", rar:1 },
-  healbook:   { icon:"🌱", rar:1 },
+  healbook:   { icon:"🌱", rar:1, skills:["heal","healx"] }, // 回復アクション系は3つ目が回復のキャラ限定
   dragonblade:{ icon:"🐉", rar:3 },
   aegis_gr:   { icon:"🏰", rar:3 },
-  saintprayer:{ icon:"👼", rar:3 },
+  saintprayer:{ icon:"👼", rar:3, skills:["heal","healx"] },
   swordcrest: { icon:"🗡", rar:2 },
   shieldcrest:{ icon:"🛡", rar:2 },
-  holywater:  { icon:"💧", rar:2 },
+  holywater:  { icon:"💧", rar:2, skills:["heal","healx"] },
   warring:    { icon:"💍", rar:2 },
   guardring:  { icon:"🪬", rar:2 },
   lifefruit:  { icon:"🍎", rar:2 },
@@ -1361,9 +1361,10 @@ function DropBattle() {
   const pickRelics = (count, rarePref) => {
     const rareBoss = rarePref === "boss";
     const allowSrc = rarePref === "boss" || rarePref === "elite"; // src指定レリックはボス/強敵報酬でのみ出現
-    // char指定レリックは対応キャラでのみ / src指定レリックはボス・強敵でのみ
+    // char指定レリックは対応キャラでのみ / skills指定は該当スキルのキャラでのみ / src指定レリックはボス・強敵でのみ
     const unowned = RELIC_KEYS.filter(k => !relicsRef.current.includes(k)
       && (RELICS[k].char === undefined || RELICS[k].char === curCharRef.current)
+      && (!RELICS[k].skills || RELICS[k].skills.includes(charSkillRef.current))
       && (!RELICS[k].src || allowSrc));
     const byRar = r => unowned.filter(k => RELICS[k].rar === r);
     const out = [];
@@ -1499,6 +1500,16 @@ function DropBattle() {
   const [storeAnim, setStoreAnim] = useState(null);
   // 上限ダメージ持ちの敵が初登場したときの説明カード（値=その敵の上限。1回きり db_tut_dcap）
   const [dcapTut, setDcapTut] = useState(null);
+  // 特殊ドロップが初めて盤面に出たときの説明カード（2枚・1回きり db_tut_sp。初回チュートリアルの紙芝居を分割）
+  const [spTut, setSpTut] = useState(null);
+  useEffect(() => {
+    if (SIM_MODE || TEST_MODE || spTut !== null) return;
+    if (status !== "battle" || tut !== null || gtut || ctut) return; // 他のチュートリアル中は出さない
+    if (!board.some(c => c.special)) return;
+    let base = "", seen = "";
+    try { base = localStorage.getItem("db_tut") || ""; seen = localStorage.getItem("db_tut_sp") || ""; } catch (e) {}
+    if (base && !seen) setSpTut(0);
+  }, [board, status, tut, gtut, ctut]);
   const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false, aoe:false, aoeUp:false });
   const turnRef = useRef(freshTurn());
   const syncTurn = () => setTv({ ...turnRef.current });
@@ -3102,7 +3113,7 @@ function DropBattle() {
       setBgmVol: v => changeBgmVol(v),
       openSound: () => setSoundOpen(true),
       setChar: i => { setCurChar(i); storeRef.current = 0; setStoreView(0); stockRef.current = 0; setStockView(0); setSmithMode("stock"); },
-      relicPool: () => RELIC_KEYS.filter(k => !relicsRef.current.includes(k) && (RELICS[k].char === undefined || RELICS[k].char === curCharRef.current)),
+      relicPool: () => RELIC_KEYS.filter(k => !relicsRef.current.includes(k) && (RELICS[k].char === undefined || RELICS[k].char === curCharRef.current) && (!RELICS[k].skills || RELICS[k].skills.includes(charSkillRef.current))),
       charState: () => ({ u:charStateRef.current.u.slice(), c:charStateRef.current.c.slice(), cu:(charStateRef.current.cu || []).slice() }),
       setMode: m => setMode(m),
       // 中断セーブ
@@ -3121,6 +3132,7 @@ function DropBattle() {
       setSkillTarget: t => setSkillTarget(t),
       setSmithMode: m => setSmithMode(m),
       showDcap: cap => setDcapTut(cap),
+      showSpTut: () => setSpTut(0),
       unlockChar: i => unlockChar(i),
       recordClear: () => recordClear()
     };
@@ -3468,6 +3480,25 @@ function DropBattle() {
       })),
       h("p", { className:"text-[9px] mt-3", style:{ opacity:0.5 } }, "特殊が消えるたび袋から1個抽選して盤面へ。袋が空になると「盤面に出ていない分」だけが袋に戻る＝次に何が落ちるか推測できる。"))));
 
+  if (spTut !== null) {
+    const SP = TX.spTutSteps;
+    const sstep = SP[spTut];
+    overlays.push(h("div", { key:"sptut", className:"fixed inset-0 flex items-end justify-center fade-in", style:{ background:"rgba(8,4,14,.72)", zIndex:80, paddingBottom:"14vh" } },
+      h("div", { className:"rounded-2xl p-4 pop-in", style:{ maxWidth:340, width:"92%", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
+        h("div", { className:"flex justify-between items-center mb-1" },
+          h("span", { className:"font-bold", style:{ color:"#e8c06a", fontSize:"1rem" } }, sstep.t),
+          h("span", { className:"text-[10px]", style:{ opacity:0.6 } }, spTut + 1, " / ", SP.length)),
+        h("p", { className:"text-[12px] leading-relaxed mb-3", style:{ opacity:0.9 } }, sstep.d),
+        h("button", {
+          onClick: () => {
+            SFX.tap();
+            if (spTut >= SP.length - 1) { setSpTut(null); try { localStorage.setItem("db_tut_sp", "1"); } catch (e) {} }
+            else setSpTut(spTut + 1);
+          },
+          className:"w-full rounded-xl py-2.5 font-bold",
+          style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } },
+          spTut >= SP.length - 1 ? "了解！ ▶" : TX.tutBtnNext))));
+  }
   if (tut !== null) {
     const TUT = TX.tutSteps;
     const step = TUT[tut];
