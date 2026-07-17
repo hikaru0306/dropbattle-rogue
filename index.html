@@ -321,16 +321,16 @@ const itemDesc = k => ITEMS[k].desc;
 const itemName = k => ITEMS[k].name;
 // 消費アイテム（最大3個・ショップでコイン交換）
 const CONSUM = {
-  potion:   { icon:"🧪", price:45 },
-  might:    { icon:"💪", price:55 },
-  aegis:    { icon:"🛡", price:55 },
-  colorize: { icon:"🎨", price:60 },
-  purify:   { icon:"🧹", price:50 },
-  stun:     { icon:"⏳", price:65 },
-  bomb:     { icon:"💣", price:60 },
-  venom:    { icon:"🐍", price:55 },
-  gemrain:  { icon:"💎", price:60 },
-  phoenix:  { icon:"🪶", price:80 }
+  potion:   { icon:"🧪", img:"assets/cs_potion.png",   price:45 },
+  might:    { icon:"💪", img:"assets/cs_might.png",    price:55 },
+  aegis:    { icon:"🛡", img:"assets/cs_aegis.png",    price:55 },
+  colorize: { icon:"🎨", img:"assets/cs_colorize.png", price:60 },
+  purify:   { icon:"🧹", img:"assets/cs_purify.png",   price:50 },
+  stun:     { icon:"⏳", img:"assets/cs_stun.png",     price:65 },
+  bomb:     { icon:"💣", img:"assets/cs_bomb.png",     price:60 },
+  venom:    { icon:"🐍", img:"assets/cs_venom.png",    price:55 },
+  gemrain:  { icon:"💎", img:"assets/cs_gemrain.png",  price:60 },
+  phoenix:  { icon:"🪶", img:"assets/cs_phoenix.png",  price:80 }
 };
 for (const k in CONSUM) Object.assign(CONSUM[k], TX.consum[k]);
 const ACTIONS = {
@@ -3226,7 +3226,7 @@ function DropBattle() {
         border: `2px solid ${isArmed ? "#e8c06a" : k ? "#8a6f3c" : "#2c2740"}`, fontSize: sz > 40 ? 18 : 15, lineHeight:1,
         transform: isArmed ? "scale(1.1)" : "none", transition:"transform .15s ease, border-color .15s ease",
         opacity: k ? 1 : 0.45, cursor: k ? "pointer" : "default" } },
-      c ? c.icon : "");
+      c ? (c.img ? Ic(c.img, Math.round(sz * 0.62)) : c.icon) : "");
   });
   const itemBarEl = h("div", { className:"flex items-center gap-2 mb-1" },
     h("span", { className:"text-[10px] font-bold", style:{ color:"#c9bfe0", width:44 } }, "アイテム"),
@@ -3630,7 +3630,7 @@ function DropBattle() {
     const c = CONSUM[items[armed]];
     overlays.push(h("div", { key:"armed", className:"fixed pop-in", style:{ top:12, left:"50%", transform:"translateX(-50%)", zIndex:75,
       background:"rgba(30,24,42,.97)", border:"2px solid #8a6f3c", borderRadius:12, padding:"8px 16px", maxWidth:"88%", textAlign:"center", pointerEvents:"none" } },
-      h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, c.icon, " ", c.name),
+      h("span", { className:"font-bold text-sm inline-flex items-center justify-center", style:{ color:"#e8c06a", gap:5 } }, c.img ? Ic(c.img, 20) : c.icon, c.name),
       h("span", { className:"block text-[11px]", style:{ opacity:0.85, marginTop:1 } }, c.desc),
       h("span", { className:"block text-[10px] font-bold", style:{ color:"#8ce8b0", marginTop:3 } }, "もう一度タップで使用")));
   }
@@ -3722,7 +3722,7 @@ function DropBattle() {
           const c = CONSUM[k];
           const can = coins >= priceOf(c.price) && items.length < itemCap();
           return h("div", { key:k, className:"flex items-center gap-3 rounded-xl px-3 py-2", style:{ background:"rgba(255,255,255,.05)", border:"2px solid #453b5c" } },
-            h("span", { style:{ fontSize:"1.4rem", minWidth:30, textAlign:"center" } }, c.icon),
+            h("span", { style:{ minWidth:30, textAlign:"center", display:"flex", alignItems:"center", justifyContent:"center" } }, c.img ? Ic(c.img, 26) : h("span", { style:{ fontSize:"1.4rem" } }, c.icon)),
             h("span", { className:"flex-1" },
               h("span", { className:"font-bold text-sm", style:{ color:"#f0e4c8" } }, c.name),
               h("span", { className:"block text-[10px]", style:{ opacity:0.75 } }, c.desc)),
