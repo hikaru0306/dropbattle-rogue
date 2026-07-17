@@ -1500,16 +1500,16 @@ function DropBattle() {
   const [storeAnim, setStoreAnim] = useState(null);
   // 上限ダメージ持ちの敵が初登場したときの説明カード（値=その敵の上限。1回きり db_tut_dcap）
   const [dcapTut, setDcapTut] = useState(null);
-  // 特殊ドロップが初めて盤面に出たときの説明カード（2枚・1回きり db_tut_sp。初回チュートリアルの紙芝居を分割）
+  // 特殊ドロップの説明カード（2枚・1回きり db_tut_sp）: 2ターン目の開始時に表示（初回3枚の直後に連続で出さない）
   const [spTut, setSpTut] = useState(null);
   useEffect(() => {
     if (SIM_MODE || TEST_MODE || spTut !== null) return;
-    if (status !== "battle" || tut !== null || gtut || ctut) return; // 他のチュートリアル中は出さない
-    if (!board.some(c => c.special)) return;
+    if (status !== "battle" || turn < 2 || tut !== null || gtut || ctut) return; // 他のチュートリアル中は出さない
+    if (!board.some(c => c.special)) return; // 盤面に特殊が無いターンは見送り（次のターン開始で再判定）
     let base = "", seen = "";
     try { base = localStorage.getItem("db_tut") || ""; seen = localStorage.getItem("db_tut_sp") || ""; } catch (e) {}
     if (base && !seen) setSpTut(0);
-  }, [board, status, tut, gtut, ctut]);
+  }, [turn, status, tut, gtut, ctut]);
   const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false, aoe:false, aoeUp:false });
   const turnRef = useRef(freshTurn());
   const syncTurn = () => setTv({ ...turnRef.current });
