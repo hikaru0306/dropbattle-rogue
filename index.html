@@ -302,6 +302,7 @@ const RELICS = {
   anvil:      { icon:"🛠", rar:2, char:5 }
 };
 for (const k in RELICS) Object.assign(RELICS[k], TX.relics[k]);
+for (const k in RELICS) RELICS[k].img = "assets/rl_" + k + ".png"; // 塗りアイコン（rl_<key>.png）
 // レリック生成の虹（ワイルド）特殊ドロップ。ITEM_KEYS(袋)には含めない＝袋からは出ない
 const RGEM = {
   linev: { glyph:"↕" },
@@ -3198,7 +3199,7 @@ function DropBattle() {
   const relicBarEl = relicsView.length > 0 && h("div", { className:"flex items-center gap-1 mb-1", style:{ flexWrap:"wrap" } },
     relicsView.map(k => h("button", { key:k, title:`${RELICS[k].name}: ${RELICS[k].desc}`,
       onClick: () => { setRelicOpen(true); SFX.open(); },
-      className:"rounded-lg", style:{ width:26, height:26, fontSize:"0.85rem", background:"rgba(30,24,42,.92)", border:"1px solid #6e5a3c", lineHeight:"24px" } }, RELICS[k].icon)),
+      className:"rounded-lg flex items-center justify-center", style:{ width:26, height:26, background:"rgba(30,24,42,.92)", border:"1px solid #6e5a3c" } }, Ic(RELICS[k].img, 20))),
     h("button", { onClick: () => { setRelicOpen(true); SFX.open(); },
       className:"rounded-lg px-2 text-[9px] font-bold", style:{ height:26, background:"rgba(30,24,42,.92)", border:"1px solid #3c3450", color:"#c9bfe0" } }, "効果一覧"));
 
@@ -3462,7 +3463,7 @@ function DropBattle() {
         h("button", { onClick: () => setRelicOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
       h("div", { className:"flex flex-col gap-2" }, relicsView.map(k =>
         h("div", { key:k, className:"flex items-center gap-3 rounded-xl px-3 py-2", style:{ background:"rgba(255,255,255,.05)", border:"1px solid #6e5a3c" } },
-          h("span", { style:{ fontSize:"1.4rem", minWidth:30, textAlign:"center" } }, RELICS[k].icon),
+          h("span", { style:{ minWidth:30, display:"flex", justifyContent:"center" } }, Ic(RELICS[k].img, 28)),
           h("span", { className:"flex-1" },
             h("span", { className:"font-bold text-sm block", style:{ color:"#e8c06a" } }, RELICS[k].name),
             h("span", { className:"block text-[11px]", style:{ opacity:0.85, lineHeight:1.5 } }, RELICS[k].desc))))))));
@@ -3708,7 +3709,7 @@ function DropBattle() {
           const rk = shop.relic, rc = priceOf(RELIC_PRICE[RELICS[rk].rar]);
           const can = coins >= rc;
           return h("div", { className:"flex items-center gap-3 rounded-xl px-3 py-2 mb-2", style:{ background:"rgba(232,192,106,.08)", border:"2px solid #6e5a3c" } },
-            h("span", { style:{ fontSize:"1.4rem", minWidth:30, textAlign:"center" } }, RELICS[rk].icon),
+            h("span", { style:{ minWidth:30, display:"flex", justifyContent:"center" } }, Ic(RELICS[rk].img, 26)),
             h("span", { className:"flex-1" },
               h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, "🏺 ", RELICS[rk].name),
               h("span", { className:"block text-[10px]", style:{ opacity:0.75 } }, RELICS[rk].desc)),
@@ -3747,7 +3748,7 @@ function DropBattle() {
         ...(rStep === "relic" ? [
           h("p", { key:"rdesc", className:"text-center text-xs mb-2", style:{ opacity:0.8 } }, "強敵を倒した証にレリックを獲得！"),
           rewards.relic && h("div", { key:"rpanel", className:"flex items-center gap-2 rounded-xl px-3 py-2 mb-3", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.5)" } },
-            h("span", { style:{ fontSize:"1.4rem" } }, RELICS[rewards.relic].icon),
+            Ic(RELICS[rewards.relic].img, 30),
             h("span", null,
               h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, "レリック獲得: ", RELICS[rewards.relic].name),
               h("span", { className:"block text-[10px]", style:{ opacity:0.8 } }, RELICS[rewards.relic].desc))),
@@ -3779,7 +3780,7 @@ function DropBattle() {
           hit ? "ぴったり！" : "はずれ…"),
         h("p", { className:"my-1 text-sm", style:{ opacity:0.85 } }, "合計 ", h("b", { style:{ color:"#7cffb0" } }, d.cleared), " 個（目標 ", puzzle.targets.join("・"), " 個）"),
         hit && h("div", { className:"flex items-center justify-center gap-2 rounded-xl px-3 py-2 my-2", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.5)" } },
-          h("span", { style:{ fontSize:"1.5rem" } }, RELICS[d.relic].icon),
+          Ic(RELICS[d.relic].img, 30),
           h("span", { className:"text-left" },
             h("span", { className:"font-bold text-sm block", style:{ color:"#e8c06a" } }, "レリック獲得: ", RELICS[d.relic].name),
             h("span", { className:"block text-[10px]", style:{ opacity:0.8 } }, RELICS[d.relic].desc))),
@@ -3800,7 +3801,7 @@ function DropBattle() {
           h("p", { className:"text-[11px] mb-1 font-bold", style:{ color:"#e8c06a" } }, "🏺 レリックを1つ選んで進む"),
           h("div", { className:"flex flex-col gap-1.5" }, actClear.picks.map(k =>
             h("button", { key:k, onClick: () => { addRelic(k); nextAct(); }, className:"flex items-center gap-3 rounded-xl px-3 py-2 text-left", style:{ background:"rgba(255,255,255,.05)", border:"2px solid #6e5a3c" } },
-              h("span", { style:{ fontSize:"1.35rem", minWidth:28, textAlign:"center" } }, RELICS[k].icon),
+              h("span", { style:{ minWidth:28, display:"flex", justifyContent:"center" } }, Ic(RELICS[k].img, 26)),
               h("span", null,
                 h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, RELICS[k].name),
                 h("span", { className:"block text-[10px]", style:{ opacity:0.8 } }, RELICS[k].desc)))))),
@@ -3824,7 +3825,7 @@ function DropBattle() {
           h("span", { className:"inline-flex items-center", style:{ gap:3 } }, h("span", { style:{ opacity:0.6 } }, "🏺"), h("b", { style:{ color:"#e8c06a" } }, relicsView.length)),
           h("span", { className:"inline-flex items-center", style:{ gap:3 } }, Ic("assets/icon_coin.png", 12), h("b", { style:{ color:"#e8c06a" } }, coins))),
         relicsView.length > 0 && h("div", { className:"flex justify-center mb-2 text-sm", style:{ gap:3, flexWrap:"wrap" } },
-          relicsView.slice(0, 10).map(k => h("span", { key:k, title:RELICS[k].name }, RELICS[k].icon)),
+          relicsView.slice(0, 10).map(k => h("span", { key:k, title:RELICS[k].name, className:"inline-flex" }, Ic(RELICS[k].img, 22))),
           relicsView.length > 10 && h("span", { className:"text-[10px]", style:{ opacity:0.6, alignSelf:"center" } }, "+", relicsView.length - 10)),
         h("div", { className:"flex flex-col items-center gap-2 mt-2" },
           h("button", { onClick: () => restart(false), className:"w-full rounded-xl py-2.5 tracking-widest font-bold", style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a", boxShadow:"0 3px 0 #6e4e1a" } }, "もう一度挑む"),
