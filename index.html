@@ -979,8 +979,9 @@ const refill = (cells, removeIds, bagRef, ownedRef, bagUpRef, ownedUpRef) => {
       if (r < need) newPositions.push(r*SIZE+c);
     }
   }
+  // 追加分(extra=ブロムの袋外生成)は目標数に数えない → extraが残っていても袋から新しい特殊が落ちてくる
   let specials = 0;
-  for (const cell of next) if (cell.special) specials++;
+  for (const cell of next) if (cell.special && !cell.extra) specials++;
   let needSpecial = specialTarget() - specials;
   if (needSpecial > 0) {
     const np = shuffle(newPositions.slice());
@@ -3055,7 +3056,7 @@ function DropBattle() {
       setEnrEvery: (i, v) => { const ens = enemiesRef.current.map((e, ix) => ix === i ? { ...e, enrEvery: v } : e); setEnemiesBoth(ens); },
       setPat: (i, pat) => { const ens = enemiesRef.current.map((e, ix) => ix === i ? { ...e, pat, pi: 0 } : e); setEnemiesBoth(ens); },
       setCellType: (i, t) => { const b = boardRef.current.slice(); b[i] = { ...b[i], type: t, special: false, up: false, wild: false }; commitBoard(b); },
-      setCellSpecial: (i, k, up, wild) => { const b = boardRef.current.slice(); b[i] = { ...b[i], special: k, up: !!up, wild: !!wild }; commitBoard(b); },
+      setCellSpecial: (i, k, up, wild, extra) => { const b = boardRef.current.slice(); b[i] = { ...b[i], special: k, up: !!up, wild: !!wild, extra: !!extra }; commitBoard(b); },
       addAtk: v => { turnRef.current.atk += v; syncTurn(); },
       setPoison: v => setPoison(v),
       setPierce: v => { turnRef.current.pierce = !!v; syncTurn(); },
