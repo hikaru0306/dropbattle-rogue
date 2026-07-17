@@ -939,8 +939,9 @@ const expandClear = (b, idx, blastOk, crossOk) => {
 const computeEffect = (act, info) => {
   if (info.junk) return { main:0, splitAtk:0, splitDef:0, healBonus:0 };
   let actBoost = 1;
-  if (act === "atk" && info.sp.atkx > 0) actBoost = info.spu.atkx > 0 ? 3 : 2;
-  if (act === "def" && info.sp.defx > 0) actBoost = info.spu.defx > 0 ? 3 : 2;
+  // 猛攻/鉄壁: スターと同じ加算式（1個で×2・2個で×3・3個で×4、＋化はさらに+1）
+  if (act === "atk" && info.sp.atkx > 0) actBoost = 1 + info.sp.atkx + info.spu.atkx;
+  if (act === "def" && info.sp.defx > 0) actBoost = 1 + info.sp.defx + info.spu.defx;
   let main = Math.round(info.base * perOf(act) * info.mult * actBoost);
   if (CUR_SKILL === "healx") main *= 2; // 大賢者：全効果2倍
   // 剣/盾: 同時に消したドロップ1つにつき+5（強化は+10）。アクションや倍率に依存しない固定値
@@ -1566,6 +1567,7 @@ function DropBattle() {
 
   const [sv, setSv] = useState(null); // 敵ターン中のシールド残量表示
   const [shakeSeq, setShakeSeq] = useState(0);
+  const shakeSeqRef = useRef(0); shakeSeqRef.current = shakeSeq; // テスト検証用に最新値をrefへ
   const [flashSeq, setFlashSeq] = useState(0);
   const [pops, setPops] = useState({}); // ダメージポップ {key:{text,color,seq}}
   const popSeq = useRef(0);
@@ -2593,7 +2595,7 @@ function DropBattle() {
       if (red && red.length) {
         const N2 = SIZE * SIZE;
         red.forEach(i => barBlast("v", [i - SIZE, i, i + SIZE].filter(k => k >= 0 && k < N2 && (k % SIZE) === (i % SIZE))));
-        SFX.crack(); setShakeSeq(q => q + 1);
+        SFX.crack(); if (actionRef.current === "atk") setShakeSeq(q => q + 1); // 攻撃で実ダメージが入る時のみ画面を揺らす
       }
       if (sweptLine) SFX.swish();
       if (boltExtra.length) lightningAt(boltExtra);
@@ -2661,7 +2663,8 @@ function DropBattle() {
           sp.style.setProperty("--dy", Math.sin(ang) * dist + "px");
         }
       });
-      if (idxs.length) { SFX.crack(); setShakeSeq(q => q + 1); }
+      // 敵にダメージが入るのは攻撃アクションのみ。防御/回復で爆破ドロップを消したときは画面を揺らさない
+      if (idxs.length) { SFX.crack(); if (actionRef.current === "atk") setShakeSeq(q => q + 1); }
     } catch (e) {}
   };
   // 列/行のセル群
@@ -3024,6 +3027,7 @@ function DropBattle() {
         act: actRef.current, mode: modeRef.current, pmax: pMaxRef.current, actClear: !!actClearRef.current, poison: poisonRef.current,
         relics: relicsRef.current.slice(),
         rewardPicks: rewardsRef.current ? (rewardsRef.current.picks || []).length : 0,
+        shakeSeq: shakeSeqRef.current,
         specials: boardRef.current.filter(c => c.special).length,
         ownedTotal: ITEM_KEYS.reduce((t, k) => t + ownedRef.current[k], 0),
         enemyAtks: enemiesRef.current.map(e => e.atk),
