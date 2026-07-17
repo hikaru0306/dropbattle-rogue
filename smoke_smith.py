@@ -114,7 +114,10 @@ with sync_playwright() as pw:
         page.evaluate("window.__test.declineReward()"); time.sleep(1.0)
     s = st(page)
     if s["status"] == "map" and s["selectable"]:
-        page.evaluate(f"window.__test.enter({s['selectable'][0]})"); time.sleep(0.8)
+        # 休憩/宝箱はバトルにならず素材リセットが走らないため、必ずバトル系ノードを選ぶ
+        types = {n["id"]: n["type"] for n in s["map"]}
+        bid = next((i for i in s["selectable"] if types[i] in ("battle", "horde", "elite")), s["selectable"][0])
+        page.evaluate(f"window.__test.enter({bid})"); time.sleep(0.8)
         info = ci(page)
         chk("stock resets per battle", info["stock"] == 0, f"stock={info['stock']}")
     else:

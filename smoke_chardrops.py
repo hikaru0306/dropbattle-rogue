@@ -43,96 +43,108 @@ with sync_playwright() as pw:
     page.click("text=冒険に出る"); time.sleep(0.5)
     page.click("text=この仲間と冒険に出る"); time.sleep(0.6)
 
-    # ―― 1) 初期所持: 各キャラ 剣盾回復2ずつ+専用3 ――
-    expect = {0:"holy", 1:"ink", 2:"warcry", 3:"store", 4:"wildstar", 5:"ore"}
+    # ―― 1) 初期所持: 専用持ちは 剣盾回復2ずつ+専用3・アルド(専用なし=聖光廃止)は3/3/3 ――
+    expect = {2:"warcry", 3:"store", 4:"wildstar", 5:"ore"}
     for i, k in expect.items():
         page.evaluate(f"window.__test.setChar({i})")
         page.evaluate("window.__test.restart()"); time.sleep(0.3)
         o = st(page)["owned"]
         chk(f"char{i} owns {k}x3 + 2/2/2", o[k] == 3 and o["atk"] == 2 and o["def"] == 2 and o["heal"] == 2, str(o))
 
-    # ―― 2) 聖光(holy): 回復の50%が攻撃に。強化込みで100%上限 ――
-    start_char(page, 0)
-    make_group(page, [0,1,2,3,4], 1)
-    page.evaluate("window.__test.setAct('heal')")
-    page.evaluate("window.__test.commit(0)"); time.sleep(0.5)
-    heal0 = st(page)["tv"]["heal"]
-    make_group(page, [6,7,8], 0)
-    page.evaluate("window.__test.setCellSpecial(6, 'holy', false, false)")
-    page.evaluate("window.__test.setAct('atk')")
-    page.evaluate("window.__test.commit(6)"); time.sleep(0.5)
-    s = st(page)
-    atk0 = s["tv"]["atk"]
-    chk("holy flag on tv", s["tv"].get("holy") == 1, str(s["tv"]))
-    hp_before = s["enemies"][0]["hp"]
-    page.evaluate("window.__test.commit(30)") if False else None
-    # 3アクション目（防御）を消化して解決
-    make_group(page, [30,31,32], 2)
-    page.evaluate("window.__test.setAct('def')")
-    page.evaluate("window.__test.commit(30)"); time.sleep(1.6)
-    s = st(page)
-    dealt = hp_before - s["enemies"][0]["hp"]
-    want = atk0 + int(heal0 * 0.5 + 0.5)  # JSのMath.roundは.5切り上げ
-    chk("holy: dealt = atk + 50% of heal", dealt == want, f"dealt={dealt} want={want} (atk{atk0}+heal{heal0}/2)")
+    # ―― 2) アルド: 聖光は廃止済み（3/3/3スタート・holyキー自体が存在しない） ――
+    page.evaluate("window.__test.setChar(0)")
+    page.evaluate("window.__test.restart()"); time.sleep(0.3)
+    o = st(page)["owned"]
+    chk("char0 owns 3/3/3 (holy removed)", o["atk"] == 3 and o["def"] == 3 and o["heal"] == 3, str(o))
+    chk("holy key gone", "holy" not in o, str(list(o.keys())))
 
-    # ―― 3) 彩雫(ink): ランダム3個を消した色に染める ――
+    # ―― 3) イリス: 彩雫は廃止済み（3/3/3スタート・inkキー自体が存在しない） ――
     start_char(page, 1)
-    make_group(page, [0,1,2], 1)
-    page.evaluate("window.__test.setCellSpecial(0, 'ink', false, false)")
-    page.evaluate("window.__test.setAct('atk')")
-    page.evaluate("window.__test.commit(0)"); time.sleep(0.5)
-    s = st(page)
-    chk("ink painted 3 cells", s["tv"].get("inkPainted") == 3, str(s["tv"].get("inkPainted")))
+    o = st(page)["owned"]
+    chk("char1 owns 3/3/3 (ink removed)", o["atk"] == 3 and o["def"] == 3 and o["heal"] == 3, str(o))
+    chk("ink key gone", "ink" not in o, str(list(o.keys())))
 
     # ―― 4) 虹のパレット: 6個以上の色変えで虹1個 ――
     page.evaluate("window.__test.giveRelic('palette')")
-    page.evaluate("window.__test.resolve()"); time.sleep(1.4)
     make_group(page, [12,13,14,15,16,17], 1)
     page.evaluate("window.__test.setAct('heal')")
     page.evaluate("window.__test.commit(12)"); time.sleep(0.5)
     s = st(page)
     chk("palette made 1 wild in painted group", len(wilds(s)) == 1 and wilds(s)[0] in [12,13,14,15,16,17], str(wilds(s)))
 
-    # ―― 5) 闘魂(warcry): 現在の攻/防が1.2倍 ――
+    # ―― 5) 闘魂(warcry): 強化で消すと1個につき倍率+0.2（攻撃/防御アクションでは無効果） ――
     start_char(page, 2)
     make_group(page, [0,1,2,3,4], 1)
     page.evaluate("window.__test.setAct('atk')")
     page.evaluate("window.__test.commit(0)"); time.sleep(0.5)
     atk_a = st(page)["tv"]["atk"]
+    # 防御アクションで闘魂入りグループを消しても攻撃は変化しない（旧仕様の×1.2は廃止）
     make_group(page, [6,7,8], 0)
     page.evaluate("window.__test.setCellSpecial(6, 'warcry', false, false)")
     page.evaluate("window.__test.setAct('def')")
     page.evaluate("window.__test.commit(6)"); time.sleep(0.5)
     s = st(page)
-    chk("warcry atk x1.2", s["tv"]["atk"] == round(atk_a * 1.2), f"{atk_a} -> {s['tv']['atk']}")
-
-    # ―― 6) 強化＆軍神の号令（3アクション消化での自動解決を避けて2アクションで検証） ――
-    page.evaluate("window.__test.resolve()"); time.sleep(1.4)
-    make_group(page, [0,1,2,3,4], 1)
-    page.evaluate("window.__test.setAct('atk')")
-    page.evaluate("window.__test.commit(0)"); time.sleep(0.5)
-    atk_b = st(page)["tv"]["atk"]
-    make_group(page, [30,31,32,33], 1)  # 強化4個・対象=atk
-    page.evaluate("window.__test.setSkillTarget('atk')")
-    page.evaluate("window.__test.setAct('heal')")
-    page.evaluate("window.__test.commit(30)"); time.sleep(0.5)
-    s = st(page)
-    chk("buff atk x1.4 (0.1x4)", s["tv"]["atk"] == int(atk_b * 1.4 + 0.5), f"{atk_b} -> {s['tv']['atk']}")
-    # 号令: 対象=defで強化 → 反対側(atk)に半分（次のターンで検証）
-    page.evaluate("window.__test.giveRelic('warhorn')")
-    make_group(page, [12,13,14], 0)
-    page.evaluate("window.__test.setAct('def')")
-    page.evaluate("window.__test.commit(12)"); time.sleep(1.6)  # 3アクション目→解決
+    chk("warcry no effect outside buff", s["tv"]["atk"] == atk_a, f"{atk_a} -> {s['tv']['atk']}")
+    # 強化アクションで闘魂1個入り3個グループ → ×(1 + 0.1*3 + 0.2) = ×1.5
+    page.evaluate("window.__test.resolve()"); time.sleep(1.6)
     make_group(page, [0,1,2,3,4], 1)
     page.evaluate("window.__test.setAct('atk')")
     page.evaluate("window.__test.commit(0)"); time.sleep(0.5)
     atk_c = st(page)["tv"]["atk"]
-    make_group(page, [30,31,32,33], 1)  # 強化4個・対象=def
-    page.evaluate("window.__test.setSkillTarget('def')")
+    make_group(page, [6,7,8], 0)
+    page.evaluate("window.__test.setCellSpecial(6, 'warcry', false, false)")
+    page.evaluate("window.__test.setSkillTarget('atk')")
+    page.evaluate("window.__test.setAct('heal')")
+    page.evaluate("window.__test.commit(6)"); time.sleep(0.5)
+    s = st(page)
+    pend5 = s["tv"].get("buffPend") or {}
+    chk("warcry +0.2 in buff (pend x1.5)", abs(pend5.get("mult", 0) - 1.5) < 1e-9, str(pend5))
+    page.evaluate("window.__test.resolve()"); time.sleep(2.0)  # 予約を消化して次のテストへ
+
+    # ―― 6) 強化は「予約→攻撃直前に計算」: 後がけ・先がけの両方で倍率が乗る ――
+    page.evaluate("window.__test.resolve()"); time.sleep(1.4)
+    # (a) 攻撃→強化 の順: コミット時点ではtv不変・buffPendに予約される
+    make_group(page, [0,1,2,3,4], 1)
+    page.evaluate("window.__test.setAct('atk')")
+    page.evaluate("window.__test.commit(0)"); time.sleep(0.5)
+    atk_b = st(page)["tv"]["atk"]
+    make_group(page, [30,31,32,33], 1)  # 強化4個・対象=atk → ×1.4
+    page.evaluate("window.__test.setSkillTarget('atk')")
     page.evaluate("window.__test.setAct('heal')")
     page.evaluate("window.__test.commit(30)"); time.sleep(0.5)
     s = st(page)
-    chk("warhorn: atk x1.2 (half of def buff)", s["tv"]["atk"] == int(atk_c * 1.2 + 0.5), f"{atk_c} -> {s['tv']['atk']}")
+    pend = s["tv"].get("buffPend") or {}
+    chk("buff pends (tv unchanged)", s["tv"]["atk"] == atk_b and abs(pend.get("mult", 0) - 1.4) < 1e-9, str(pend))
+    hp0 = s["enemies"][0]["hp"]
+    page.evaluate("window.__test.resolve()"); time.sleep(2.2)
+    s = st(page)
+    dealt = hp0 - s["enemies"][0]["hp"]
+    chk("buff applied at resolve (x1.4)", dealt == int(atk_b * 1.4 + 0.5), f"dealt={dealt} want={int(atk_b*1.4+0.5)}")
+    # (b) 強化→攻撃 の順でも同じく乗る（HP切れ撃破で計測が狂わないようゴーレムを湧き直す）
+    page.evaluate("window.__test.spawn(['golem'])"); time.sleep(0.3)
+    make_group(page, [30,31,32,33], 1)
+    page.evaluate("window.__test.setAct('heal')")
+    page.evaluate("window.__test.commit(30)"); time.sleep(0.5)
+    make_group(page, [0,1,2,3,4], 1)
+    page.evaluate("window.__test.setAct('atk')")
+    page.evaluate("window.__test.commit(0)"); time.sleep(0.5)
+    s = st(page)
+    atk_d = s["tv"]["atk"]
+    hp1 = s["enemies"][0]["hp"]
+    page.evaluate("window.__test.resolve()"); time.sleep(2.2)
+    s = st(page)
+    dealt2 = hp1 - s["enemies"][0]["hp"]
+    chk("buff-first also applies (x1.4)", dealt2 == int(atk_d * 1.4 + 0.5), f"dealt={dealt2} want={int(atk_d*1.4+0.5)}")
+    # (c) 号令: pend.hornに半分の倍率が入る
+    page.evaluate("window.__test.spawn(['golem'])"); time.sleep(0.3)
+    page.evaluate("window.__test.giveRelic('warhorn')")
+    make_group(page, [30,31,32,33], 1)
+    page.evaluate("window.__test.setSkillTarget('def')")
+    page.evaluate("window.__test.setAct('heal')")
+    page.evaluate("window.__test.commit(30)"); time.sleep(0.5)
+    pend = st(page)["tv"].get("buffPend") or {}
+    chk("warhorn half in pend (1.2)", abs(pend.get("horn", 0) - 1.2) < 1e-9, str(pend))
+    page.evaluate("window.__test.resolve()"); time.sleep(2.2)
 
     # ―― 7) 星のしずく(wildstar): ランダム1個が虹に ――
     start_char(page, 4)

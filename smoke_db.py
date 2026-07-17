@@ -42,7 +42,8 @@ with sync_playwright() as p:
     print("3 battle OK enemies:", s["enemies"])
     page.screenshot(path=SHOT + r"\s3_battle.png")
 
-    # 実ポインタ操作で盤面を1回消す（攻撃）
+    # 実ポインタ操作で盤面を1回消す（攻撃）※盤面のマウント/dropInアニメ完了を待ってからタップ（フレーク対策）
+    time.sleep(0.6)
     cell = page.query_selector("[data-idx='14']")
     box = cell.bounding_box()
     page.mouse.move(box["x"] + box["width"]/2, box["y"] + box["height"]/2)

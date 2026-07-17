@@ -32,7 +32,7 @@ JOBS = {
     "icon_note":    "A single golden musical note symbol with a round note head and a curved flag on the stem, flat bold design.",
     "icon_speaker": "An ornate golden brass horn megaphone held sideways, wide bell opening facing left, hovering, nothing underneath.",
     # ―― 盤面特殊ドロップのマーク ――
-    "mk_star":   "A bright golden four-pointed sparkle star with thick bold points and a warm yellow glowing center.",
+    "mk_star":   "A classic bold five-pointed golden star shape, flat yellow gold fill with an orange bottom shade, single star symbol.",
     "mk_plus":   "A bold bright teal plus cross symbol with slightly rounded ends.",
     "mk_three":  "Three glossy bright orange round orbs arranged in a pyramid triangle, touching each other, hovering, nothing underneath.",
     "mk_pierce": "A bold silver arrow with a wide triangular arrowhead and thick shaft pointing to the upper right, chunky cartoon proportions, short red feather fletching.",

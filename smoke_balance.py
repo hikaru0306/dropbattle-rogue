@@ -143,16 +143,16 @@ with sync_playwright() as p:
         assert bigs[i] < bigs[i+1], f"boss big not increasing: {bigs}"
     print("8 ura boss big curve OK:", [round(x) for x in bigs])
 
-    # 9. イリス: 攻/防の基礎値5・回復は1のまま
+    # 9. イリス: 攻/防の基礎値8・回復は1のまま
     page.evaluate("window.__test.setChar(1)")
     time.sleep(0.2)
     per = st(page)["per"]
-    assert per["atk"] == 5 and per["def"] == 5 and per["heal"] == 1, f"iris per: {per}"
+    assert per["atk"] == 8 and per["def"] == 8 and per["heal"] == 1, f"iris per: {per}"
     fresh_battle(page)
     tv0, tv1 = clear_row(page, 3)
     got = tv1["atk"] - tv0["atk"]
-    assert got == 15, f"iris atk 3clear: want 15 got {got}"
-    print("9 iris base 5 OK (per", per, ", 3clear -> atk+15)")
+    assert got == 24, f"iris atk 3clear: want 24 got {got}"
+    print("9 iris base 8 OK (per", per, ", 3clear -> atk+24)")
 
     # 10. ガレス: 強化は1ドロップ+0.1（4個atk=40 → 3個強化で 40*(1+0.3)=52）
     page.evaluate("window.__test.setChar(2)")
@@ -161,9 +161,10 @@ with sync_playwright() as p:
     fresh_battle(page)
     tv0, tv1 = clear_row(page, 4, action="atk")
     assert tv1["atk"] - tv0["atk"] == 40, f"gareth atk commit: {tv1}"
-    tv0, tv1 = clear_row(page, 3, action="heal")   # 3つ目=強化
-    assert tv1["atk"] == 52, f"gareth buff x(1+0.1*3): want 52 got {tv1['atk']}"
-    print("10 gareth +0.1/drop OK (40 -> 52)")
+    tv0, tv1 = clear_row(page, 3, action="heal")   # 3つ目=強化（予約され、計算はターン解決の直前）
+    pend = tv1.get("buffPend") or {}
+    assert tv1["atk"] == 40 and abs(pend.get("mult", 0) - 1.3) < 1e-9, f"gareth buff pend x1.3: {tv1}"
+    print("10 gareth +0.1/drop OK (pend x1.3, resolve時に40->52)")
     page.evaluate("window.__test.setChar(0)")
 
     # 11. 縦裂の宝珠: ちょうど5個で虹生成・6個では生成されない
