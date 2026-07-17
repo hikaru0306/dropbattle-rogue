@@ -121,7 +121,8 @@ with sync_playwright() as pw:
         info = ci(page)
         chk("stock resets per battle", info["stock"] == 0, f"stock={info['stock']}")
 
-        # 6) 生成の枯渇フォールバック: 所持特殊が全て盤面に出ている（リロードしても出せない）→ 魔鉱石を生成
+        # 6) 生成の枯渇フォールバック: 所持特殊が全て盤面に出ている（リロードしても出せない）
+        #    → 剣20%/盾20%/魔鉱石60%で追加生成（extra=所持外・袋会計に影響しない）
         page.evaluate("window.__test.spawn(['golem'])"); time.sleep(0.3)  # 高HPで撃破を避ける
         page.evaluate("window.__test.setSmithMode('stock')")
         make_group(page, [0, 1, 2], 1); time.sleep(0.2)
@@ -132,6 +133,7 @@ with sync_playwright() as pw:
         # make_groupで盤面の特殊を全消去してから、所持特殊を全数(9個)盤面に配置
         make_group(page, [6, 7, 8], 1); time.sleep(0.2)
         owned = st(page)["owned"]
+        owned_total_before = st(page)["ownedTotal"]
         cells = list(range(24, 36)); ptr = 0
         for k, v in owned.items():
             for _ in range(v):
@@ -143,7 +145,10 @@ with sync_playwright() as pw:
         page.evaluate("window.__test.commit(6)"); time.sleep(0.6)
         s = st(page); info = ci(page)
         row_sp = [s["board"][i]["sp"] for i in [6, 7, 8]]
-        chk("gen fallback made 3 ore", row_sp == ["ore", "ore", "ore"], str(row_sp))
+        row_x = [s["board"][i]["x"] for i in [6, 7, 8]]
+        chk("gen fallback made 3 specials in {atk,def,ore}", len([x for x in row_sp if x]) == 3 and all(x in ("atk", "def", "ore") for x in row_sp), str(row_sp))
+        chk("fallback drops flagged extra", all(row_x), str(row_x))
+        chk("fallback did not add to owned", st(page)["ownedTotal"] == owned_total_before, f"{owned_total_before}->{st(page)['ownedTotal']}")
         chk("fallback stock spent to 0", info["stock"] == 0, f"stock={info['stock']}")
         chk("fallback action consumed", "heal" in s["used"])
     else:

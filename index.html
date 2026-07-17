@@ -704,9 +704,9 @@ const refillBag = owned => ({ ...owned });
 const bagTotal = bag => ITEM_KEYS.reduce((s,k) => s+bag[k], 0);
 const drawFromBag = (bagRef, ownedRef, bagUpRef, ownedUpRef, cellsNow) => {
   if (bagTotal(bagRef.current) <= 0) {
-    // 盤面に残っている特殊ドロップは補充から除外（推測可能性の担保）
+    // 盤面に残っている特殊ドロップは補充から除外（推測可能性の担保）。追加分(extra)は所持外なので数えない
     const onB = initZero(), onBU = initZero();
-    for (const c of (cellsNow || [])) if (c && c.special) { onB[c.special]++; if (c.up) onBU[c.special]++; }
+    for (const c of (cellsNow || [])) if (c && c.special && !c.extra) { onB[c.special]++; if (c.up) onBU[c.special]++; }
     const nb = {}, nbu = {};
     let tot = 0;
     for (const k of ITEM_KEYS) {
@@ -2401,14 +2401,20 @@ function DropBattle() {
       let done = 0;
       if (mode === "gen") {
         const target = boardRef.current.map((c, i) => (grp.has(c.id) && c.type !== JUNK && !c.wild && !c.special) ? i : -1).filter(i => i >= 0);
-        // 生成できる上限＝「所持しているが盤面に出ていない」特殊数（袋の枯渇による複製を防ぐ）
-        const onBoard = boardRef.current.filter(c => c.special).length;
+        // 生成できる上限＝「所持しているが盤面に出ていない」特殊数（袋の枯渇による複製を防ぐ）。追加分(extra)は所持外なので数えない
+        const onBoard = boardRef.current.filter(c => c.special && !c.extra).length;
         const avail = ITEM_KEYS.reduce((s, k) => s + ownedRef.current[k], 0) - onBoard;
         if (avail <= 0) {
-          // 所持特殊が全て盤面に出ている（袋をリロードしても出せる特殊がない）→ 魔鉱石を直接生成
+          // 所持特殊が全て盤面に出ている（袋をリロードしても出せる特殊がない）→ 剣20%/盾20%/魔鉱石60%で追加生成
+          // これらは所持外の「追加分」（extra）。消しても袋・所持数の会計には影響しない
           const n = Math.min(stockRef.current, target.length);
-          for (let t = 0; t < n; t++) { nb[target[t]] = { ...nb[target[t]], special:"ore", up:false }; done++; }
-          if (done) addLog([`⚒ 出せる特殊ドロップが尽きた… 素材${done}を打ち、魔鉱石${done}個を生成した`]);
+          for (let t = 0; t < n; t++) {
+            const r = Math.random();
+            const kind = r < 0.2 ? "atk" : r < 0.4 ? "def" : "ore";
+            nb[target[t]] = { ...nb[target[t]], special:kind, up:false, extra:true };
+            done++;
+          }
+          if (done) addLog([`⚒ 出せる特殊ドロップが尽きた… 素材${done}を打ち、特殊ドロップ${done}個を生成した`]);
         } else {
           const n = Math.min(stockRef.current, target.length, avail);
           for (let t = 0; t < n; t++) {
@@ -3020,7 +3026,7 @@ function DropBattle() {
         junk: boardRef.current.filter(c => c.type === JUNK).length,
         bagLeft: ITEM_KEYS.reduce((t, k) => t + bagRef.current[k], 0),
         colors: new Set(boardRef.current.filter(c => c.type !== JUNK).map(c => c.type)).size,
-        board: boardRef.current.map(c => ({ t: c.type, sp: c.special || null, w: !!c.wild, u: !!c.up })),
+        board: boardRef.current.map(c => ({ t: c.type, sp: c.special || null, w: !!c.wild, u: !!c.up, x: !!c.extra })),
         used: [...usedRef.current],
         locked: lockedRef.current,
         coins: coinsRef.current, items: itemsRef.current.slice(),
