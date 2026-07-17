@@ -269,13 +269,13 @@ const RELICS = {
   jadecore:   { icon:"🟢", rar:2 },
   swordbook:  { icon:"⚔", rar:1 },
   guardbook:  { icon:"🧱", rar:1 },
-  healbook:   { icon:"🌱", rar:1, skills:["heal","healx"] }, // 回復アクション系は3つ目が回復のキャラ限定
+  healbook:   { icon:"🌱", rar:2, skills:["heal","healx"] }, // 回復アクション系は3つ目が回復のキャラ限定
   dragonblade:{ icon:"🐉", rar:3 },
   aegis_gr:   { icon:"🏰", rar:3 },
   saintprayer:{ icon:"👼", rar:3, skills:["heal","healx"] },
   swordcrest: { icon:"🗡", rar:2 },
   shieldcrest:{ icon:"🛡", rar:2 },
-  holywater:  { icon:"💧", rar:2, skills:["heal","healx"] },
+  holywater:  { icon:"💧", rar:1, skills:["heal","healx"] },
   warring:    { icon:"💍", rar:2 },
   guardring:  { icon:"🪬", rar:2 },
   lifefruit:  { icon:"🍎", rar:2 },
@@ -471,15 +471,15 @@ const KINDS = {
   demonx: { name:"真魔王ヴァルガ",     hp:2100, atk:115, size:120, idle:"b", bigMul:2.6, jamN:5, pats:[["jamatk","charge","bigatk","attack","drain","charge","bigatk"], ["drain","jamatk","charge","bigatk","double","charge","bigatk"]] }
 };
 const PATTERNS = {
-  attack:  { icon:"⚔",  label:"こうげき",   color:"#ffb3a8" },
-  double:  { icon:"⚔⚔", label:"れんぞく",   color:"#ffb3a8" },
-  bigatk:  { icon:"💥", label:"おおわざ",   color:"#ff6b6b" },
-  charge:  { icon:"⏳", label:"ためる",     color:"#ffd88a" },
-  jam:     { icon:"🌀", label:"おじゃま",   color:"#c9a2ff" },
-  healally:{ icon:"💚", label:"なかま回復", color:"#8ce8b0" },
-  drain:   { icon:"🩸", label:"吸血",       color:"#ff9ad0" },
-  jamatk:  { icon:"⚔🌀", label:"呪撃",      color:"#e8a2ff" },
-  poison:  { icon:"🐍", label:"どく",       color:"#8ce87c" }
+  attack:  { icon:"⚔",  img:"assets/icon_atk.png",      label:"こうげき",   color:"#ffb3a8" },
+  double:  { icon:"⚔⚔", img:"assets/mk_aoe.png",        label:"れんぞく",   color:"#ffb3a8" },
+  bigatk:  { icon:"💥", img:"assets/intent_big.png",    label:"おおわざ",   color:"#ff6b6b" },
+  charge:  { icon:"⏳", img:"assets/intent_charge.png", label:"ためる",     color:"#ffd88a" },
+  jam:     { icon:"🌀", img:"assets/intent_jam.png",    label:"おじゃま",   color:"#c9a2ff" },
+  healally:{ icon:"💚", img:"assets/mk_heart.png",      label:"なかま回復", color:"#8ce8b0" },
+  drain:   { icon:"🩸", img:"assets/intent_drain.png",  label:"吸血",       color:"#ff9ad0" },
+  jamatk:  { icon:"⚔🌀", img:"assets/icon_atk.png",     label:"呪撃",      color:"#e8a2ff" },
+  poison:  { icon:"🐍", img:"assets/st_poison.png",     label:"どく",       color:"#8ce87c" }
 };
 // 敵の次の行動。仲間がいないヒーラーは攻撃に切り替わる
 const intentOf = (en, allies) => {
@@ -1889,7 +1889,7 @@ function DropBattle() {
           en.atk = Math.round(en.atk * 1.08);
           regenLogs.push(`🔥 ${en.name}が激昂！攻撃力上昇${en.enr === 3 ? "・2回行動に！" : `（${en.enr}）`}`);
           const eid = en.id, twice = en.enr === 3;
-          setTimeout(() => { addPop(eid, twice ? "💪×2行動!" : "💪UP!", "#ff8a5a"); setAnim(eid, "heal"); }, 250);
+          setTimeout(() => { addPop(eid, twice ? "激昂!×2行動" : "激昂!攻撃UP", "#ff8a5a"); setAnim(eid, "heal"); }, 250);
         }
         if (!SIM_MODE && en.shdMax && Math.random() < en.shdC) {
           const gain = Math.round(en.shdMax * (0.5 + Math.random() * 0.5));
@@ -3986,7 +3986,7 @@ function DropBattle() {
             poisonView > 0 && h("span", { title:"毒（このバトル中、毎ターン受ける）", className:"absolute font-bold flex items-center", style:{ left:-14, top:-6, gap:2, padding:"2px 6px", borderRadius:10,
               background:"rgba(46,92,40,.92)", border:"1px solid rgba(140,232,124,.7)",
               fontSize:12, color:"#c8f5b8", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", zIndex:2 } },
-              "🐍", POISON_DMG)),
+              h("img", { src:"assets/st_poison.png", alt:"毒", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), POISON_DMG)),
           h("div", { style:{ width:40, height:7, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-5, filter:"blur(2px)" } }),
           h("div", { className:"w-full mt-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:8 })),
           h("span", { className:"text-[10px] font-bold mt-1", style:{ color: hit === "player" ? "#ff9a9a" : hit === "heal" ? "#7cffb0" : "#cfe9d8", fontVariantNumeric:"tabular-nums", transition:"color .3s" } }, pHP, "/", pMax)),
@@ -4001,13 +4001,17 @@ function DropBattle() {
             const pm = PATTERNS[iv.act];
             const charging = en.alive && iv.act === "bigatk";
             const twice = (en.enr || 0) >= 3;
-            const intentTxt = (iv.act === "charge" ? pm.icon + (chargeLeft(en) === "" ? "" : "あと" + chargeLeft(en))
-              : iv.act === "jam" ? pm.icon + iv.jamN
-              : iv.act === "jamatk" ? "⚔" + iv.dmg + " 🌀" + iv.jamN
-              : iv.act === "healally" ? pm.icon + iv.heal
-              : iv.act === "double" ? "⚔" + iv.hit + "×" + iv.hits
-              : iv.act === "poison" ? pm.icon + POISON_DMG
-              : pm.icon + iv.dmg) + (twice ? "⚡×2" : "");
+            // 予告アイコンは塗り画像で表示（数値はテキスト）。IIco=小さめのインライン画像
+            const IIco = (src, s = 13) => h("img", { src, alt:"", draggable:false, width:s, height:s, style:{ width:s, height:s, maxWidth:s, maxHeight:s, flexShrink:0, objectFit:"contain", verticalAlign:"middle" } });
+            const intentEls = (
+                iv.act === "charge" ? [pm.icon, chargeLeft(en) === "" ? "" : "あと" + chargeLeft(en)]
+              : iv.act === "jam" ? [IIco(pm.img), iv.jamN]
+              : iv.act === "jamatk" ? [IIco("assets/icon_atk.png"), iv.dmg + " ", IIco("assets/intent_jam.png"), iv.jamN]
+              : iv.act === "healally" ? [IIco(pm.img), iv.heal]
+              : iv.act === "double" ? [IIco(pm.img), iv.hit + "×" + iv.hits]
+              : iv.act === "poison" ? [IIco(pm.img), POISON_DMG]
+              : [IIco(pm.img), iv.dmg]
+              ).concat(twice ? [h("span", { style:{ color:"#ff9a5a", fontWeight:900, marginLeft:1 } }, "×2")] : []);
             const isDmgIntent = iv.act === "attack" || iv.act === "double" || iv.act === "bigatk" || iv.act === "drain" || iv.act === "jamatk";
             return h("button", { key:en.id,
               onClick: () => { if (en.alive && !locked && status === "battle") { setTargetId(en.id); targetRef.current = en.id; SFX.tap(); } },
@@ -4016,21 +4020,23 @@ function DropBattle() {
                 transition:"filter .3s ease" } },
               // 名前は表示しない。激昂・強敵の状態だけスプライトの上にバッジで出す（下に積むと表示量で足元が浮くため）
               ((en.enr || 0) > 0 || en.elite) && h("span", { className:"flex items-center justify-center", style:{ gap:3, marginTop:2, marginBottom:2, maxWidth:"none" } },
-                h("span", { className:"text-[9px] font-bold", style:{ padding:"0 7px", borderRadius:6, background:"rgba(10,8,16,.72)", border:"1px solid rgba(255,255,255,.12)", color: en.boss ? "#ff5c7a" : en.elite ? "#d05cff" : "#d8cbe8", opacity: en.alive ? 0.95 : 0.35, textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } },
-                  ((en.enr || 0) > 0 ? "🔥" + en.enr + " " : "") + (en.elite ? "💀" : ""))),
+                h("span", { className:"text-[9px] font-bold inline-flex items-center", style:{ gap:2, padding:"1px 6px", borderRadius:6, background:"rgba(10,8,16,.72)", border:"1px solid rgba(255,255,255,.12)", color: en.boss ? "#ff5c7a" : en.elite ? "#d05cff" : "#d8cbe8", opacity: en.alive ? 0.95 : 0.35, textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } },
+                  (en.enr || 0) > 0 && h("img", { src:"assets/st_enrage.png", alt:"激昂", draggable:false, width:11, height:11, style:{ width:11, height:11, maxWidth:11, maxHeight:11, flexShrink:0, objectFit:"contain" } }),
+                  (en.enr || 0) > 0 && en.enr,
+                  en.elite && h("img", { src:"assets/mk_skull.png", alt:"精鋭", draggable:false, width:12, height:12, style:{ width:12, height:12, maxWidth:12, maxHeight:12, flexShrink:0, objectFit:"contain", marginLeft:(en.enr||0)>0?2:0 } }))),
               h("span", { style:{ position:"relative", display:"block" } },
                 // 予告（攻撃など）はスプライトに重ねて表示。ボスは縦に高く、別の行として積むと低い画面高で見切れるため
                 // ボスはスプライトが高く予告が枠上端からはみ出しうるため少し下げる
-                en.alive && h("span", { className:"absolute text-[10px] font-bold", style:{ top: en.boss ? -24 : -28, left:"50%",
+                en.alive && h("span", { className:"absolute text-[10px] font-bold inline-flex items-center", style:{ top: en.boss ? -24 : -28, left:"50%", gap:2,
                   transform: gtut === "warn" && isDmgIntent ? "translateX(-50%) scale(1.15)" : "translateX(-50%)",
-                  height:18, lineHeight:"16px", padding:"0 7px", borderRadius:9, whiteSpace:"nowrap", zIndex:2,
+                  height:18, lineHeight:"16px", padding:"0 6px", borderRadius:9, whiteSpace:"nowrap", zIndex:2,
                   background: isDmgIntent ? (iv.act === "bigatk" ? "rgba(150,26,40,.9)" : "rgba(120,32,32,.8)") : "rgba(0,0,0,.55)",
                   border: isDmgIntent ? "1px solid rgba(255,130,120,.65)" : "1px solid rgba(255,255,255,.22)",
                   color: isDmgIntent ? "#ffd9d4" : pm.color,
                   fontSize: gtut === "warn" && isDmgIntent ? 14 : iv.act === "bigatk" ? 11 : 10,
                   boxShadow: gtut === "warn" && isDmgIntent ? "0 0 0 2px #ff6b6b, 0 0 14px rgba(255,107,107,.8)" : "none",
-                  animation: charging ? "intentBlink .9s ease-in-out infinite" : "none", textShadow:"0 1px 2px #000" } }, intentTxt),
-                en.alive && enrLeft(en, turn) === 0 && h("span", { className:"absolute pointer-events-none", style:{ top:-6, right:-6, fontSize:"1.2rem", zIndex:3, animation:"angerPulse .6s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)" } }, "💪"),
+                  animation: charging ? "intentBlink .9s ease-in-out infinite" : "none", textShadow:"0 1px 2px #000" } }, ...intentEls),
+                en.alive && enrLeft(en, turn) === 0 && h("img", { src:"assets/st_enrage.png", alt:"激昂", draggable:false, width:22, height:22, className:"absolute pointer-events-none", style:{ top:-8, right:-8, width:22, height:22, maxWidth:22, maxHeight:22, objectFit:"contain", zIndex:3, animation:"angerPulse .6s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)" } }),
                 isT && h("span", { className:"absolute pointer-events-none", style:{ top:-8, left:"50%", animation:"targetBob 1s ease-in-out infinite", color:"#e8c05a", fontSize:12, textShadow:"0 1px 2px #000", zIndex:2 } }, "▼"),
                 pops[en.id] && h("span", { key:pops[en.id].seq, className:"dmg-pop", style:{ color:pops[en.id].color } }, pops[en.id].text),
                 h(SpriteBox, { kind:en.kind, size:sz, idle:k.idle, anim:a, charge:charging, dead:!en.alive }),
@@ -4043,7 +4049,7 @@ function DropBattle() {
                 en.dcap > 0 && en.alive && h("span", { title:"被ダメ上限", className:"absolute flex items-center font-bold", style:{ left:-4, bottom: (en.shd || 0) > 0 ? 29 : 6, gap:2, padding:"1px 6px", borderRadius:9,
                   background:"rgba(58,20,20,.9)", border:"1px solid rgba(255,150,120,.65)",
                   fontSize:11, color:"#ffb3a2", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap", zIndex:2 } },
-                  h("span", { style:{ fontSize:10, lineHeight:1 } }, "⛔"),
+                  h("img", { src:"assets/st_dcap.png", alt:"上限", draggable:false, width:12, height:12, style:{ width:12, height:12, maxWidth:12, maxHeight:12, flexShrink:0, objectFit:"contain" } }),
                   en.dcap)),
               h("span", { style:{ width:sz * 0.6, height:6, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-4, filter:"blur(2px)", opacity: en.alive ? 1 : 0, transition:"opacity .5s" } }),
               h("span", { className:"w-full mt-1", style:{ opacity: en.alive ? 1 : 0, transition:"opacity .5s", maxWidth:74 } },
@@ -4097,7 +4103,7 @@ function DropBattle() {
             valEl = h("span", { style:{ fontSize:"0.72rem", fontWeight:800 } }, "インク");
           } else if (curSkill === "smith") {
             title = smithMode === "stock" ? "補充" : smithMode === "gen" ? "生成" : "強化＋";
-            iconEl = h("span", { style:{ fontSize:16, marginTop:5, lineHeight:1 } }, smithMode === "stock" ? "📦" : smithMode === "gen" ? "✨" : "⚒️");
+            iconEl = h("img", { src: smithMode === "stock" ? "assets/sk_stock.png" : smithMode === "gen" ? "assets/sk_gen.png" : "assets/sk_forge.png", alt:"", draggable:false, width:18, height:18, style:{ width:18, height:18, maxWidth:18, maxHeight:18, marginTop:5, objectFit:"contain", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.4))" } });
             // 素材の増減プレビュー（ドロップ選択中・金色で消した/使った後の値を表示）:
             //   補充=+消す数（金床2倍）+魔鉱石分 / 生成・強化=使う素材を差し引いた残り / 攻・防でも魔鉱石分は増加を予測
             let stPrev = null;
@@ -4136,7 +4142,7 @@ function DropBattle() {
               : h("span", { style:{ fontSize:"0.9rem", fontWeight:900 } }, "+" + incN + "/個");
           } else {
             title = "蓄積";
-            iconEl = h("span", { style:{ fontSize:16, marginTop:5, lineHeight:1 } }, "📚");
+            iconEl = h("img", { src:"assets/mk_store.png", alt:"", draggable:false, width:18, height:18, style:{ width:18, height:18, maxWidth:18, maxHeight:18, marginTop:5, objectFit:"contain", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.4))" } });
             // ドロップ選択中は消した後の蓄積値を金色でプレビュー
             // 蓄積アクション=count+蓄積石の効果分／攻・防アクション選択中でも蓄積石の効果分(+2/強化+4)を反映
             const spN = info ? ((info.sp.store || 0) + (info.spu.store || 0)) * 2 : 0;
