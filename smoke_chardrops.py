@@ -161,13 +161,13 @@ with sync_playwright() as pw:
     s = st(page)
     chk("starstaff keeps a wild on board", len(wilds(s)) >= 1, str(wilds(s)))
 
-    # ―― 9) 魔鉱石(ore): 消すと素材+2（どのアクションでも） ――
+    # ―― 9) 魔鉱石(ore): 消すと素材+1（どのアクションでも） ――
     start_char(page, 5)
     make_group(page, [0,1,2], 1)
     page.evaluate("window.__test.setCellSpecial(0, 'ore', false, false)")
     page.evaluate("window.__test.setAct('atk')")
     page.evaluate("window.__test.commit(0)"); time.sleep(0.5)
-    chk("ore +2 stock on atk clear", ci(page)["stock"] == 2, f"stock={ci(page)['stock']}")
+    chk("ore +1 stock on atk clear", ci(page)["stock"] == 1, f"stock={ci(page)['stock']}")
 
     # ―― 10) 名工の金床: 補充2倍 ――
     page.evaluate("window.__test.giveRelic('anvil')")
@@ -175,7 +175,7 @@ with sync_playwright() as pw:
     make_group(page, [6,7,8,9,10], 0)
     page.evaluate("window.__test.setAct('heal')")
     page.evaluate("window.__test.commit(6)"); time.sleep(0.5)
-    chk("anvil doubles stock gain (+10)", ci(page)["stock"] == 12, f"stock={ci(page)['stock']}")
+    chk("anvil doubles stock gain (+10)", ci(page)["stock"] == 11, f"stock={ci(page)['stock']}")
 
     # ―― 11) 聖者の祈祷書: あふれた回復が次ターンの防御に（最大30） ――
     start_char(page, 0)

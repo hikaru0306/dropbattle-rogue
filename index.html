@@ -1395,7 +1395,7 @@ function DropBattle() {
 
   // ===== キャラ固有スキルのチュートリアル（キャラごとに初回バトルで一度だけ） =====
   // step遷移: recolor: btn→cycle1→cycle2→paint→done / buff: btn→toggle→clear→done / store: btn→clear→done（切替なし）
-  //           smith: btn→mode1→gift(素材+5プレゼント)→clear(生成)→done / healx: info（カードのみ）
+  //           smith: btn→mode1→gift(素材+3プレゼントカード)→giftfx(粒子演出で数字カウントアップ)→clear(生成)→done / healx: info（カードのみ）
   const [ctut, setCtutState] = useState(null);
   const ctutRef = useRef(null);
   const setCtut = v => { ctutRef.current = v; setCtutState(v); };
@@ -1416,15 +1416,15 @@ function DropBattle() {
     }
     return best >= 0 ? best : maxI;
   };
-  // 鍛冶の生成チュートリアル用: 5個以上つながった同色グループを保証して種を返す
-  // （最大グループが5個未満なら、隣接セルを同色に染めて拡張する）
+  // 鍛冶の生成チュートリアル用: 3個以上つながった同色グループを保証して種を返す
+  // （最大グループが3個未満なら、隣接セルを同色に染めて拡張する）
   const pickCtutSeedGen = () => {
     const b = boardRef.current.slice();
     const seedI = pickCtutSeed(false);
     const color = b[seedI].type;
     let grp = findGroup(b, seedI);
     let changed = false, guard = 0;
-    while (grp.size < 5 && guard++ < 30) {
+    while (grp.size < 3 && guard++ < 30) {
       const gi = b.map((c, i) => grp.has(c.id) ? i : -1).filter(i => i >= 0);
       let ext = -1;
       for (const i of gi) {
@@ -2473,9 +2473,9 @@ function DropBattle() {
       SFX.coin();
       addLog([`金 コイン+${g}`]);
     }
-    // 魔鉱石（ブロム）: 鍛冶素材を+2（強化+4）
+    // 魔鉱石（ブロム）: 鍛冶素材を+1（強化+2）
     if (skill === "smith" && info.sp.ore > 0) {
-      const oAdd = (info.sp.ore - info.spu.ore) * 2 + info.spu.ore * 4;
+      const oAdd = (info.sp.ore - info.spu.ore) + info.spu.ore * 2;
       stockRef.current += oAdd;
       setStockView(stockRef.current);
       addLog([`鉱 素材 +${oAdd}（計 ${stockRef.current}）`]);
@@ -2678,6 +2678,32 @@ function DropBattle() {
         }));
         setTimeout(() => d.remove(), 760 + j * 16);
       });
+    } catch (e) {}
+  };
+
+  // 鍛冶チュートリアル: 素材プレゼントの金色粒子（画面中央付近から鍛冶ボタンの素材数へ飛ぶ）
+  const giftParticles = () => {
+    try {
+      const target = document.getElementById("smith-stockval");
+      if (!target) return;
+      const tr = target.getBoundingClientRect();
+      const tx = tr.left + tr.width / 2, ty = tr.top + tr.height / 2;
+      for (let j = 0; j < 12; j++) {
+        const cx = window.innerWidth / 2 + (Math.random() - 0.5) * 170;
+        const cy = window.innerHeight * 0.38 + (Math.random() - 0.5) * 130;
+        const d = document.createElement("div");
+        d.className = "fly-dot";
+        d.style.left = cx + "px";
+        d.style.top = cy + "px";
+        d.style.background = "#ffd75e";
+        d.style.transitionDelay = (j * 45) + "ms";
+        document.body.appendChild(d);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          d.style.transform = `translate(${tx - cx}px, ${ty - cy}px) scale(.45)`;
+          d.style.opacity = "0.2";
+        }));
+        setTimeout(() => d.remove(), 760 + j * 45);
+      }
     } catch (e) {}
   };
 
@@ -3465,6 +3491,28 @@ function DropBattle() {
       h("span", { className:"font-bold block", style:{ color:"#ffe08a", fontSize:"0.98rem", lineHeight:1.5, textShadow:"0 1px 2px #000" } }, m[0]),
       h("span", { className:"block text-[10px] mt-1", style:{ color:"#8ce8b0", fontWeight:700 } }, m[1])));
   }
+  // 鍛冶チュートリアル: 素材プレゼントカード（受け取るボタン→粒子演出で数字カウントアップ→生成体験へ）
+  if (ctut && ctut.step === "gift") {
+    overlays.push(h("div", { key:"ctgift", className:"fixed inset-0 flex items-end justify-center fade-in", style:{ background:"rgba(8,4,14,.5)", zIndex:80, paddingBottom:"16vh" } },
+      h("div", { className:"rounded-2xl p-4 pop-in", style:{ maxWidth:340, width:"92%", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", textAlign:"center" } },
+        h("span", { className:"font-bold block mb-1", style:{ color:"#ffe08a", fontSize:"1.05rem" } }, TX.ctutGift.title),
+        h("p", { className:"text-[12px] leading-relaxed mb-3", style:{ opacity:0.9 } }, TX.ctutGift.body),
+        h("button", { onClick: () => {
+            SFX.forge();
+            const ct0 = ctutRef.current;
+            setCtut({ ...ct0, step: "giftfx" });   // カードを閉じて粒子演出へ
+            giftParticles();
+            // 粒子の到着に合わせて素材を1つずつカウントアップ
+            [0, 1, 2].forEach(j => setTimeout(() => {
+              stockRef.current += 1; setStockView(stockRef.current); SFX.coin();
+            }, (FAST ? 20 : 520) + j * (FAST ? 10 : 260)));
+            setTimeout(() => {
+              const c2 = ctutRef.current;
+              if (c2 && c2.step === "giftfx") setCtut({ ...c2, step: "clear", seed: pickCtutSeedGen() });
+            }, FAST ? 80 : 1900);
+          },
+          className:"w-full rounded-xl py-2.5 font-bold", style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } }, TX.ctutGift.btn))));
+  }
   // キャラスキルチュートリアル: 締めカード
   if (ctut && ctut.step === "done") {
     const dm = TX.ctutDone[ctut.skill] || ["できた！", ""];
@@ -3952,9 +4000,9 @@ function DropBattle() {
           } else if (curSkill === "smith") {
             title = smithMode === "stock" ? "補充" : smithMode === "gen" ? "生成" : "強化＋";
             iconEl = h("span", { style:{ fontSize:16, marginTop:5, lineHeight:1 } }, smithMode === "stock" ? "📦" : smithMode === "gen" ? "✨" : "⚒️");
-            // 素材数はチュートリアルのプレゼント時（gift）に金色で強調＋値変化でパルス
-            valEl = h("span", { key:"sv" + stockView, className: stockView > 0 ? "val-pulse" : "",
-              style:{ fontSize:"0.9rem", fontWeight:900, color: ctut && ctut.step === "gift" ? "#ffd75e" : undefined } }, "素材", stockView);
+            // 素材数はチュートリアルのプレゼント演出中（gift/giftfx）に金色で強調＋値変化でパルス
+            valEl = h("span", { id:"smith-stockval", key:"sv" + stockView, className: stockView > 0 ? "val-pulse" : "",
+              style:{ fontSize:"0.9rem", fontWeight:900, color: ctut && (ctut.step === "gift" || ctut.step === "giftfx") ? "#ffd75e" : undefined } }, "素材", stockView);
           } else if (curSkill === "buff") {
             const incN = hasR("warforge2") ? 0.3 : hasR("warforge") ? 0.2 : 0.1;
             title = "強化→" + tgtLabel;
@@ -4001,16 +4049,7 @@ function DropBattle() {
                 if (ct.step === "cycle1") setCtut({ ...ct, step: "cycle2" });
                 else if (ct.step === "cycle2") setCtut({ ...ct, step: "paint", seed: pickCtutSeed(true) });
                 else if (ct.step === "toggle") setCtut({ ...ct, step: "clear", seed: pickCtutSeed(false) });
-                else if (ct.step === "mode1") {
-                  // 生成モードに切り替わった: 素材+5をプレゼント → 少し見せてから5個グループの生成体験へ
-                  stockRef.current += 5; setStockView(stockRef.current);
-                  SFX.forge();
-                  setCtut({ ...ct, step: "gift" });
-                  setTimeout(() => {
-                    const c2 = ctutRef.current;
-                    if (c2 && c2.step === "gift") setCtut({ ...c2, step: "clear", seed: pickCtutSeedGen() });
-                  }, FAST ? 60 : 1700);
-                }
+                else if (ct.step === "mode1") setCtut({ ...ct, step: "gift" }); // 生成モードに切替→素材プレゼントカードへ
               }
             }, disabled:isUsed,
             className:"act-h relative rounded-xl flex flex-col items-center justify-center overflow-hidden",

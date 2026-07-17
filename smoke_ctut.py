@@ -91,25 +91,28 @@ with sync_playwright() as p:
     chk("buff flag", page.evaluate("localStorage.getItem('db_ctut_buff')") == "1")
     page.click("text=たたかいを続ける"); time.sleep(0.3)
 
-    # ―― 3) ブロム（鍛冶）: 補充→生成切替で素材+5プレゼント → 5個グループで生成 ――
+    # ―― 3) ブロム（鍛冶）: 補充→生成切替 → 素材+3プレゼントカード → 受け取る(粒子演出) → 生成 ――
     start_battle_as(page, 5)
     page.evaluate("window.__test.startCtut('smith')"); time.sleep(0.3)
     click_skill_btn(page)   # 選択
     chk("smith -> mode1", ct(page)["step"] == "mode1")
     stock0 = page.evaluate("window.__test.charInfo()")["stock"]
-    click_skill_btn(page)   # stock->gen 切替 → 素材+5プレゼント(gift)
+    click_skill_btn(page)   # stock->gen 切替 → プレゼントカード(gift)
     ci5 = page.evaluate("window.__test.charInfo()")
-    chk("smith -> gift (+5素材, gen)", ct(page)["step"] == "gift" and ci5["stock"] == stock0 + 5 and ci5["smithMode"] == "gen", str(ci5))
-    chk("gift banner", "素材を5追加しておくね" in page.evaluate("document.body.innerText"))
-    time.sleep(2.2)          # 自動でclearへ進む
+    chk("smith -> gift card (genモード・素材まだ増えない)", ct(page)["step"] == "gift" and ci5["stock"] == stock0 and ci5["smithMode"] == "gen", str(ci5))
+    chk("gift card text", "素材を3個追加するね" in page.evaluate("document.body.innerText"))
+    page.click("text=受け取る"); time.sleep(0.3)
+    chk("gift -> giftfx", ct(page)["step"] == "giftfx")
+    time.sleep(2.4)          # 粒子演出＋カウントアップ後、自動でclearへ
     c = ct(page)
-    chk("gift -> clear (seed)", c["step"] == "clear" and c.get("seed") is not None, str(c))
+    ci5b = page.evaluate("window.__test.charInfo()")
+    chk("giftfx -> clear (+3素材)", c["step"] == "clear" and c.get("seed") is not None and ci5b["stock"] == stock0 + 3, f"{c} stock={ci5b['stock']}")
     grp = page.evaluate(f"window.__test.groupIdxs({c['seed']})")
-    chk("seed group >= 5", len(grp) >= 5, str(len(grp)))
+    chk("seed group >= 3", len(grp) >= 3, str(len(grp)))
     page.evaluate(f"window.__test.commit({c['seed']})"); time.sleep(0.6)
     ci6 = page.evaluate("window.__test.charInfo()")
     sp_in_grp = page.evaluate("(idxs => { const s = window.__test.state(); return idxs.filter(i => s.board[i].sp).length; })(" + str(grp) + ")")
-    chk("smith -> done (生成済み・素材消費)", ct(page)["step"] == "done" and sp_in_grp > 0 and ci6["stock"] < ci5["stock"], f"sp={sp_in_grp} stock={ci6['stock']}")
+    chk("smith -> done (生成済み・素材消費)", ct(page)["step"] == "done" and sp_in_grp > 0 and ci6["stock"] < ci5b["stock"], f"sp={sp_in_grp} stock={ci6['stock']}")
     chk("smith flag", page.evaluate("localStorage.getItem('db_ctut_smith')") == "1")
     page.click("text=たたかいを続ける"); time.sleep(0.3)
 
