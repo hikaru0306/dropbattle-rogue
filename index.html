@@ -866,9 +866,9 @@ const groupInfo = (cells, ids) => {
 };
 const perOf = act =>
   (CUR_SKILL === "recolor" && act !== "heal" ? 8 : ACTIONS[act].per) // イリスは攻/防の基礎値8（色変えで大グループを作れる代償）
-  + (act === "atk" ? (hasR("swordbook") ? 2 : 0) + (hasR("dragonblade") ? 3 : 0) : 0)
-  + (act === "def" ? (hasR("guardbook") ? 2 : 0) + (hasR("aegis_gr") ? 3 : 0) : 0)
-  + (act === "heal" ? (hasR("healbook") ? 2 : 0) + (hasR("saintprayer") ? 3 : 0) : 0);
+  + (act === "atk" ? (hasR("swordbook") ? 2 : 0) + (hasR("dragonblade") ? 3 : 0) + (hasR("swordcrest") ? 1 : 0) : 0)
+  + (act === "def" ? (hasR("guardbook") ? 2 : 0) + (hasR("aegis_gr") ? 3 : 0) + (hasR("shieldcrest") ? 2 : 0) : 0)
+  + (act === "heal" ? (hasR("healbook") ? 2 : 0) + (hasR("saintprayer") ? 3 : 0) + (hasR("holywater") ? 1 : 0) : 0);
 // タップ起点の消去範囲を確定する。パターン系レリックの追加爆破と、
 // 爆破に巻き込まれた特殊ドロップ（爆弾連鎖・雷）の再帰発動まで含む
 const expandClear = (b, idx, blastOk, crossOk) => {
@@ -941,11 +941,7 @@ const computeEffect = (act, info) => {
   let actBoost = 1;
   if (act === "atk" && info.sp.atkx > 0) actBoost = info.spu.atkx > 0 ? 3 : 2;
   if (act === "def" && info.sp.defx > 0) actBoost = info.spu.defx > 0 ? 3 : 2;
-  let relicMul = 1;
-  if (act === "atk" && hasR("swordcrest")) relicMul = 1.1;
-  if (act === "def" && hasR("shieldcrest")) relicMul = 1.2;
-  if (act === "heal" && hasR("holywater")) relicMul = 1.5;
-  let main = Math.round(info.base * perOf(act) * info.mult * actBoost * relicMul);
+  let main = Math.round(info.base * perOf(act) * info.mult * actBoost);
   if (CUR_SKILL === "healx") main *= 2; // 大賢者：全効果2倍
   // 剣/盾: 同時に消したドロップ1つにつき+5（強化は+10）。アクションや倍率に依存しない固定値
   const splitPer = (info.sp.atk - info.spu.atk) * 5 + info.spu.atk * 10;
