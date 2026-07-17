@@ -367,7 +367,7 @@ const CHARS = [
     desc:"3つ目の力は「強化」。攻撃か防御を選び、消した1ドロップにつきそのターンの効果を+0.1倍する。", unlock:"3章のボスを倒すと解放" },
   { name:"賢者ノア",       skill:"store",   img:"assets/hero4.png", color:"#8d63cf",
     tag:"蓄積して育つ",   short:"蓄積",
-    desc:"3つ目の力は「蓄積」。消した数を攻撃か防御に蓄積して育つ（蓄積はバトルごとにリセット）。", unlock:"2人以上のキャラで3章を突破" },
+    desc:"3つ目の力は「蓄積」。消した数を蓄積し、攻撃と防御の両方に加算して育つ（蓄積はバトルごとにリセット）。", unlock:"2人以上のキャラで3章を突破" },
   { name:"大賢者ルクス",   skill:"healx",   img:"assets/hero5.png", color:"#e8c06a",
     tag:"回復＋全効果2倍", short:"回復",
     desc:"3つ目の力は「回復」。さらにドロップが1色増える代わりに、全ての効果が2倍になる大賢者。", unlock:"すべてのキャラで3章を突破" },
@@ -1269,10 +1269,10 @@ function DropBattle() {
   const [paintColor, setPaintColor_] = useState(0);       // 色変えキャラの現在インク色
   const paintColorRef = useRef(0);
   const setPaintColor = v => { paintColorRef.current = v; setPaintColor_(v); };
-  const [skillTarget, setSkillTarget_] = useState("atk"); // 強化/蓄積キャラの対象（攻撃 or 防御）
+  const [skillTarget, setSkillTarget_] = useState("atk"); // 強化キャラの対象（攻撃 or 防御）。蓄積は攻防両方で切替なし
   const skillTargetRef = useRef("atk");
   const setSkillTarget = v => { skillTargetRef.current = v; setSkillTarget_(v); };
-  const storeRef = useRef(0);                              // 蓄積キャラの累積値（冒険を通して保持）
+  const storeRef = useRef(0);                              // 蓄積キャラの累積値（バトルごとにリセット）
   const [storeView, setStoreView] = useState(0);
   const [smithMode, setSmithMode_] = useState("stock");    // 鍛冶キャラのモード（stock=補充/gen=生成/up=強化）
   const smithModeRef = useRef("stock");
@@ -1423,7 +1423,7 @@ function DropBattle() {
   const setGuide = v => { gtutRef.current = v; setGtutState(v); };
 
   // ===== キャラ固有スキルのチュートリアル（キャラごとに初回バトルで一度だけ） =====
-  // step遷移: recolor: btn→cycle1→cycle2→paint→done / buff・store: btn→toggle→clear→done
+  // step遷移: recolor: btn→cycle1→cycle2→paint→done / buff: btn→toggle→clear→done / store: btn→clear→done（切替なし）
   //           smith: btn→mode1→mode2→mode3→clear→done / healx: info（カードのみ）
   const [ctut, setCtutState] = useState(null);
   const ctutRef = useRef(null);
@@ -2429,13 +2429,13 @@ function DropBattle() {
       addLog([`✨ ${st === "atk" ? "攻撃" : "防御"}強化 ×${factor.toFixed(1)} を準備！（攻撃の直前に計算）`]);
       if (horn > 0) addLog([`📯 号令: ${st === "atk" ? "防御" : "攻撃"}にも ×${horn.toFixed(2)}`]);
     } else if (act === "heal" && skill === "store") {
-      // 蓄積キャラ：消した数を累積し、選んだステータスへ加算（累積はバトルごとにリセット）
-      const st = skillTargetRef.current;
+      // 蓄積キャラ：消した数を累積し、攻撃と防御の両方へ加算（累積はバトルごとにリセット・切替なし）
       const sinc = hasR("storegem") ? 2 : 1; // ノア専用レリックで1ドロップ＝蓄積+2
       storeRef.current += info.count * sinc;
       setStoreView(storeRef.current);
-      turnRef.current[st] += storeRef.current;
-      addLog([`📚 蓄積 ${storeRef.current}（${st === "atk" ? "攻撃" : "防御"}へ加算）`]);
+      turnRef.current.atk += storeRef.current;
+      turnRef.current.def += storeRef.current;
+      addLog([`📚 蓄積 ${storeRef.current}（攻撃と防御へ加算）`]);
       ctutFinish(); // 蓄積チュートリアルの対象を消したら締めへ
     } else if (act === "heal" && skill === "smith") {
       // 鍛冶キャラ・補充：消した数だけ素材を貯める（回復はしない）。名工の金床で2倍
@@ -3467,8 +3467,7 @@ function DropBattle() {
                  toggle:["ボタンをもう一度タップすると…", "▼ 強化する対象（剣⇄盾）が切り替わる！"],
                  clear:["光っているドロップをタップ！", "▼ 消した数だけ倍率が上がる"] },
       store:   { btn:["📚 3つ目の力「蓄積」を使ってみよう！", "▼ 光っている「蓄積」ボタンをタップ"],
-                 toggle:["ボタンをもう一度タップすると…", "▼ 加算する対象（攻⇄防）が切り替わる！"],
-                 clear:["光っているドロップをタップ！", "▼ 消した数が冒険の間ずっと貯まっていく"] },
+                 clear:["光っているドロップをタップ！", "▼ 消した数が貯まり、攻撃と防御の両方に加算される"] },
       smith:   { btn:["⚒ 3つ目の力「鍛冶」を使ってみよう！", "▼ 光っている「鍛冶」ボタンをタップ"],
                  mode1:["ボタンをもう一度タップすると…", "▼ モードが 📦補充 → ✨生成 に切り替わる！"],
                  mode2:["さらにタップ！", "▼ ✨生成 → ⚒️強化＋"],
@@ -3486,7 +3485,7 @@ function DropBattle() {
     const CT_DONE = {
       recolor: ["🎨 グループがインクの色に染まった！", "色変えで同じ色をつなげて、大きなグループを作ってから消すのがイリスの戦い方だ。"],
       buff:    ["💪 倍率がかかった！", "消した数が多いほど倍率アップ。攻撃を伸ばすか防御を固めるかは切り替えられる。"],
-      store:   ["📚 蓄積が貯まった！", "蓄積は冒険の間ずっと増え続けて、毎ターン選んだ側に加算される。育てるほど強い。"],
+      store:   ["📚 蓄積が貯まった！", "蓄積はバトル中ずっと増え続けて、使うたび攻撃と防御の両方に加算される。育てるほど強い。"],
       smith:   ["⚒ 素材が貯まった！", "素材を使って✨生成（特殊ドロップを盤面に置く）や⚒️強化＋（特殊を強化）ができる。"]
     };
     const dm = CT_DONE[ctut.skill] || ["できた！", ""];
@@ -3990,9 +3989,13 @@ function DropBattle() {
               ? h("span", { style:{ fontSize:"1rem", fontWeight:900, color:"#ffd75e" } }, "×" + (1 + incN * selN + wcB).toFixed(1))
               : h("span", { style:{ fontSize:"0.9rem", fontWeight:900 } }, "+" + incN + "/個");
           } else {
-            title = "蓄積→" + tgtLabel;
+            title = "蓄積";
             iconEl = h("span", { style:{ fontSize:16, marginTop:5, lineHeight:1 } }, "📚");
-            valEl = h("span", { style:{ fontSize:"1rem", fontWeight:900 } }, "+" + storeView);
+            // ドロップ選択中は消した後の蓄積値を金色でプレビュー（攻防両方に加算される）
+            const sN = isSel && info ? info.count * (hasR("storegem") ? 2 : 1) : 0;
+            valEl = sN > 0
+              ? h("span", { style:{ fontSize:"1rem", fontWeight:900, color:"#ffd75e" } }, "+" + (storeView + sN))
+              : h("span", { style:{ fontSize:"1rem", fontWeight:900 } }, "+" + storeView);
           }
           return h("button", { key,
             onClick: () => {
@@ -4002,12 +4005,14 @@ function DropBattle() {
               if (ct && !["btn","cycle1","cycle2","toggle","mode1","mode2","mode3"].includes(ct.step)) return;
               if (!isSel) {
                 setAction("heal"); actionRef.current = "heal"; SFX.tap();
-                if (ct && ct.step === "btn") setCtut({ ...ct, step: curSkill === "recolor" ? "cycle1" : curSkill === "smith" ? "mode1" : "toggle" });
+                // 蓄積（ノア）は切替なし → ボタン誘導の次はそのまま対象グループ消しへ
+                if (ct && ct.step === "btn") setCtut(curSkill === "store" ? { ...ct, step: "clear", seed: pickCtutSeed(false) }
+                  : { ...ct, step: curSkill === "recolor" ? "cycle1" : curSkill === "smith" ? "mode1" : "toggle" });
                 return;
               }
               if (curSkill === "recolor") { setPaintColor((paintColor + 1) % 4); SFX.tap(); }
               else if (curSkill === "smith") { setSmithMode(smithMode === "stock" ? "gen" : smithMode === "gen" ? "up" : "stock"); SFX.tap(); }
-              else { setSkillTarget(skillTarget === "atk" ? "def" : "atk"); SFX.tap(); }
+              else if (curSkill === "buff") { setSkillTarget(skillTarget === "atk" ? "def" : "atk"); SFX.tap(); }
               // チュートリアルのステップ進行（切替の体験 → 対象指定へ）
               if (ct) {
                 if (ct.step === "cycle1") setCtut({ ...ct, step: "cycle2" });
@@ -4056,7 +4061,7 @@ function DropBattle() {
           const base = dispTv[key];
           valEl = base > 0 ? mkBreakdown(base + crossBonus, base, crossBonus, "#ffcf5d") : `+${crossBonus}`;
         } else valEl = String(dispTv[key]);
-        const lit = fx.length > 0 && fx[fx.length-1].act === key;
+        const lit = (fx.length > 0 && fx[fx.length-1].act === key) || !!bAn; // 強化の倍率計算中は対象ボタンの暗転を解除して見せる
         const gWarn = gtut === "warn", gDef = gtut === "def", gClear = gtut === "clear";
         const guideTgt = gDef && key === "def";        // 「防御」を光らせて誘導
         const guideOff = gWarn || (gDef && key !== "def") || gClear || (ctut && ctut.step !== "done"); // 誘導中の対象外ボタンは暗く
