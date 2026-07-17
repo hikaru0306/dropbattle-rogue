@@ -69,7 +69,9 @@ with sync_playwright() as p:
     chk("outside tap blocked", [x["t"] for x in st(page)["board"]] == board0)
     # 対象を塗る → done
     ink = page.evaluate("window.__test.charInfo()")["paint"]
-    page.evaluate(f"window.__test.commit({seed})"); time.sleep(0.6)
+    page.evaluate(f"window.__test.commit({seed})"); time.sleep(0.4)
+    chk("-> finwait after paint (1秒見せる)", ct(page)["step"] == "finwait", str(ct(page)))
+    time.sleep(1.4)
     chk("-> done after paint", ct(page)["step"] == "done")
     painted = st(page)["board"]
     chk("group painted to ink", all(painted[i]["t"] == ink for i in grp), str([painted[i]["t"] for i in grp]))
@@ -109,7 +111,9 @@ with sync_playwright() as p:
     chk("giftfx -> clear (+3素材)", c["step"] == "clear" and c.get("seed") is not None and ci5b["stock"] == stock0 + 3, f"{c} stock={ci5b['stock']}")
     grp = page.evaluate(f"window.__test.groupIdxs({c['seed']})")
     chk("seed group >= 3", len(grp) >= 3, str(len(grp)))
-    page.evaluate(f"window.__test.commit({c['seed']})"); time.sleep(0.6)
+    page.evaluate(f"window.__test.commit({c['seed']})"); time.sleep(0.4)
+    chk("smith -> finwait (生成を1秒見せる)", ct(page)["step"] == "finwait", str(ct(page)))
+    time.sleep(1.4)
     ci6 = page.evaluate("window.__test.charInfo()")
     sp_in_grp = page.evaluate("(idxs => { const s = window.__test.state(); return idxs.filter(i => s.board[i].sp).length; })(" + str(grp) + ")")
     chk("smith -> done (生成済み・素材消費)", ct(page)["step"] == "done" and sp_in_grp > 0 and ci6["stock"] < ci5b["stock"], f"sp={sp_in_grp} stock={ci6['stock']}")

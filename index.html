@@ -1445,11 +1445,20 @@ function DropBattle() {
     return seedI;
   };
   // 指定グループの消去/塗り替えが済んだら締めへ（完了フラグもここで保存）
-  const ctutFinish = () => {
+  // delayMs指定時は「finwait」ステップ（暗転なし・入力ロック）で盤面の変化を見せてから締めカードを出す
+  const ctutFinish = delayMs => {
     const ct = ctutRef.current;
     if (ct && (ct.step === "paint" || ct.step === "clear")) {
-      setCtut({ ...ct, step: "done" });
       try { localStorage.setItem("db_ctut_" + ct.skill, "1"); } catch (e) {}
+      if (delayMs) {
+        setCtut({ ...ct, step: "finwait" });
+        setTimeout(() => {
+          const c2 = ctutRef.current;
+          if (c2 && c2.step === "finwait") setCtut({ ...c2, step: "done" });
+        }, FAST ? 60 : delayMs);
+      } else {
+        setCtut({ ...ct, step: "done" });
+      }
     }
   };
 
@@ -1482,6 +1491,10 @@ function DropBattle() {
   }, [tv.atk, tv.def, tv.heal]);
   // ガレス強化の段階演出: {st, from, to, mult, stage} stage1=元の値 → stage2=元の値×倍率 → stage3=最終値
   const [buffAnim, setBuffAnim] = useState(null);
+  // ノア蓄積の段階演出（攻防同時）: {fromAtk, fromDef, toAtk, toDef, add, stage} stage2=元の値+蓄積 → stage3=最終値
+  const [storeAnim, setStoreAnim] = useState(null);
+  // 上限ダメージ持ちの敵が初登場したときの説明カード（値=その敵の上限。1回きり db_tut_dcap）
+  const [dcapTut, setDcapTut] = useState(null);
   const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false, aoe:false, aoeUp:false });
   const turnRef = useRef(freshTurn());
   const syncTurn = () => setTv({ ...turnRef.current });
@@ -1570,12 +1583,11 @@ function DropBattle() {
       }
       turnRef.current.buffPend = null;
       syncTurn();
-      // 段階演出: 元の値 → ×倍率 → 最終値
-      setBuffAnim({ st: pend.st, from: oldV, to: newV, mult: pend.mult, stage: 1 });
-      setTimeout(() => setBuffAnim(a => (a && a.to === newV ? { ...a, stage: 2 } : a)), 430);
-      setTimeout(() => setBuffAnim(a => (a && a.to === newV ? { ...a, stage: 3 } : a)), 1050);
-      setTimeout(() => setBuffAnim(a => (a && a.to === newV ? null : a)), 1900);
-      buffStep = { text: `💪 ${pend.st === "atk" ? "攻撃" : "防御"}強化 ×${pend.mult.toFixed(1)}`, color:"#ffd75e", act:"heal", wait: FAST ? 40 : 1550, run: () => { SFX.charge(); } };
+      // 段階演出: 「強化」テキストと同時に ×倍率 を表示 → 最終値（元の値だけ見せる待ちは廃止・1テンポ短縮）
+      setBuffAnim({ st: pend.st, from: oldV, to: newV, mult: pend.mult, stage: 2 });
+      setTimeout(() => setBuffAnim(a => (a && a.to === newV ? { ...a, stage: 3 } : a)), 620);
+      setTimeout(() => setBuffAnim(a => (a && a.to === newV ? null : a)), 1450);
+      buffStep = { text: `💪 ${pend.st === "atk" ? "攻撃" : "防御"}強化 ×${pend.mult.toFixed(1)}`, color:"#ffd75e", act:"heal", wait: FAST ? 40 : 1100, run: () => { SFX.charge(); } };
     }
     let { atk, def, heal } = turnRef.current;
     recordCharStats(curCharRef.current, atk, def); // このターンの攻撃力/防御力で記録更新
@@ -2271,7 +2283,7 @@ function DropBattle() {
     commitBoard(bd0);
     syncBag(); // 盤面生成で袋から引いた分を表示に反映
     setPops({}); // 前バトルのダメージポップを掃除
-    setBuffAnim(null); // 強化演出の残りも掃除
+    setBuffAnim(null); setStoreAnim(null); // 強化/蓄積演出の残りも掃除
     setArmed(null);
     setAction("atk"); actionRef.current = "atk";
     setUsed(new Set()); usedRef.current = new Set();
@@ -2297,6 +2309,14 @@ function DropBattle() {
       let base = "", cd = "";
       try { base = localStorage.getItem("db_tut") || ""; cd = localStorage.getItem("db_ctut_" + CUR_SKILL) || ""; } catch (e) {}
       if (base && !cd) setCtut({ skill: CUR_SKILL, step: CUR_SKILL === "healx" ? "info" : "btn" });
+    }
+    // 上限ダメージ持ちの敵が初登場したら説明カード（1回きり）
+    setDcapTut(null);
+    const capEn = ens.find(e => e.dcap > 0);
+    if (capEn && !TEST_MODE) {
+      let seen = "";
+      try { seen = localStorage.getItem("db_tut_dcap") || ""; } catch (e) {}
+      if (!seen) setDcapTut(capEn.dcap);
     }
   };
 
@@ -2338,7 +2358,7 @@ function DropBattle() {
       commitBoard(nb); syncBag();
       SFX.clear();
       addLog([`🎨 つながった${painted}個を${["赤","金","紫","碧","青"][paint] || ""}色に塗り替えた`]);
-      ctutFinish(); // 色変えチュートリアルの対象を塗ったら締めへ
+      ctutFinish(1000); // 色変えチュートリアル: 塗り替わりを1秒見せてから締めへ
       const nu = new Set(usedRef.current); nu.add("heal");
       setUsed(nu); usedRef.current = nu;
       if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
@@ -2376,7 +2396,7 @@ function DropBattle() {
       stockRef.current -= done; setStockView(stockRef.current);
       commitBoard(nb); syncBag();
       SFX.forge();
-      if (mode === "gen") ctutFinish(); // 鍛冶チュートリアル: 生成できたら締めへ
+      if (mode === "gen") ctutFinish(1000); // 鍛冶チュートリアル: 生成された特殊を1秒見せてから締めへ
       const nu = new Set(usedRef.current); nu.add("heal");
       setUsed(nu); usedRef.current = nu;
       if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
@@ -2414,6 +2434,7 @@ function DropBattle() {
       if (Math.min(n, cand.length) > 0) addLog(["雫 虹ドロップが生まれた！"]);
     }
     let mainAdd = eff.main;
+    let storeFxFrom = null; // ノア蓄積の段階演出用（加算前の攻防値）
     if (act === "atk" && turnRef.current.atkBoost) mainAdd *= 2;
     if (act === "def" && turnRef.current.defBoost) mainAdd *= 2;
     if (act === "heal" && skill === "buff") {
@@ -2437,6 +2458,7 @@ function DropBattle() {
       const spAdd = (info.sp.store + info.spu.store) * 2;
       storeRef.current += info.count * sinc + spAdd;
       setStoreView(storeRef.current);
+      storeFxFrom = { fromAtk: turnRef.current.atk, fromDef: turnRef.current.def, add: storeRef.current }; // 演出用に加算前の値を記録
       turnRef.current.atk += storeRef.current;
       turnRef.current.def += storeRef.current;
       if (spAdd > 0) addLog([`📚 蓄積石 +${spAdd}`]);
@@ -2455,6 +2477,14 @@ function DropBattle() {
     if (eff.splitAtk) turnRef.current.atk += eff.splitAtk;
     if (eff.splitDef) turnRef.current.def += eff.splitDef;
     if (eff.healBonus) turnRef.current.heal += eff.healBonus;
+    // ノア蓄積: ガレス式の段階演出（元の値 +蓄積 → 最終値。剣盾の分割加算も最終値に含む）
+    if (storeFxFrom) {
+      const toAtk = turnRef.current.atk, toDef = turnRef.current.def;
+      setStoreAnim({ ...storeFxFrom, toAtk, toDef, stage: 2 });
+      setTimeout(() => setStoreAnim(a => (a && a.toAtk === toAtk ? { ...a, stage: 3 } : a)), 620);
+      setTimeout(() => setStoreAnim(a => (a && a.toAtk === toAtk ? null : a)), 1450);
+      SFX.charge();
+    }
     if (info.sp.pierce > 0) turnRef.current.pierce = true;
     if (act === "atk" && info.sp.aoe > 0) {
       turnRef.current.aoe = true;
@@ -3082,6 +3112,7 @@ function DropBattle() {
       setPaint: c => setPaintColor(c),
       setSkillTarget: t => setSkillTarget(t),
       setSmithMode: m => setSmithMode(m),
+      showDcap: cap => setDcapTut(cap),
       unlockChar: i => unlockChar(i),
       recordClear: () => recordClear()
     };
@@ -3096,7 +3127,9 @@ function DropBattle() {
   const info = preview && preview.over && preview.info && preview.info.count > 0 ? preview.info : null;
   const actColor = action ? ACTIONS[action].color : "#fff";
   const remaining = 3 - used.size;
-  const selEff = info ? computeEffect(action, info) : null;
+  // 消さないアクション（色変え／鍛冶の生成・強化＋）の選択中は、消したとき用の予測（剣盾などの特殊効果）を出さない
+  const selNonClear = action === "heal" && (CHARS[curChar].skill === "recolor" || (CHARS[curChar].skill === "smith" && smithMode !== "stock"));
+  const selEff = info && !selNonClear ? computeEffect(action, info) : null;
   const bagLeft = ITEM_KEYS.reduce((s,k) => s + bagView[k], 0);
   const ownedTotal = ITEM_KEYS.reduce((s,k) => s + ownedView[k], 0);
   const onBoardCnt = {};
@@ -3532,6 +3565,15 @@ function DropBattle() {
         h("button", { onClick: () => { SFX.tap(); setCtut(null); try { localStorage.setItem("db_ctut_healx", "1"); } catch (e) {} },
           className:"w-full rounded-xl py-2.5 font-bold", style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } }, TX.ctutHealxInfo.btn))));
   }
+  // 上限ダメージの敵の初登場説明カード
+  if (dcapTut) {
+    overlays.push(h("div", { key:"dcapinfo", className:"fixed inset-0 flex items-center justify-center fade-in", style:{ background:"rgba(8,4,14,.55)", zIndex:80 } },
+      h("div", { className:"rounded-2xl p-4 pop-in", style:{ maxWidth:340, width:"92%", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", textAlign:"center" } },
+        h("span", { className:"font-bold block mb-1", style:{ color:"#ffb3a2", fontSize:"1.05rem" } }, TX.dcapInfo.title),
+        h("p", { className:"text-[12px] leading-relaxed mb-3", style:{ opacity:0.9 } }, TX.dcapInfo.body.replace(/\{cap\}/g, String(dcapTut))),
+        h("button", { onClick: () => { SFX.tap(); setDcapTut(null); try { localStorage.setItem("db_tut_dcap", "1"); } catch (e) {} },
+          className:"w-full rounded-xl py-2.5 font-bold", style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } }, TX.dcapInfo.btn))));
+  }
   if (armed !== null && items[armed]) {
     const c = CONSUM[items[armed]];
     overlays.push(h("div", { key:"armed", className:"fixed pop-in", style:{ top:12, left:"50%", transform:"translateX(-50%)", zIndex:75,
@@ -3732,7 +3774,7 @@ function DropBattle() {
   const gSceneDim = gtut === "def" || gtut === "clear"; // 敵シーンは warn 中は明るく（攻撃予告を見せる）
   const guideIds = gtut === "clear" ? findGroup(board, gtutSeedRef.current) : null; // 消させる対象グループ
   // キャラスキルチュートリアル: ボタン誘導中は盤面全体を暗く、対象指定中は対象グループだけ光らせる
-  const ctutBoardLock = ctut && ctut.step !== "paint" && ctut.step !== "clear" && ctut.step !== "done";
+  const ctutBoardLock = ctut && ctut.step !== "paint" && ctut.step !== "clear" && ctut.step !== "done" && ctut.step !== "finwait";
   const ctutIds = ctut && (ctut.step === "paint" || ctut.step === "clear") && ctut.seed != null ? findGroup(board, ctut.seed) : null;
   const boardEl = h("div", { className:"relative rounded-2xl board-wrap", style:{ padding:5, background:"rgba(19,14,28,.8)", border:"2px solid #3c3450", marginBottom:4 } },
         h("div", { className:"grid grid-cols-6 gap-1.5", style:{ touchAction:"none" }, onContextMenu: e => e.preventDefault() },
@@ -4073,12 +4115,20 @@ function DropBattle() {
           h("span", { style:{ fontSize:"0.58rem", opacity:0.6 } }, `(${base}+${bonus})`));
         let valEl;
         const bAn = buffAnim && buffAnim.st === key ? buffAnim : null;
+        const sAn = storeAnim && (key === "atk" || key === "def") ? storeAnim : null;
         if (bAn) {
           // ガレス強化の段階表示: 元の値 → 「元の値 ×倍率」 → 最終値（金色）
           valEl = bAn.stage === 1 ? String(bAn.from)
             : bAn.stage === 2 ? h("span", null, String(bAn.from),
                 h("span", { style:{ color:"#ffd75e", fontSize:"0.82rem", marginLeft:3, fontWeight:900 } }, "×" + bAn.mult.toFixed(1)))
             : h("span", { style:{ color:"#ffd75e" } }, String(bAn.to));
+        } else if (sAn) {
+          // ノア蓄積の段階表示（攻防同時）: 「元の値 +蓄積」 → 最終値（金色）
+          const from = key === "atk" ? sAn.fromAtk : sAn.fromDef;
+          const to = key === "atk" ? sAn.toAtk : sAn.toDef;
+          valEl = sAn.stage === 2 ? h("span", null, String(from),
+              h("span", { style:{ color:"#ffd75e", fontSize:"0.82rem", marginLeft:3, fontWeight:900 } }, "+" + sAn.add))
+            : h("span", { style:{ color:"#ffd75e" } }, String(to));
         } else if (isSel && selEff) {
           let v = selEff.main;
           if (key === "atk") v += selEff.splitAtk;
@@ -4119,7 +4169,7 @@ function DropBattle() {
           h("span", { style:{ fontSize:11, height:15, lineHeight:"15px", whiteSpace:"nowrap", color: isUsed ? (lit ? "#e7e0ef" : "#777") : "#e7e0ef" } }, a.label,
             // 表示倍率はキャラ補正込みの実効値（ルクスの全効果2倍もここに反映。レリック加算はperOf内）
             h("span", { style:{ fontSize:8, opacity:0.5, marginLeft:2 } }, "×", perOf(key) * (CUR_SKILL === "healx" ? 2 : 1))),
-          h("span", { id:"actval-" + key, key:"v" + key + "_" + tv[key] + (bAn ? "_b" + bAn.stage : ""), className: tv[key] > 0 ? "val-pulse" : "",
+          h("span", { id:"actval-" + key, key:"v" + key + "_" + tv[key] + (bAn ? "_b" + bAn.stage : "") + (sAn ? "_s" + sAn.stage : ""), className: tv[key] > 0 ? "val-pulse" : "",
             style:{ fontSize:"1.05rem", height:20, lineHeight:"20px", fontWeight:700, fontVariantNumeric:"tabular-nums", display:"flex", alignItems:"center", justifyContent:"center",
             color: lit ? "#ffffff" : isSel && selEff && tv[key] === 0 ? (info && info.mult > 1 ? "#ffe88a" : "#fff") : crossBonus > 0 && tv[key] === 0 ? "#ffcf5d" : isUsed ? a.color : tv[key] > 0 ? "#e0d8f0" : "#9b93a6",
             textShadow: isSel && selEff && tv[key] === 0 && info && info.mult > 1 ? "0 0 8px #ffd54a" : "none" } }, valEl));
