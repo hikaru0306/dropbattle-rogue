@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""鍛冶師（smith）検証: 補充で素材蓄積 / 生成で袋から特殊配置 / 強化で＋化 / 素材のバトル間持ち越し / 素材0はアクション消費なし"""
+"""鍛冶師（smith）検証: 補充で素材蓄積 / 生成で袋から特殊配置 / 強化で＋化 / 素材のバトル間持ち越し / 素材0はアクション消費なし / 出せる特殊が尽きたら魔鉱石を生成"""
 import time
 from playwright.sync_api import sync_playwright
 
@@ -120,6 +120,32 @@ with sync_playwright() as pw:
         page.evaluate(f"window.__test.enter({bid})"); time.sleep(0.8)
         info = ci(page)
         chk("stock resets per battle", info["stock"] == 0, f"stock={info['stock']}")
+
+        # 6) 生成の枯渇フォールバック: 所持特殊が全て盤面に出ている（リロードしても出せない）→ 魔鉱石を生成
+        page.evaluate("window.__test.spawn(['golem'])"); time.sleep(0.3)  # 高HPで撃破を避ける
+        page.evaluate("window.__test.setSmithMode('stock')")
+        make_group(page, [0, 1, 2], 1); time.sleep(0.2)
+        page.evaluate("window.__test.setAct('heal')")
+        page.evaluate("window.__test.commit(0)"); time.sleep(0.8)  # 素材3を確保
+        chk("stock 3 for fallback test", ci(page)["stock"] == 3, f"stock={ci(page)['stock']}")
+        page.evaluate("window.__test.resolve()"); time.sleep(1.2)
+        # make_groupで盤面の特殊を全消去してから、所持特殊を全数(9個)盤面に配置
+        make_group(page, [6, 7, 8], 1); time.sleep(0.2)
+        owned = st(page)["owned"]
+        cells = list(range(24, 36)); ptr = 0
+        for k, v in owned.items():
+            for _ in range(v):
+                page.evaluate(f"window.__test.setCellSpecial({cells[ptr]}, '{k}', false, false)"); ptr += 1
+        s = st(page)
+        chk("all owned specials on board", s["specials"] == s["ownedTotal"], f"sp={s['specials']} owned={s['ownedTotal']}")
+        page.evaluate("window.__test.setSmithMode('gen')")
+        page.evaluate("window.__test.setAct('heal')")
+        page.evaluate("window.__test.commit(6)"); time.sleep(0.6)
+        s = st(page); info = ci(page)
+        row_sp = [s["board"][i]["sp"] for i in [6, 7, 8]]
+        chk("gen fallback made 3 ore", row_sp == ["ore", "ore", "ore"], str(row_sp))
+        chk("fallback stock spent to 0", info["stock"] == 0, f"stock={info['stock']}")
+        chk("fallback action consumed", "heal" in s["used"])
     else:
         chk("stock resets per battle (skipped: status=" + s["status"] + ")", False)
 

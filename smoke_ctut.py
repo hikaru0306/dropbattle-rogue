@@ -120,10 +120,10 @@ with sync_playwright() as p:
     chk("smith flag", page.evaluate("localStorage.getItem('db_ctut_smith')") == "1")
     page.click("text=たたかいを続ける"); time.sleep(0.3)
 
-    # ―― 4) ルクス（info） ――
+    # ―― 4) セレネ（info） ――
     start_battle_as(page, 4)
     page.evaluate("window.__test.startCtut('healx')"); time.sleep(0.3)
-    chk("healx info card", ct(page)["step"] == "info" and "大賢者ルクス" in page.evaluate("document.body.innerText"))
+    chk("healx info card", ct(page)["step"] == "info" and "月の司祭セレネ" in page.evaluate("document.body.innerText"))
     page.click("text=了解！"); time.sleep(0.3)
     chk("healx closed + flag", ct(page) is None and page.evaluate("localStorage.getItem('db_ctut_healx')") == "1")
 

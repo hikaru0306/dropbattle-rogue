@@ -43,13 +43,16 @@ with sync_playwright() as pw:
     page.click("text=冒険に出る"); time.sleep(0.5)
     page.click("text=この仲間と冒険に出る"); time.sleep(0.6)
 
-    # ―― 1) 初期所持: 専用持ちは 剣盾回復2ずつ+専用3・アルド(専用なし=聖光廃止)は3/3/3 ――
+    # ―― 1) 初期所持: 専用持ちは 剣盾回復2ずつ+専用3（ガレスは剣4/盾4/回復1+専用3）――
     expect = {2:"warcry", 3:"store", 4:"wildstar", 5:"ore"}
     for i, k in expect.items():
         page.evaluate(f"window.__test.setChar({i})")
         page.evaluate("window.__test.restart()"); time.sleep(0.3)
         o = st(page)["owned"]
-        chk(f"char{i} owns {k}x3 + 2/2/2", o[k] == 3 and o["atk"] == 2 and o["def"] == 2 and o["heal"] == 2, str(o))
+        if i == 2:  # ガレス: 3つ目が回復でないため剣盾多め
+            chk(f"char{i} owns {k}x3 + 4/4/1", o[k] == 3 and o["atk"] == 4 and o["def"] == 4 and o["heal"] == 1, str(o))
+        else:
+            chk(f"char{i} owns {k}x3 + 2/2/2", o[k] == 3 and o["atk"] == 2 and o["def"] == 2 and o["heal"] == 2, str(o))
 
     # ―― 2) アルド: 聖光は廃止済み（3/3/3スタート・holyキー自体が存在しない） ――
     page.evaluate("window.__test.setChar(0)")
@@ -58,10 +61,10 @@ with sync_playwright() as pw:
     chk("char0 owns 3/3/3 (holy removed)", o["atk"] == 3 and o["def"] == 3 and o["heal"] == 3, str(o))
     chk("holy key gone", "holy" not in o, str(list(o.keys())))
 
-    # ―― 3) イリス: 彩雫は廃止済み（3/3/3スタート・inkキー自体が存在しない） ――
+    # ―― 3) イリス: 剣4/盾4/回復1スタート（3つ目が回復でないため・inkキー自体が存在しない） ――
     start_char(page, 1)
     o = st(page)["owned"]
-    chk("char1 owns 3/3/3 (ink removed)", o["atk"] == 3 and o["def"] == 3 and o["heal"] == 3, str(o))
+    chk("char1 owns 4/4/1", o["atk"] == 4 and o["def"] == 4 and o["heal"] == 1, str(o))
     chk("ink key gone", "ink" not in o, str(list(o.keys())))
 
     # ―― 4) 虹のパレット: 6個以上の色変えで虹1個 ――

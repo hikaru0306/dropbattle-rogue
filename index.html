@@ -691,6 +691,12 @@ const initOwned = ci => {
   // キャラ専用ドロップ: 剣/盾/回復を2ずつ＋専用ドロップ3つでスタート（報酬では手に入らない）
   const sk = ci != null && CHARS[ci] ? CHARS[ci].skill : null;
   const excl = ITEM_KEYS.find(k => ITEMS[k].exclusive === sk);
+  // イリス・ガレス: 3つ目が回復でないため 剣4/盾4/回復1 スタート
+  if (sk === "recolor" || sk === "buff") {
+    const o = { ...base, heal:1, def:4, atk:4 };
+    if (excl) o[excl] = 3;
+    return o;
+  }
   if (excl) return { ...base, heal:2, def:2, atk:2, [excl]:3 };
   return base;
 };
@@ -2398,13 +2404,20 @@ function DropBattle() {
         // 生成できる上限＝「所持しているが盤面に出ていない」特殊数（袋の枯渇による複製を防ぐ）
         const onBoard = boardRef.current.filter(c => c.special).length;
         const avail = ITEM_KEYS.reduce((s, k) => s + ownedRef.current[k], 0) - onBoard;
-        const n = Math.min(stockRef.current, target.length, Math.max(0, avail));
-        for (let t = 0; t < n; t++) {
-          const d = drawFromBag(bagRef, ownedRef, bagUpRef, ownedUpRef, nb);
-          nb[target[t]] = { ...nb[target[t]], special: d.k, up: d.up };
-          done++;
+        if (avail <= 0) {
+          // 所持特殊が全て盤面に出ている（袋をリロードしても出せる特殊がない）→ 魔鉱石を直接生成
+          const n = Math.min(stockRef.current, target.length);
+          for (let t = 0; t < n; t++) { nb[target[t]] = { ...nb[target[t]], special:"ore", up:false }; done++; }
+          if (done) addLog([`⚒ 出せる特殊ドロップが尽きた… 素材${done}を打ち、魔鉱石${done}個を生成した`]);
+        } else {
+          const n = Math.min(stockRef.current, target.length, avail);
+          for (let t = 0; t < n; t++) {
+            const d = drawFromBag(bagRef, ownedRef, bagUpRef, ownedUpRef, nb);
+            nb[target[t]] = { ...nb[target[t]], special: d.k, up: d.up };
+            done++;
+          }
+          if (done) addLog([`⚒ 素材${done}を打ち、特殊ドロップ${done}個を生成した`]);
         }
-        if (done) addLog([`⚒ 素材${done}を打ち、特殊ドロップ${done}個を生成した`]);
       } else {
         const target = boardRef.current.map((c, i) => (grp.has(c.id) && c.special && !c.up) ? i : -1).filter(i => i >= 0);
         const n = Math.min(stockRef.current, target.length);
