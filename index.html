@@ -1646,7 +1646,8 @@ function DropBattle() {
             setTimeout(() => {
               setAnim(en.id, dead ? "die" : "hit");
               addPop(en.id, dealtH > 0 ? "-" + dealtH : "BLOCK", dealtH > 0 ? "#ffe2de" : "#9db8e8");
-              if (dead && en.boss) { setShakeSeq(q => q + 1); setFlashSeq(q => q + 1); }
+              if (isFirst && dealtH > 0) setShakeSeq(q => q + 1); // 攻撃の着弾（実ダメージ）で画面を揺らす
+              if (dead && en.boss) setFlashSeq(q => q + 1);
             }, 160);
             setTimeout(() => setEnemiesBoth(snap), 180);
           }
@@ -1689,7 +1690,8 @@ function DropBattle() {
               setAnim(en.id, dead ? "die" : "hit");
               addPop(en.id, dealtH > 0 ? "-" + dealtH : "BLOCK", dealtH > 0 ? "#ffe2de" : "#9db8e8");
               if (dealtS > 0) SFX.crack();
-              if (dead && en.boss) { setShakeSeq(q => q + 1); setFlashSeq(q => q + 1); }
+              if (isFirst && dealtH > 0) setShakeSeq(q => q + 1); // 攻撃の着弾（実ダメージ）で画面を揺らす
+              if (dead && en.boss) setFlashSeq(q => q + 1);
             }, 160);
             setTimeout(() => setEnemiesBoth(snap), 180);
           }
@@ -2157,7 +2159,7 @@ function DropBattle() {
       if (hitAny) {
         setEnemiesBoth(ens);
         ens.forEach(en => setAnim(en.id, en.alive ? "hit" : "die"));
-        SFX.atk(); addLog(["💣 爆裂瓶：敵全体に80ダメージ"]);
+        SFX.atk(); setShakeSeq(q => q + 1); addLog(["💣 爆裂瓶：敵全体に80ダメージ"]); // アイテムで実ダメージ→画面を揺らす
         used = true;
         if (ens.every(e => !e.alive)) {
           setLocked(true); lockedRef.current = true;
@@ -2595,7 +2597,7 @@ function DropBattle() {
       if (red && red.length) {
         const N2 = SIZE * SIZE;
         red.forEach(i => barBlast("v", [i - SIZE, i, i + SIZE].filter(k => k >= 0 && k < N2 && (k % SIZE) === (i % SIZE))));
-        SFX.crack(); if (actionRef.current === "atk") setShakeSeq(q => q + 1); // 攻撃で実ダメージが入る時のみ画面を揺らす
+        SFX.crack(); // 盤面の爆破演出では画面を揺らさない（画面揺れは実ダメージが入る瞬間だけ）
       }
       if (sweptLine) SFX.swish();
       if (boltExtra.length) lightningAt(boltExtra);
@@ -2663,8 +2665,8 @@ function DropBattle() {
           sp.style.setProperty("--dy", Math.sin(ang) * dist + "px");
         }
       });
-      // 敵にダメージが入るのは攻撃アクションのみ。防御/回復で爆破ドロップを消したときは画面を揺らさない
-      if (idxs.length) { SFX.crack(); if (actionRef.current === "atk") setShakeSeq(q => q + 1); }
+      // 盤面の爆破演出では画面を揺らさない（画面揺れは実ダメージが入る瞬間だけ）
+      if (idxs.length) SFX.crack();
     } catch (e) {}
   };
   // 列/行のセル群
