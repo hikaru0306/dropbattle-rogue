@@ -70,6 +70,9 @@ button:active{filter:brightness(1.12)}
 @keyframes targetBob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,5px)}}
 @keyframes mistDrift{0%{transform:translateX(-12%)}50%{transform:translateX(12%)}100%{transform:translateX(-12%)}}
 @keyframes popIn{0%{transform:scale(.85);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes merchPop{0%{transform:translateY(30px) scale(.35);opacity:0}45%{transform:translateY(-10px) scale(1.18);opacity:1}70%{transform:translateY(3px) scale(.96)}100%{transform:translateY(0) scale(1)}}
+@keyframes merchTxt{0%{opacity:0;transform:translateY(10px);letter-spacing:.5em}35%{opacity:0}100%{opacity:1;transform:translateY(0);letter-spacing:.14em}}
+@keyframes merchRing{0%{transform:scale(.3);opacity:.9}100%{transform:scale(2.1);opacity:0}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes intentBlink{0%,100%{opacity:1}50%{opacity:.55}}
 .sp-idle-a{animation:breathA 2.6s ease-in-out infinite;transform-origin:50% 100%}
@@ -672,7 +675,8 @@ const encounterFor = (node, act, mode) => {
       enr: 0, enrEvery: SIM_MODE ? 0 : (ura ? 4 + Math.floor(Math.random() * 2) : 4 + Math.floor(Math.random() * 3)), // 裏は激昂がやや早い(4-5T)
       shd, shdMax: si ? si.sh : 0, shdC: si ? si.c : 0,
       // 上限ダメージ＝最大HPの約1/4〜1/5をキリよく10刻みに。ボス/強敵の"一部だけ"が持つ特殊耐性
-      dcap: ((e.boss && Math.random() < 0.5) || (e.elite && Math.random() < 0.35)) ? Math.max(10, Math.round(hp / 4.5 / 10) * 10) : 0,
+      // 3章まで（act0〜2）は出さない＝表では出現せず、裏の4章以降のみ（ユーザー指定）
+      dcap: (act >= 3 && ((e.boss && Math.random() < 0.5) || (e.elite && Math.random() < 0.35))) ? Math.max(10, Math.round(hp / 4.5 / 10) * 10) : 0,
       elite:!!e.elite, boss:!!e.boss, idx:i };
   });
 };
@@ -2015,8 +2019,12 @@ function DropBattle() {
   // ===== ショップ（群れ勝利後・休憩所） =====
   const priceOf = base => Math.round(base * (hasR("member") ? 0.8 : 1));
   const openShop = () => {
-    setShop({ offers: shuffle(Object.keys(CONSUM)).slice(0, hasR("dice") ? 6 : 4), relic: pickRelics(1)[0] || null });
+    setShop({ offers: shuffle(Object.keys(CONSUM)).slice(0, hasR("dice") ? 6 : 4), relic: pickRelics(1)[0] || null, intro: true });
     SFX.open();
+    setTimeout(() => {
+      setShop(sp => sp && sp.intro ? { ...sp, intro: false } : sp);
+      SFX.coin();
+    }, 1600);
   };
   const buyRelic = k => {
     const cost = priceOf(RELIC_PRICE[RELICS[k].rar]);
@@ -3087,7 +3095,7 @@ function DropBattle() {
       tapAct: key => { if (gtutRef.current === "def") { if (key === "def") { setAction("def"); actionRef.current = "def"; setGuide("clear"); } } else if (!gtutRef.current) { setAction(key); actionRef.current = key; } },
       dismissGuide: () => { setGuide(null); try { localStorage.setItem("db_gtut", "1"); } catch (e) {} },
       encPreview: (a, nodeType, m) => encounterFor({ row: 1, type: nodeType }, a, m).map(e => ({
-        kind: e.kind, atk: e.atk, atkFloor: e.atkFloor, bigFloor: e.bigFloor,
+        kind: e.kind, atk: e.atk, atkFloor: e.atkFloor, bigFloor: e.bigFloor, dcap: e.dcap,
         normalDmg: intentOf({ ...e, pat: ["attack"], pi: 0, rollMul: 1 }, []).dmg,
         bigDmg: intentOf({ ...e, pat: ["bigatk"], pi: 0, rollMul: 1 }, []).dmg })),
       setSfxVol: v => changeSfxVol(v),
@@ -3300,10 +3308,7 @@ function DropBattle() {
           h("div", { className:"flex items-center justify-center gap-2 mb-0.5" },
             h("span", { className:"font-bold", style:{ fontSize:"1.12rem", color: selOpen ? "#f0e4c8" : "#8a8296", textShadow:"0 1px 0 rgba(0,0,0,.5)" } }, selOpen ? ch.name : "？？？"),
             selOpen && h("span", { className:"text-[10px] px-1.5 py-0.5 rounded-md", style:{ background:"rgba(255,255,255,.08)", color:ch.color, border:`1px solid ${ch.color}` } }, ch.tag)),
-          // 制覇チップは名前の下の専用行に（高さはキャラによらず常に確保＝位置が動かない）
-          h("div", { className:"flex items-center justify-center", style:{ gap:6, minHeight:22, marginBottom:2 } },
-            selOpen && charState.c.includes(selView) && h("span", { className:"text-[10px] px-2 py-0.5 rounded-full font-bold", style:{ background:"linear-gradient(160deg,#ffedaa,#e8b84a 65%,#cf9430)", color:"#5c3c0c", border:"1px solid #a87824", boxShadow:"inset 0 1px 1px rgba(255,255,255,.7), 0 1px 3px rgba(0,0,0,.4)", textShadow:"0 1px 0 rgba(255,255,255,.4)" } }, "✓ クリア済み"),
-            selOpen && (charState.cu || []).includes(selView) && h("span", { className:"text-[10px] px-2 py-0.5 rounded-full font-bold", style:{ background:"linear-gradient(160deg,#dcbcfc,#a86ae0 65%,#8443c4)", color:"#2e1246", border:"1px solid #6a3aa0", boxShadow:"inset 0 1px 1px rgba(255,255,255,.55), 0 1px 3px rgba(0,0,0,.4)", textShadow:"0 1px 0 rgba(255,255,255,.3)" } }, "✓ 裏制覇")),
+          // 制覇チップ行は削除（記録パネルの「制覇 N回」で伝わるため。タイルのメダルは残す）
           selOpen
             ? h("p", { className:"text-[11px]", style:{ opacity:0.85, lineHeight:1.6 } }, ch.desc)
             : h("p", { className:"text-[11px]", style:{ color:"#c99", lineHeight:1.6 } }, "🔒 ", ch.unlock)),
@@ -3332,8 +3337,8 @@ function DropBattle() {
               display:"flex", alignItems:"center", justifyContent:"center",
               fontSize:9, fontWeight:900, color:"#f4e8ff", textShadow:"0 1px 1px rgba(40,10,66,.8)" } }, "裏"));
         })),
-        // ―― モード切替（表クリア済みキャラのみ裏を選べる） ――
-        uraOpen && h("div", { className:"flex gap-2 mb-2" }, [
+        // ―― モード切替（表クリア済みキャラのみ裏を選べる。未解放でも領域は常に確保＝キャラ切替時のガタつき防止） ――
+        h("div", { className:"flex gap-2 mb-2", style:{ visibility: uraOpen ? "visible" : "hidden" } }, [
           ["omote", "表の冒険", "全3章", ch.color],
           ["ura", "裏の冒険", "全5章・高難度", URA_C]
         ].map(([m, label, sub, col]) => {
@@ -3344,7 +3349,6 @@ function DropBattle() {
             h("span", { className:"text-sm block" }, label),
             h("span", { className:"text-[9px] block", style:{ opacity:0.75, fontWeight:600 } }, sub));
         })),
-        !uraOpen && selOpen && h("p", { className:"text-center text-[10px] mb-2", style:{ color:"#8a8296" } }, "表（全3章）をこのキャラでクリアすると、裏の冒険（全5章）に挑めるようになる"),
         // ―― 決定ボタン ――
         h("button", { onClick: () => pickChar(selView, effMode), disabled: !selOpen,
           className:"w-full rounded-2xl py-3 font-bold",
@@ -3635,7 +3639,17 @@ function DropBattle() {
             })),
           h("button", { onClick: () => setCampfire("menu"), className:"w-full rounded-xl py-2 text-xs font-bold", style:{ background:"rgba(255,255,255,.08)", border:"1px solid #3c3450", color:"#c9bfe0" } }, "← もどる")))));
   }
-  if (shop) {
+  if (shop && shop.intro) {
+    overlays.push(h("div", { key:"shopIntro",
+      onClick: () => setShop(sp => sp && sp.intro ? { ...sp, intro: false } : sp),
+      className:"fixed inset-0 flex flex-col items-center justify-center fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:58 } },
+      h("div", { style:{ position:"relative", width:96, height:96 } },
+        h("div", { style:{ position:"absolute", inset:0, borderRadius:"50%", border:"3px solid rgba(232,192,106,.8)", animation:"merchRing .8s ease-out .1s forwards", opacity:0 } }),
+        h("img", { src:"assets/node_treasure.png", alt:"行商人", draggable:false,
+          style:{ width:96, height:96, objectFit:"contain", animation:"merchPop .7s cubic-bezier(.3,1.5,.5,1) both",
+            filter:"drop-shadow(0 0 18px rgba(232,192,106,.55))" } })),
+      h("p", { className:"font-bold mt-5", style:{ color:"#e8c06a", fontSize:"1.35rem", textShadow:"0 2px 0 #000, 0 0 12px rgba(232,192,106,.4)", animation:"merchTxt .9s ease .3s both" } }, "行商人が現れた！")));
+  } else if (shop) {
     overlays.push(h("div", { key:"shop", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:58 } },
       h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:370, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
         h("div", { className:"flex justify-between items-center mb-1" },
@@ -3966,7 +3980,8 @@ function DropBattle() {
                   ((en.enr || 0) > 0 ? "🔥" + en.enr + " " : "") + (en.elite ? "💀" : ""))),
               h("span", { style:{ position:"relative", display:"block" } },
                 // 予告（攻撃など）はスプライトに重ねて表示。ボスは縦に高く、別の行として積むと低い画面高で見切れるため
-                en.alive && h("span", { className:"absolute text-[10px] font-bold", style:{ top:-28, left:"50%",
+                // ボスはスプライトが高く予告が枠上端からはみ出しうるため少し下げる
+                en.alive && h("span", { className:"absolute text-[10px] font-bold", style:{ top: en.boss ? -24 : -28, left:"50%",
                   transform: gtut === "warn" && isDmgIntent ? "translateX(-50%) scale(1.15)" : "translateX(-50%)",
                   height:18, lineHeight:"16px", padding:"0 7px", borderRadius:9, whiteSpace:"nowrap", zIndex:2,
                   background: isDmgIntent ? (iv.act === "bigatk" ? "rgba(150,26,40,.9)" : "rgba(120,32,32,.8)") : "rgba(0,0,0,.55)",
@@ -3984,7 +3999,8 @@ function DropBattle() {
                   fontSize:11, color:"#dce8ff", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", zIndex:2 } },
                   h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:12, height:12, style:{ width:12, height:12, maxWidth:12, maxHeight:12, flexShrink:0, objectFit:"contain" } }),
                   en.shd),
-                en.dcap > 0 && en.alive && h("span", { title:"被ダメ上限", className:"absolute flex items-center font-bold", style:{ right:-4, bottom: (en.shd || 0) > 0 ? 24 : 6, gap:2, padding:"1px 6px", borderRadius:9,
+                // 上限バッジは左・盾バッジは右下に分離。盾あり時はさらに一段上げて対角配置（狭いスプライトでも重ならない）
+                en.dcap > 0 && en.alive && h("span", { title:"被ダメ上限", className:"absolute flex items-center font-bold", style:{ left:-4, bottom: (en.shd || 0) > 0 ? 29 : 6, gap:2, padding:"1px 6px", borderRadius:9,
                   background:"rgba(58,20,20,.9)", border:"1px solid rgba(255,150,120,.65)",
                   fontSize:11, color:"#ffb3a2", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap", zIndex:2 } },
                   h("span", { style:{ fontSize:10, lineHeight:1 } }, "⛔"),
