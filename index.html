@@ -2401,29 +2401,24 @@ function DropBattle() {
       let done = 0;
       if (mode === "gen") {
         const target = boardRef.current.map((c, i) => (grp.has(c.id) && c.type !== JUNK && !c.wild && !c.special) ? i : -1).filter(i => i >= 0);
-        // 生成できる上限＝「所持しているが盤面に出ていない」特殊数（袋の枯渇による複製を防ぐ）。追加分(extra)は所持外なので数えない
-        const onBoard = boardRef.current.filter(c => c.special && !c.extra).length;
-        const avail = ITEM_KEYS.reduce((s, k) => s + ownedRef.current[k], 0) - onBoard;
-        if (avail <= 0) {
-          // 所持特殊が全て盤面に出ている（袋をリロードしても出せる特殊がない）→ 剣20%/盾20%/魔鉱石60%で追加生成
-          // これらは所持外の「追加分」（extra）。消しても袋・所持数の会計には影響しない
-          const n = Math.min(stockRef.current, target.length);
-          for (let t = 0; t < n; t++) {
-            const r = Math.random();
-            const kind = r < 0.2 ? "atk" : r < 0.4 ? "def" : "ore";
-            nb[target[t]] = { ...nb[target[t]], special:kind, up:false, extra:true };
-            done++;
-          }
-          if (done) addLog([`⚒ 出せる特殊ドロップが尽きた… 素材${done}を打ち、特殊ドロップ${done}個を生成した`]);
-        } else {
-          const n = Math.min(stockRef.current, target.length, avail);
-          for (let t = 0; t < n; t++) {
+        // 生成数は素材と対象数だけで決まる（袋の数ではキャップしない）。
+        // 「所持しているが盤面に出ていない」特殊がある間は袋から引き、尽きたら
+        // 剣20%/盾20%/魔鉱石60%の追加分(extra=所持外・袋会計に影響しない)で埋める
+        let availLeft = ITEM_KEYS.reduce((s, k) => s + ownedRef.current[k], 0) - boardRef.current.filter(c => c.special && !c.extra).length;
+        const n = Math.min(stockRef.current, target.length);
+        for (let t = 0; t < n; t++) {
+          if (availLeft > 0) {
             const d = drawFromBag(bagRef, ownedRef, bagUpRef, ownedUpRef, nb);
             nb[target[t]] = { ...nb[target[t]], special: d.k, up: d.up };
-            done++;
+            availLeft--;
+          } else {
+            const r = Math.random();
+            const kind = r < 0.2 ? "atk" : r < 0.4 ? "def" : "ore";
+            nb[target[t]] = { ...nb[target[t]], special: kind, up: false, extra: true };
           }
-          if (done) addLog([`⚒ 素材${done}を打ち、特殊ドロップ${done}個を生成した`]);
+          done++;
         }
+        if (done) addLog([`⚒ 素材${done}を打ち、特殊ドロップ${done}個を生成した`]);
       } else {
         const target = boardRef.current.map((c, i) => (grp.has(c.id) && c.special && !c.up) ? i : -1).filter(i => i >= 0);
         const n = Math.min(stockRef.current, target.length);

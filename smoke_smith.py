@@ -151,6 +151,33 @@ with sync_playwright() as pw:
         chk("fallback did not add to owned", st(page)["ownedTotal"] == owned_total_before, f"{owned_total_before}->{st(page)['ownedTotal']}")
         chk("fallback stock spent to 0", info["stock"] == 0, f"stock={info['stock']}")
         chk("fallback action consumed", "heal" in s["used"])
+
+        # 7) 部分フォールバック: 所持のうち盤面外が2つ + 素材5 → 袋2 + 追加3 の計5生成（袋数でキャップされない）
+        page.evaluate("window.__test.resolve()"); time.sleep(1.2)
+        page.evaluate("window.__test.spawn(['golem'])"); time.sleep(0.3)
+        page.evaluate("window.__test.setSmithMode('stock')")
+        make_group(page, [0, 1, 2, 3, 4], 1); time.sleep(0.2)
+        page.evaluate("window.__test.setAct('heal')")
+        page.evaluate("window.__test.commit(0)"); time.sleep(0.8)  # 素材+5
+        chk("stock>=5 for partial test", ci(page)["stock"] >= 5, f"stock={ci(page)['stock']}")
+        page.evaluate("window.__test.resolve()"); time.sleep(1.2)
+        # 5個の生成対象グループ + 所持特殊を7個だけ盤面に配置(availLeft = 9-7 = 2)
+        make_group(page, [18, 19, 20, 21, 22], 1); time.sleep(0.2)
+        owned = st(page)["owned"]
+        flat = []
+        for k, v in owned.items(): flat += [k] * v
+        for c, k in zip([24, 25, 26, 27, 28, 29, 30], flat[:7]):
+            page.evaluate(f"window.__test.setCellSpecial({c}, '{k}', false, false)")
+        time.sleep(0.1)
+        page.evaluate("window.__test.setSmithMode('gen')")
+        page.evaluate("window.__test.setAct('heal')")
+        page.evaluate("window.__test.commit(18)"); time.sleep(0.6)
+        s = st(page)
+        row = [s["board"][i] for i in [18, 19, 20, 21, 22]]
+        n_extra = sum(1 for c in row if c["x"])
+        n_bag = sum(1 for c in row if c["sp"] and not c["x"])
+        chk("partial gen: 5 total (袋数でキャップされない)", n_extra + n_bag == 5, f"bag={n_bag} extra={n_extra}")
+        chk("partial gen: 袋2 + 追加3", n_bag == 2 and n_extra == 3, f"bag={n_bag} extra={n_extra}")
     else:
         chk("stock resets per battle (skipped: status=" + s["status"] + ")", False)
 
