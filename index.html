@@ -1911,7 +1911,7 @@ function DropBattle() {
       const pdmg = Math.min(php, poisonRef.current);
       php -= pdmg;
       const np = php;
-      seq.push({ text: `毒 ${pdmg}！`, color: "#8ce87c", act: "def",
+      seq.push({ text: `毒 ${pdmg}！`, color: "#8ce87c", act: "poison", // 毒は防御無視なので防御ボタンは光らせない
         run: () => {
           setPHP(np); setAnim("hero","hit"); SFX.hurt(); flash("player");
           addPop("hero", "-" + pdmg, "#8ce87c");
