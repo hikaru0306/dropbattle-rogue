@@ -155,7 +155,7 @@ const P_MAX = 300;
 const NUM_SPECIAL = 5;
 const STAR_THRESHOLD = 6;
 const ATK_PER = 10, DEF_PER = 10, HEAL_PER = 1;
-const POISON_DMG = 4; // 毒：防御無視で毎ターン固定ダメージ。一度受けるとそのバトル中は治らない（バトル終了/章クリアで解除）
+const POISON_DMG = 4; // 毒：1回受けるごとに毎ターンのダメージが+4され、重ねがけで累積する（防御無視・バトル終了/章クリアで解除）
 const ROWS = 8; // マップの段数（1章=8層固定）
 const ACTS = 3;
 const TX = window.TEXTS; // 文言定義（texts.js）。表示テキストの修正はtexts.jsを編集する
@@ -1766,13 +1766,18 @@ function DropBattle() {
         continue;
       }
       if (iv.act === "poison") {
-        poisonRef.current = 1; // 毒状態フラグ。一度受けるとこのバトル中は解除されない
-        seq.push({ text: `${en.name}の毒霧！`, color: "#8ce87c",
+        // 毒は重ねがけで累積する（4を受けている状態で更に4を受けると毎ターン8）
+        const pTotal = poisonRef.current + POISON_DMG;
+        const stacked = poisonRef.current > 0;
+        poisonRef.current = pTotal;
+        seq.push({ text: stacked ? `${en.name}の毒霧！毒が強まった！` : `${en.name}の毒霧！`, color: "#8ce87c",
           run: () => {
             setAnim(en.id, "attack");
-            setTimeout(() => { SFX.jam(); addPop("hero", "🐍毒", "#8ce87c"); setPoisonView(1); }, 220);
+            setTimeout(() => { SFX.jam(); addPop("hero", stacked ? `🐍毒+${POISON_DMG}` : "🐍毒", "#8ce87c"); setPoisonView(pTotal); }, 220);
           } });
-        logs.push(`🐍 ${en.name}の毒霧！このバトル中、毎ターン${POISON_DMG}ダメージ`);
+        logs.push(stacked
+          ? `🐍 ${en.name}の毒霧！毒が重なって毎ターン${pTotal}ダメージに（+${POISON_DMG}）`
+          : `🐍 ${en.name}の毒霧！このバトル中、毎ターン${pTotal}ダメージ`);
         continue;
       }
       if (iv.act === "healally") {
@@ -1881,7 +1886,7 @@ function DropBattle() {
     }
     // ④ 毒ダメージ（防御無視・このバトル中は毎ターン発生し続ける）
     if (php > 0 && poisonRef.current > 0) {
-      const pdmg = Math.min(php, POISON_DMG);
+      const pdmg = Math.min(php, poisonRef.current);
       php -= pdmg;
       const np = php;
       seq.push({ text: `毒 ${pdmg}！`, color: "#8ce87c", act: "def",
@@ -3293,17 +3298,19 @@ function DropBattle() {
   const numCell = { display:"inline-block", minWidth:40, textAlign:"right", fontVariantNumeric:"tabular-nums" };
   const curNode = map.nodes.find(n => n.id === curNodeId);
   const progRow = pendingNodeRef.current ? pendingNodeRef.current.row + 1 : curNode ? curNode.row + 1 : 0;
-  const willPoison = poisonView > 0 || enemies.some(e => {
-    if (!e.alive) return false;
+  // 毒の予測 = 今かかっている毒 ＋ このターン新たに受ける毒（重ねがけぶん）
+  const poisonPreview = poisonView + enemies.reduce((n, e) => {
+    if (!e.alive) return n;
     const pat = e.pat || KINDS[e.kind].pats[0];
     const actsN = (e.enr || 0) >= 3 ? 2 : 1; // 激昂3以上は1ターンに2回行動するため両方チェック
-    for (let ai = 0; ai < actsN; ai++) if (pat[(e.pi + ai) % pat.length] === "poison") return true;
-    return false;
-  }); // 既に毒 or このターン新たに毒を受ける
+    let c = 0;
+    for (let ai = 0; ai < actsN; ai++) if (pat[(e.pi + ai) % pat.length] === "poison") c++;
+    return n + c * POISON_DMG;
+  }, 0);
   // 防御はガレスの予約倍率（攻撃直前に計算される分）も織り込んで予測する
   const effDef = tv.buffPend && tv.buffPend.st === "def" ? Math.round(tv.def * tv.buffPend.mult)
     : tv.buffPend && tv.buffPend.horn > 0 ? Math.round(tv.def * tv.buffPend.horn) : tv.def;
-  const incomingPreview = Math.max(0, enemies.filter(e => e.alive).reduce((s,e) => s + intentOf(e, enemies).dmg * ((e.enr || 0) >= 3 ? 2 : 1), 0) - effDef) + (willPoison ? POISON_DMG : 0); // 毒は防御無視で確定発生するため別枠で加算
+  const incomingPreview = Math.max(0, enemies.filter(e => e.alive).reduce((s,e) => s + intentOf(e, enemies).dmg * ((e.enr || 0) >= 3 ? 2 : 1), 0) - effDef) + poisonPreview; // 毒は防御無視で確定発生するため別枠で加算
   const rootStyle = {
     fontFamily: FONT,
     minHeight: "calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
@@ -4117,10 +4124,10 @@ function DropBattle() {
               animation: sv === 0 ? "hitShake .45s ease" : "none", zIndex:2 } },
               h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:15, height:15, style:{ width:15, height:15, maxWidth:15, maxHeight:15, flexShrink:0, objectFit:"contain" } }),
               sv !== null ? sv : tv.def),
-            poisonView > 0 && h("span", { title:"毒（このバトル中、毎ターン受ける）", className:"absolute font-bold flex items-center", style:{ left:-14, top:-6, gap:2, padding:"2px 6px", borderRadius:10,
+            poisonView > 0 && h("span", { title:`毒（このバトル中、毎ターン${poisonView}ダメージ）`, className:"absolute font-bold flex items-center", style:{ left:-14, top:-6, gap:2, padding:"2px 6px", borderRadius:10,
               background:"rgba(46,92,40,.92)", border:"1px solid rgba(140,232,124,.7)",
               fontSize:12, color:"#c8f5b8", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", zIndex:2 } },
-              h("img", { src:"assets/st_poison.png", alt:"毒", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), POISON_DMG)),
+              h("img", { src:"assets/st_poison.png", alt:"毒", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), poisonView)),
           h("div", { style:{ width:40, height:7, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-5, filter:"blur(2px)" } }),
           h("div", { className:"w-full mt-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:8 })),
           h("span", { className:"text-[10px] font-bold mt-1", style:{ color: hit === "player" ? "#ff9a9a" : hit === "heal" ? "#7cffb0" : "#cfe9d8", fontVariantNumeric:"tabular-nums", transition:"color .3s" } }, pHP, "/", pMax)),
@@ -4143,7 +4150,7 @@ function DropBattle() {
               : iv.act === "jamatk" ? [IIco("assets/icon_atk.png"), iv.dmg + " ", IIco("assets/intent_jam.png"), iv.jamN]
               : iv.act === "healally" ? [IIco(pm.img), iv.heal]
               : iv.act === "double" ? [IIco(pm.img), iv.hit + "×" + iv.hits]
-              : iv.act === "poison" ? [IIco(pm.img), POISON_DMG]
+              : iv.act === "poison" ? [IIco(pm.img), "+" + POISON_DMG]
               : [IIco(pm.img), iv.dmg]
               ).concat(twice ? [h("span", { style:{ color:"#ff9a5a", fontWeight:900, marginLeft:1 } }, "×2")] : []);
             const isDmgIntent = iv.act === "attack" || iv.act === "double" || iv.act === "bigatk" || iv.act === "drain" || iv.act === "jamatk";

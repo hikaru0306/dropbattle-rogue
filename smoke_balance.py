@@ -197,12 +197,12 @@ with sync_playwright() as p:
     assert got == 6, f"jadecore: want heal 6 (3+上3) got {got}"
     print("12 core relics all colors OK (jadecore 3clear -> 6 cells)")
 
-    # 13. 毒: バトル中は永続（毎ターン4・解除されない）→ 次バトルで解除
+    # 13. 毒: バトル中は永続（毎ターン累積値ぶん・解除されない）→ 次バトルで解除
     fresh_battle(page)
     s = st(page)
     for i in range(len(s["enemies"])):
         page.evaluate(f"window.__test.setPat({i}, ['charge'])")  # 敵は何もしない
-    page.evaluate("window.__test.setPoison(1)")
+    page.evaluate("window.__test.setPoison(4)")   # 毒4（1回ぶん）
     hp0 = st(page)["php"]
     for _ in range(3):
         page.evaluate("window.__test.resolve()")
