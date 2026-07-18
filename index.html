@@ -568,7 +568,14 @@ const genMap = (simpleStart) => {
     if (r === 0) types = ["battle"]; // 1層目は分岐なし（出発は常に1択）
     else if (r === 1 && simpleStart) types = ["battle","battle"];
     else if (r === ROWS-1) types = ["boss"];
-    else if (r === ROWS-2) types = shuffle(["rest","elite"]);
+    else if (r === ROWS-2) {
+      // ボス直前の段：立て直せる枠（休憩か宝箱）を必ず1つ残しつつ、残りは他の段と同じく色々出す
+      const n = 2 + (Math.random() < 0.4 ? 1 : 0);
+      types = [Math.random() < 0.65 ? "rest" : "treasure"];
+      const others = shuffle(["elite","horde","battle","treasure","rest"].filter(t => t !== types[0]));
+      while (types.length < n) types.push(others.pop());
+      shuffle(types);
+    }
     else {
       const n = 2 + (Math.random() < 0.55 ? 1 : 0);
       // 同じ行に同じ種類を並べない（選択肢は必ず全部違うものにする）
@@ -644,13 +651,18 @@ const genMap = (simpleStart) => {
     if (!onPath.length) break;
     demote(onPath[Math.floor(onPath.length / 2)]);
   }
-  // (4) 逆に少なすぎないように：強敵が1つしか無いマップは中段に1つ足して「選択肢として2回」出す。
-  //     最終段手前(ROWS-2)の強敵は必ずルート上に来るので、中段に1つ足せばどのルートでも2回になる。
-  if (elites().length < 2) {
-    const cand = nodes.filter(n => n.row >= 2 && n.row <= ROWS - 3 && n.n > 1
+  // (4) 逆に少なすぎないように：強敵が2つ未満のマップは、強敵の無い段に足して「選択肢として2回」出す
+  for (let guard = 0; guard < 8 && elites().length < 2; guard++) {
+    const cand = nodes.filter(n => n.row >= 2 && n.row <= ROWS - 2 && n.n > 1
       && (n.type === "battle" || n.type === "horde" || n.type === "treasure")
-      && !rows[n.row].some(x => x.type === "elite"));
-    if (cand.length) cand[Math.floor(Math.random() * cand.length)].type = "elite";
+      && !rows[n.row].some(x => x.type === "elite")
+      // ボス直前の「立て直せる枠」は潰さない
+      && !(n.row === ROWS - 2 && !rows[n.row].some(x => x !== n && (x.type === "rest" || x.type === "treasure"))));
+    if (!cand.length) break;
+    const t = cand[Math.floor(Math.random() * cand.length)];
+    t.type = "elite";
+    // 足したせいで1ルート3回以上になったら取り消す
+    if (routeMax().mx > 2) { demote(t); break; }
   }
   return { nodes, edges, rows };
 };
