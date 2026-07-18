@@ -109,7 +109,8 @@ with sync_playwright() as p:
             print(f"7b-{a} boss relic + up-reward taken OK")
             s = st(page)
             assert s["act"] == a + 1, f"act not advanced: {s['act']}"
-            assert s["php"] == s["pmax"] == 300, f"act bonus wrong php={s['php']} pmax={s['pmax']}"
+            # 王冠レリックを引くと最大HPが+50されるので固定値では判定しない（全回復していることを見る）
+            assert s["php"] == s["pmax"] and s["pmax"] >= 300, f"act bonus wrong php={s['php']} pmax={s['pmax']}"
             print(f"9-{a} nextAct OK act={s['act']+1} pmax={s['pmax']}")
         else:
             s = wait_status(page, "clear", 20)

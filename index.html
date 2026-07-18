@@ -4225,8 +4225,6 @@ function DropBattle() {
           effDef > 0 && h("span", { className:"flex items-center", style:{ gap:2, fontSize:10, color:"#9db8e8" } },
             "（", h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:11, height:11, style:{ width:11, height:11, maxWidth:11, maxHeight:11, flexShrink:0, objectFit:"contain" } }), effDef, "）"))),
       // アクション（並び＝消化順。ドラッグで入れ替え）
-      turn === 1 && used.size === 0 && !gActive && !ctut && h("p", { key:"acthint", className:"text-center", style:{ fontSize:9.5, opacity:0.5, marginBottom:2, letterSpacing:.5 } },
-        "左から順に消化 ／ ドラッグで並べ替え"),
       h("div", { className:"grid grid-cols-3 gap-2 mb-1", ref: actRowRef }, actOrder.map((key, oi) => {
         const curSkill = CHARS[curChar].skill;
         const dragSt = actDragStyle(key, oi);
