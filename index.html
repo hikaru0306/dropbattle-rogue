@@ -205,6 +205,11 @@ const URA_HP_ACT     = [1.15, 1.35, 1.55, 1.8, 2.1];
 const URA_ATK_ACT    = [1.45, 1.5, 1.5, 1.5, 1.55];    // 雑魚/強敵はD係数で章成長するため倍率はほぼ一定（強敵大技がボスを超えない範囲）
 const URA_BOSSHP_ACT = [1.05, 1.25, 1.55, 1.95, 2.65]; // 真魔王(2100×0.72×2.65)≒HP4000は維持
 const URA_BOSSATK_ACT= [1.0, 1.15, 1.3, 1.45, 1.6];    // ボス大技の目安: 1章≒226/2章≒302/3章≒335(ロール込み300〜400)/4章≒404/5章≒489
+// 裏の終盤ボスの追加倍率（章ごと。4章=HPと火力を1.2倍 / 5章=火力を1.2倍）
+const URA_BOSS_ATK_EXTRA = [1, 1, 1, 1.2, 1.2];
+const URA_BOSS_HP_EXTRA  = [1, 1, 1, 1.2, 1];
+const FINAL_BOSS_SOLO = 1.2;  // 裏5章ボス: 取り巻きが全滅している間はさらにこの倍率
+const FINAL_ACT_ATK  = 1.2;   // 裏5章のボス以外（雑魚・強敵・取り巻き）の火力倍率
 const actsOf = mode => mode === "ura" ? URA_ACTS : ACTS;
 const actNameOf = (mode, a) => (mode === "ura" ? URA_ACT_NAMES : ACT_NAMES)[a] || "";
 
@@ -487,8 +492,11 @@ const intentOf = (en, allies) => {
   const k = KINDS[en.kind];
   const pat = en.pat || k.pats[0];
   let act = pat[en.pi % pat.length];
-  if (act === "healally" && !(allies || []).some(a => a.alive && a.id !== en.id)) act = "attack";
-  const roll = en.rollMul || 1; // 1行動ごとに振り直されるダメージロール
+  const aliveAllies = (allies || []).some(a => a.alive && a.id !== en.id);
+  if (act === "healally" && !aliveAllies) act = "attack";
+  // 取り巻きが全滅すると火力アップ（裏5章ボス・真魔王ヴァルガ）
+  const solo = (en.soloUp && !aliveAllies) ? en.soloUp : 1;
+  const roll = (en.rollMul || 1) * solo; // 1行動ごとに振り直されるダメージロール
   let hit = act === "double" ? Math.max(1, Math.round(en.atk * 0.6 * roll)) : Math.max(1, Math.round(en.atk * roll));
   if (en.atkFloor && act !== "double") hit = Math.max(hit, en.atkFloor); // 弱エリートの通常攻撃下限
   let dmg = act === "attack" || act === "drain" || act === "jamatk" ? hit
@@ -666,11 +674,16 @@ const encounterFor = (node, act, mode) => {
   return list.map((e,i) => {
     const k = KINDS[e.kind];
     const hs = e.noScale ? 1 : hpS, as = e.noScale ? 1 : atkS;
-    const hp = Math.round(k.hp * hs * e.hpM * (e.boss ? bossHp : hpAct) * (!e.boss && hasR("deathmark") ? 0.9 : 1));
+    const hp = Math.round(k.hp * hs * e.hpM * (e.boss ? bossHp : hpAct)
+      * (e.boss && ura ? (URA_BOSS_HP_EXTRA[act] || 1) : 1)
+      * (!e.boss && hasR("deathmark") ? 0.9 : 1));
     const si = SHIELDS[e.kind];
     const shd = (!SIM_MODE && si && Math.random() < si.c) ? Math.round(si.sh * (0.5 + Math.random() * 0.5)) : 0;
     return { id:"e"+(UID++), kind:e.kind, name:k.name, hp, max:hp,
-      atk: Math.max(1, Math.round(k.atk * as * e.atkM * (e.boss ? bossAtk : atkAct))), bigX: e.boss ? 1 : (act >= 1 ? 1.0 : 1.1), alive:true, pi:0,
+      atk: Math.max(1, Math.round(k.atk * as * e.atkM * (e.boss ? bossAtk : atkAct)
+        * (e.boss ? (ura ? (URA_BOSS_ATK_EXTRA[act] || 1) : 1) : (ura && act === 4 ? FINAL_ACT_ATK : 1)))),
+      soloUp: (e.boss && ura && act === 4) ? FINAL_BOSS_SOLO : 0, // 取り巻き全滅で火力アップ
+      bigX: e.boss ? 1 : (act >= 1 ? 1.0 : 1.1), alive:true, pi:0,
       pat: pick(k.pats), rollMul: rollDmg(),
       atkFloor: (act >= 1 && e.elite) ? (ura ? 65 : 60) : 0, bigFloor: (act >= 1 && e.elite) ? (ura ? 130 : 120) : 0, // 2章以降エリートの火力下限
       enr: 0, enrEvery: SIM_MODE ? 0 : (ura ? 4 + Math.floor(Math.random() * 2) : 4 + Math.floor(Math.random() * 3)), // 裏は激昂がやや早い(4-5T)
@@ -1328,6 +1341,7 @@ function DropBattle() {
   const [pMax, setPMax_] = useState(P_MAX);
   const pMaxRef = useRef(P_MAX);
   const setPMax = v => { pMaxRef.current = v; setPMax_(v); };
+  const soloShownRef = useRef(false); // 裏5章ボスの「怒気」演出を1バトル1回だけ出すため
   const poisonRef = useRef(0);                             // 毒の残りターン数（0=なし）
   const [poisonView, setPoisonView] = useState(0);
   const setPoison = v => { poisonRef.current = v; setPoisonView(v); };
@@ -1728,6 +1742,14 @@ function DropBattle() {
     }
 
     // ② 敵の行動（パターン制）。防御はシールドとして全ヒット共通で消費
+    // 取り巻きが全滅した瞬間の演出（裏5章ボス: 以降の火力アップ）
+    const soloBoss = ens.find(e => e.alive && e.soloUp && !ens.some(a => a.alive && a.id !== e.id));
+    if (soloBoss && !soloShownRef.current) {
+      soloShownRef.current = true;
+      seq.push({ text: `${soloBoss.name}が怒気を放った！`, color: "#ff5c7a",
+        run: () => { setAnim(soloBoss.id, "attack"); SFX.crack(); flash("player"); } });
+      logs.push(`👿 取り巻きが倒れ、${soloBoss.name}の攻撃力が上がった`);
+    }
     let shield = def;
     let php = pRef.current;
     if (turnRef.current.stun) {
@@ -2348,6 +2370,7 @@ function DropBattle() {
     storeRef.current = 0; setStoreView(0); // 蓄積はバトルごとにリセット
     stockRef.current = 0; setStockView(0); // 鍛冶素材もバトルごとにリセット
     setPoison(0); // 毒はバトルごとにリセット
+    soloShownRef.current = false;
     turnRef.current = freshTurn(); syncTurn();
     setTurn(1); turnNumRef.current = 1;
     setAnims({});
@@ -3159,6 +3182,7 @@ function DropBattle() {
       start: () => { setStatus("map"); statusRef.current = "map"; },
       enter: id => { const n = mapRef.current.nodes.find(n => n.id === id); if (n) enterNode(n); },
       weaken: () => { const ens = enemiesRef.current.map(e => e.alive ? { ...e, hp:1 } : e); setEnemiesBoth(ens); },
+      killMinions: () => { const ens = enemiesRef.current.map(e => e.boss ? e : { ...e, hp:0, alive:false }); setEnemiesBoth(ens); },
       spawn: kinds => {
         const ens = kinds.map((kind,i) => { const k = KINDS[kind];
           return { id:"e"+(UID++), kind, name:k.name, hp:k.hp, max:k.hp, atk:k.atk, alive:true, pi:0, pat:k.pats[0], rollMul:1, shd:0, shdMax:(SHIELDS[kind]||{}).sh||0, shdC:0, enr:0, enrEvery:0, dcap: kind==="demon" ? Math.max(10, Math.round(k.hp / 4.5 / 10) * 10) : 0, elite:false, boss:kind==="demon", idx:i }; });
@@ -4160,11 +4184,13 @@ function DropBattle() {
                 filter: gtut === "warn" && en.alive ? "drop-shadow(0 0 12px rgba(255,190,90,.95)) drop-shadow(0 0 5px rgba(255,120,60,.85))" : "none",
                 transition:"filter .3s ease" } },
               // 名前は表示しない。激昂・強敵の状態だけスプライトの上にバッジで出す（下に積むと表示量で足元が浮くため）
-              ((en.enr || 0) > 0 || en.elite) && h("span", { className:"flex items-center justify-center", style:{ gap:3, marginTop:2, marginBottom:2, maxWidth:"none" } },
+              ((en.enr || 0) > 0 || en.elite || (en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id))) && h("span", { className:"flex items-center justify-center", style:{ gap:3, marginTop:2, marginBottom:2, maxWidth:"none" } },
                 h("span", { className:"text-[9px] font-bold inline-flex items-center", style:{ gap:2, padding:"1px 6px", borderRadius:6, background:"rgba(10,8,16,.72)", border:"1px solid rgba(255,255,255,.12)", color: en.boss ? "#ff5c7a" : en.elite ? "#d05cff" : "#d8cbe8", opacity: en.alive ? 0.95 : 0.35, textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } },
                   (en.enr || 0) > 0 && h("img", { src:"assets/st_enrage.png", alt:"激昂", draggable:false, width:11, height:11, style:{ width:11, height:11, maxWidth:11, maxHeight:11, flexShrink:0, objectFit:"contain" } }),
                   (en.enr || 0) > 0 && en.enr,
-                  en.elite && h("img", { src:"assets/mk_skull.png", alt:"精鋭", draggable:false, width:12, height:12, style:{ width:12, height:12, maxWidth:12, maxHeight:12, flexShrink:0, objectFit:"contain", marginLeft:(en.enr||0)>0?2:0 } }))),
+                  en.elite && h("img", { src:"assets/mk_skull.png", alt:"精鋭", draggable:false, width:12, height:12, style:{ width:12, height:12, maxWidth:12, maxHeight:12, flexShrink:0, objectFit:"contain", marginLeft:(en.enr||0)>0?2:0 } }),
+                  // 取り巻き全滅で火力アップ中（裏5章ボス）
+                  en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id) && h("span", { style:{ marginLeft:(en.enr||0)>0||en.elite?3:0, color:"#ff5c7a", fontWeight:900 } }, "怒気"))),
               h("span", { style:{ position:"relative", display:"block" } },
                 // 予告（攻撃など）はスプライトに重ねて表示。ボスは縦に高く、別の行として積むと低い画面高で見切れるため
                 // ボスはスプライトが高く予告が枠上端からはみ出しうるため少し下げる
