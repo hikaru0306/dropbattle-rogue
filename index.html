@@ -1241,6 +1241,13 @@ function DropBattle() {
   const [board, setBoard] = useState(() => makePlainBoard()); // 初期盤面は袋から引かない（バトル開始時に生成される）
   const [action, setAction] = useState("atk");
   const [used, setUsed] = useState(new Set());
+  // アクションの並び順（左から順に消化）。ボタンをドラッグして入れ替える。並びは次のターン・次のバトルへ引き継ぐ
+  const [actOrder, setActOrder_] = useState(ORDER.slice());
+  const actOrderRef = useRef(ORDER.slice());
+  const setActOrder = v => { actOrderRef.current = v; setActOrder_(v); };
+  const nextInOrder = usedSet => actOrderRef.current.find(a => !usedSet.has(a)) || actOrderRef.current[0];
+  const [actDrag, setActDrag] = useState(null); // {key, dx, from, to} ドラッグ中の見た目
+  const actDragRef = useRef(null);
   // ===== キャラクター =====
   const [curChar, setCurChar_] = useState(0);
   const curCharRef = useRef(0);
@@ -1938,7 +1945,7 @@ function DropBattle() {
       }
       syncTurn();
       setUsed(new Set()); usedRef.current = new Set();
-      setAction("atk"); actionRef.current = "atk";
+      setAction(actOrderRef.current[0]); actionRef.current = actOrderRef.current[0];
       setTurn(t => t + 1);
       setLocked(false); lockedRef.current = false;
     });
@@ -2330,7 +2337,7 @@ function DropBattle() {
     setPops({}); // 前バトルのダメージポップを掃除
     setBuffAnim(null); setStoreAnim(null); // 強化/蓄積演出の残りも掃除
     setArmed(null);
-    setAction("atk"); actionRef.current = "atk";
+    setAction(actOrderRef.current[0]); actionRef.current = actOrderRef.current[0];
     setUsed(new Set()); usedRef.current = new Set();
     setPreview(null); setClearing(new Set());
     storeRef.current = 0; setStoreView(0); // 蓄積はバトルごとにリセット
@@ -2407,7 +2414,7 @@ function DropBattle() {
       const nu = new Set(usedRef.current); nu.add("heal");
       setUsed(nu); usedRef.current = nu;
       if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
-      else { const na = ORDER.find(a => !nu.has(a)); setAction(na); actionRef.current = na; }
+      else { const na = nextInOrder(nu); setAction(na); actionRef.current = na; }
       return;
     }
     // 鍛冶キャラ：生成＝袋の特殊ドロップを素材の数だけタップしたグループへ打ち出す／
@@ -2453,7 +2460,7 @@ function DropBattle() {
       const nu = new Set(usedRef.current); nu.add("heal");
       setUsed(nu); usedRef.current = nu;
       if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
-      else { const na = ORDER.find(a => !nu.has(a)); setAction(na); actionRef.current = na; }
+      else { const na = nextInOrder(nu); setAction(na); actionRef.current = na; }
       return;
     }
     const { ids, seedJunk, blast, cross, red } = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed);
@@ -2631,7 +2638,7 @@ function DropBattle() {
       if (newUsed.size >= 3) {
         setTimeout(() => resolveTurn(), FAST ? 60 : 350);
       } else {
-        const nextAct = ORDER.find(a => !newUsed.has(a));
+        const nextAct = nextInOrder(newUsed);
         setAction(nextAct); actionRef.current = nextAct;
         setLocked(false); lockedRef.current = false;
       }
@@ -2857,6 +2864,81 @@ function DropBattle() {
     SFX.tap();
   };
 
+  // ===== アクションボタンの並べ替え（ドラッグ）=====
+  // 左から順に消化されるので、並び＝消化順。使用済みのボタンは動かせない
+  const actRowRef = useRef(null);
+  const canDragAct = key => {
+    if (lockedRef.current || usedRef.current.has(key)) return false;
+    const g = gtutRef.current;
+    if (g === "warn" || g === "clear" || g === "done") return false;
+    if (g === "def" && key !== "def") return false;              // 2戦目ガイド: 「防御」だけ動かせる
+    const ct = ctutRef.current;
+    if (ct && (ct.step !== "btn" || key !== "heal")) return false; // スキルチュートリアル: 誘導ステップのみ
+    return true;
+  };
+  const applyActOrder = (from, to) => {
+    if (from === to) return;
+    const arr = actOrderRef.current.slice();
+    const [k] = arr.splice(from, 1);
+    arr.splice(to, 0, k);
+    setActOrder(arr);
+    SFX.tap();
+    const na = arr.find(a => !usedRef.current.has(a)) || arr[0];
+    setAction(na); actionRef.current = na;
+    // チュートリアル: 目的のボタンが先頭に来たら次のステップへ
+    if (gtutRef.current === "def" && na === "def") setGuide("clear");
+    const ct = ctutRef.current;
+    if (ct && ct.step === "btn" && na === "heal") {
+      const sk = charSkillRef.current;
+      setCtut(sk === "store" ? { ...ct, step:"clear", seed: pickCtutSeed(false) }
+        : { ...ct, step: sk === "recolor" ? "cycle1" : sk === "smith" ? "mode1" : "toggle" });
+    }
+  };
+  const actDragStart = (e, key) => {
+    if (!canDragAct(key)) return;
+    const row = actRowRef.current;
+    if (!row) return;
+    const step = (row.getBoundingClientRect().width + 8) / 3; // gap-2 = 8px
+    const from = actOrderRef.current.indexOf(key);
+    actDragRef.current = { key, from, to: from, dx: 0, step, x0: e.clientX, moved: false };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+  };
+  const actDragMove = e => {
+    const d = actDragRef.current;
+    if (!d) return;
+    const dx = e.clientX - d.x0;
+    if (!d.moved && Math.abs(dx) > 6) d.moved = true;
+    if (!d.moved) return;
+    const to = Math.max(0, Math.min(2, Math.round((d.from * d.step + dx) / d.step)));
+    d.dx = dx; d.to = to;
+    setActDrag({ key:d.key, dx, from:d.from, to, step:d.step });
+  };
+  // タップ処理は onClick 側に任せる（プログラム的な .click() でも動くように）。
+  // ドラッグで動かしたときだけ直後の click を握りつぶす
+  const actClickBlockRef = useRef(false);
+  const actDragEnd = () => {
+    const d = actDragRef.current;
+    actDragRef.current = null;
+    setActDrag(null);
+    if (!d || !d.moved) return;
+    actClickBlockRef.current = true;
+    applyActOrder(d.from, d.to);
+  };
+  const actTap = fn => { // ボタンの onClick 共通ラッパ
+    if (actClickBlockRef.current) { actClickBlockRef.current = false; return; }
+    if (fn) fn();
+  };
+  // ドラッグ中の見た目（つまんだボタンは指に追従・押しのけられたボタンは1枠ぶんスライド）
+  const actDragStyle = (key, idx) => {
+    const d = actDrag;
+    if (!d) return null;
+    if (d.key === key) return { transform:`translateX(${d.dx}px) scale(1.06)`, zIndex:30, transition:"none", boxShadow:"0 8px 18px rgba(0,0,0,.55)" };
+    let sh = 0;
+    if (d.from < d.to && idx > d.from && idx <= d.to) sh = -d.step;
+    else if (d.from > d.to && idx >= d.to && idx < d.from) sh = d.step;
+    return sh ? { transform:`translateX(${sh}px)`, transition:"transform .15s ease" } : null;
+  };
+
   // ===== 隠しコード「1010」: キャラと裏の冒険を全解放（タイトル画面で入力） =====
   const [codeOpen, setCodeOpen] = useState(false);
   const [codeVal, setCodeVal] = useState("");
@@ -2911,7 +2993,8 @@ function DropBattle() {
     syncBag();
     setPops({});
     // 章リセットは上で実施済み
-    setAction("atk"); actionRef.current = "atk";
+    setActOrder(ORDER.slice()); // 新しい冒険は「攻・防・能」の並びから
+    setAction(actOrderRef.current[0]); actionRef.current = actOrderRef.current[0];
     setUsed(new Set()); usedRef.current = new Set();
     setPreview(null); setClearing(new Set());
     setLocked(false); lockedRef.current = false;
@@ -2946,6 +3029,7 @@ function DropBattle() {
         nodes: m.nodes.map(n => ({ id:n.id, row:n.row, col:n.col, n:n.n, type:n.type })),
         edges: m.edges.map(e => ({ from:e.from, to:e.to })),
         cur: curNodeRef.current, visited: [...visitedRef.current],
+        order: actOrderRef.current.slice(),
         battleNum: battleNumRef.current }));
     } catch (e) {}
   };
@@ -2956,6 +3040,7 @@ function DropBattle() {
     storeRef.current = 0; setStoreView(0);
     stockRef.current = 0; setStockView(0); setSmithMode("stock");
     setPaintColor(0); setSkillTarget("atk");
+    setActOrder(Array.isArray(sv.order) && sv.order.length === 3 && ORDER.every(k => sv.order.includes(k)) ? sv.order.slice() : ORDER.slice());
     ownedRef.current = { ...initZero(), ...sv.owned };
     bagRef.current = { ...initZero(), ...sv.bag };
     ownedUpRef.current = { ...initZero(), ...sv.ownedUp };
@@ -2981,7 +3066,7 @@ function DropBattle() {
     battleNumRef.current = sv.battleNum || 1;
     commitBoard(makePlainBoard()); // 袋から引かない（セーブされた袋をそのまま復元）
     syncBag(); setPops({});
-    setAction("atk"); actionRef.current = "atk";
+    setAction(actOrderRef.current[0]); actionRef.current = actOrderRef.current[0];
     setUsed(new Set()); usedRef.current = new Set();
     setPreview(null); setClearing(new Set());
     setLocked(false); lockedRef.current = false;
@@ -3043,6 +3128,7 @@ function DropBattle() {
         colors: new Set(boardRef.current.filter(c => c.type !== JUNK).map(c => c.type)).size,
         board: boardRef.current.map(c => ({ t: c.type, sp: c.special || null, w: !!c.wild, u: !!c.up, x: !!c.extra })),
         used: [...usedRef.current],
+        order: actOrderRef.current.slice(),
         locked: lockedRef.current,
         coins: coinsRef.current, items: itemsRef.current.slice(),
         shop: shopRef.current ? shopRef.current.offers.slice() : null,
@@ -3082,7 +3168,10 @@ function DropBattle() {
       addAtk: v => { turnRef.current.atk += v; syncTurn(); },
       setPoison: v => setPoison(v),
       setPierce: v => { turnRef.current.pierce = !!v; syncTurn(); },
-      setAct: a => { if (!usedRef.current.has(a)) { setAction(a); actionRef.current = a; } },
+      // 並べ替え式になったので「そのアクションを未使用の先頭へ移動」＝実質の選択
+      setAct: a => { if (!usedRef.current.has(a)) { const i = actOrderRef.current.indexOf(a); const f = actOrderRef.current.findIndex(k => !usedRef.current.has(k)); applyActOrder(i, Math.max(0, f)); } },
+      order: () => actOrderRef.current.slice(),
+      reorderAct: (from, to) => applyActOrder(from, to),
       setTargetIdx: i => { const en = enemiesRef.current[i]; if (en && en.alive) { setTargetId(en.id); targetRef.current = en.id; } },
       addCoins: v => setCoinsBoth(coinsRef.current + v),
       giveItem: k => setItemsBoth([...itemsRef.current, k].slice(0, itemCap())),
@@ -3129,7 +3218,7 @@ function DropBattle() {
         setEnemiesBoth(ens); setTargetId(ens[0].id); targetRef.current = ens[0].id;
         commitBoard(makeTutorialBoard()); syncBag();
         setPops({}); setArmed(null);
-        setAction("atk"); actionRef.current = "atk";
+        setAction(actOrderRef.current[0]); actionRef.current = actOrderRef.current[0];
         setUsed(new Set()); usedRef.current = new Set();
         setPreview(null); setClearing(new Set());
         turnRef.current = freshTurn(); syncTurn();
@@ -3142,7 +3231,13 @@ function DropBattle() {
       mapPreview: simple => genMap(simple).rows.map(row => row.map(n => n.type)),
       declineReward: () => declineReward(),
       chooseReward: k => chooseReward(k),
-      tapAct: key => { if (gtutRef.current === "def") { if (key === "def") { setAction("def"); actionRef.current = "def"; setGuide("clear"); } } else if (!gtutRef.current) { setAction(key); actionRef.current = key; } },
+      tapAct: key => { // 旧「タップで選択」相当（ドラッグで先頭へ移動する操作をエミュレート）
+        if (gtutRef.current && gtutRef.current !== "def") return;
+        if (gtutRef.current === "def" && key !== "def") return;
+        if (usedRef.current.has(key)) return;
+        const i = actOrderRef.current.indexOf(key);
+        const f = actOrderRef.current.findIndex(k => !usedRef.current.has(k));
+        applyActOrder(i, Math.max(0, f)); },
       dismissGuide: () => { setGuide(null); try { localStorage.setItem("db_gtut", "1"); } catch (e) {} },
       encPreview: (a, nodeType, m) => encounterFor({ row: 1, type: nodeType }, a, m).map(e => ({
         kind: e.kind, atk: e.atk, atkFloor: e.atkFloor, bigFloor: e.bigFloor, dcap: e.dcap,
@@ -4122,9 +4217,13 @@ function DropBattle() {
           h("b", { style:{ color: incomingPreview > 0 ? "#ff8a80" : "#7cffb0", fontSize:15, fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000" } }, incomingPreview),
           effDef > 0 && h("span", { className:"flex items-center", style:{ gap:2, fontSize:10, color:"#9db8e8" } },
             "（", h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:11, height:11, style:{ width:11, height:11, maxWidth:11, maxHeight:11, flexShrink:0, objectFit:"contain" } }), effDef, "）"))),
-      // アクション
-      h("div", { className:"grid grid-cols-3 gap-2 mb-1" }, ORDER.map(key => {
+      // アクション（並び＝消化順。ドラッグで入れ替え）
+      turn === 1 && used.size === 0 && !gActive && !ctut && h("p", { key:"acthint", className:"text-center", style:{ fontSize:9.5, opacity:0.5, marginBottom:2, letterSpacing:.5 } },
+        "左から順に消化 ／ ドラッグで並べ替え"),
+      h("div", { className:"grid grid-cols-3 gap-2 mb-1", ref: actRowRef }, actOrder.map((key, oi) => {
         const curSkill = CHARS[curChar].skill;
+        const dragSt = actDragStyle(key, oi);
+        const dragProps = { onPointerDown: e => actDragStart(e, key), onPointerMove: actDragMove };
         // 3つ目のアクションがキャラ固有スキル（色変え/強化/蓄積）の場合は専用ボタン
         if (key === "heal" && (curSkill === "recolor" || curSkill === "buff" || curSkill === "store" || curSkill === "smith")) {
           const sc = CHARS[curChar].color;
@@ -4190,19 +4289,12 @@ function DropBattle() {
               ? h("span", { style:{ fontSize:"1rem", fontWeight:900, color:"#ffd75e" } }, "+" + (storeView + sN))
               : h("span", { style:{ fontSize:"1rem", fontWeight:900 } }, "+" + storeView);
           }
-          return h("button", { key,
-            onClick: () => {
+          const skillTap = () => {
               if (isUsed || locked) return;
               const ct = ctutRef.current;
               // チュートリアル中は誘導ステップ以外でのボタン操作を禁止（対象指定中の色替え等で混乱しないように）
-              if (ct && !["btn","cycle1","cycle2","toggle","mode1"].includes(ct.step)) return;
-              if (!isSel) {
-                setAction("heal"); actionRef.current = "heal"; SFX.tap();
-                // 蓄積（ノア）は切替なし → ボタン誘導の次はそのまま対象グループ消しへ
-                if (ct && ct.step === "btn") setCtut(curSkill === "store" ? { ...ct, step: "clear", seed: pickCtutSeed(false) }
-                  : { ...ct, step: curSkill === "recolor" ? "cycle1" : curSkill === "smith" ? "mode1" : "toggle" });
-                return;
-              }
+              if (ct && !["cycle1","cycle2","toggle","mode1"].includes(ct.step)) return;
+              // タップ＝モード切替（選択中かどうかは問わない。順番はドラッグで決める）
               if (curSkill === "recolor") { setPaintColor((paintColor + 1) % 4); SFX.tap(); }
               else if (curSkill === "smith") { setSmithMode(smithMode === "stock" ? "gen" : smithMode === "gen" ? "up" : "stock"); SFX.tap(); }
               else if (curSkill === "buff") { setSkillTarget(skillTarget === "atk" ? "def" : "atk"); SFX.tap(); }
@@ -4213,14 +4305,19 @@ function DropBattle() {
                 else if (ct.step === "toggle") setCtut({ ...ct, step: "clear", seed: pickCtutSeed(false) });
                 else if (ct.step === "mode1") setCtut({ ...ct, step: "gift" }); // 生成モードに切替→素材プレゼントカードへ
               }
-            }, disabled:isUsed,
+          };
+          return h("button", { key, ...dragProps,
+            onPointerUp: actDragEnd,
+            onPointerCancel: actDragEnd,
+            onClick: () => actTap(skillTap),
+            disabled:isUsed,
             className:"act-h relative rounded-xl flex flex-col items-center justify-center overflow-hidden",
-            style:{ background: isUsed ? "rgba(14,11,20,.85)" : isSel ? "rgba(255,255,255,.06)" : "rgba(30,24,42,.92)",
+            style:{ touchAction:"none", background: isUsed ? "rgba(14,11,20,.85)" : isSel ? "rgba(255,255,255,.06)" : "rgba(30,24,42,.92)",
               border:`2px solid ${isUsed ? "#2c2740" : isSel ? sc : "#3c3450"}`,
               boxShadow: ctOn ? "0 0 0 3px #ffe08a, 0 0 18px rgba(255,207,93,.9)" : "none",
               zIndex: ctOn ? 46 : "auto", position:"relative",
               // 倍率予約中はターン終了まで読めるよう、使用後でも明るさを残す
-              opacity: isUsed ? (curSkill === "buff" && tv.buffPend ? 0.9 : 0.4) : 1, transition:"background .25s ease, border-color .25s ease, opacity .25s ease, box-shadow .25s ease" } },
+              opacity: isUsed ? (curSkill === "buff" && tv.buffPend ? 0.9 : 0.4) : 1, transition:"background .25s ease, border-color .25s ease, opacity .25s ease, box-shadow .25s ease", ...(dragSt || {}) } },
             h("span", { style:{ position:"absolute", top:0, left:"14%", right:"14%", height:3, borderRadius:"0 0 4px 4px", background:sc, opacity: isUsed ? 0.25 : 0.9, pointerEvents:"none" } }),
             iconEl,
             h("span", { style:{ fontSize:11, height:15, lineHeight:"15px", whiteSpace:"nowrap", color: isUsed ? "#777" : "#e7e0ef" } }, title),
@@ -4265,14 +4362,11 @@ function DropBattle() {
         const guideTgt = gDef && key === "def";        // 「防御」を光らせて誘導
         const guideOff = gWarn || (gDef && key !== "def") || gClear || (ctut && ctut.step !== "done"); // 誘導中の対象外ボタンは暗く
         const disabledBtn = isUsed || gWarn || gClear || (gDef && key !== "def") || (ctut && ctut.step !== "done");
-        return h("button", { key,
-          onClick: () => {
-            if (isUsed || locked) return;
-            if (gWarn) return;
-            if (gDef) { if (key === "def") { setAction("def"); actionRef.current = "def"; SFX.tap(); setGuide("clear"); } return; }
-            if (gClear) return;
-            setAction(key); SFX.tap();
-          }, disabled:disabledBtn,
+        return h("button", { key, ...dragProps,
+          onPointerUp: actDragEnd,   // タップでは選択しない（順番はドラッグで入れ替える）
+          onPointerCancel: actDragEnd,
+          onClick: () => actTap(null),
+          disabled:disabledBtn,
           className:"act-h relative rounded-xl flex flex-col items-center justify-center overflow-hidden",
 
 
@@ -4282,8 +4376,8 @@ function DropBattle() {
             boxShadow: guideTgt ? `0 0 0 3px ${a.color}, 0 0 18px ${a.color}` : lit ? `0 0 0 3px ${a.color}` : "none",
             animation: lit ? "actPulse .55s ease" : "none",
             opacity: guideOff ? 0.26 : isUsed ? (lit ? 1 : 0.4) : 1,
-            zIndex: guideTgt ? 46 : "auto",
-            transition:"background .25s ease, border-color .25s ease, box-shadow .25s ease, opacity .25s ease" } },
+            zIndex: guideTgt ? 46 : "auto", touchAction:"none",
+            transition:"background .25s ease, border-color .25s ease, box-shadow .25s ease, opacity .25s ease", ...(dragSt || {}) } },
           h("span", { style:{ position:"absolute", top:0, left:"14%", right:"14%", height:3, borderRadius:"0 0 4px 4px", background:a.color, opacity: isUsed && !lit ? 0.25 : 0.9, pointerEvents:"none" } }),
           h("img", { src:a.img, alt:a.label, draggable:false, width:20, height:20, style:{ height:20, width:20, maxWidth:20, maxHeight:20, flexShrink:0, marginTop:5, objectFit:"contain", opacity: isUsed && !lit ? 0.35 : 1, filter:"drop-shadow(0 2px 1px rgba(0,0,0,.45))" } }),
           h("span", { style:{ fontSize:11, height:15, lineHeight:"15px", whiteSpace:"nowrap", color: isUsed ? (lit ? "#e7e0ef" : "#777") : "#e7e0ef" } }, a.label,

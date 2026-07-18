@@ -18,6 +18,17 @@ def chk(name, cond, extra=""):
 def st(p): return p.evaluate("window.__test.state()")
 def ct(p): return p.evaluate("window.__test.ctut()")
 
+def drag_skill_to_front(p):
+    """btnステップ: スキルボタン（右端）を左端へドラッグして先頭に持ってくる"""
+    btns = p.query_selector_all("div.grid.grid-cols-3.gap-2.mb-1 > button")
+    src = btns[-1].bounding_box(); dst = btns[0].bounding_box()
+    p.mouse.move(src["x"] + src["width"]/2, src["y"] + src["height"]/2)
+    p.mouse.down()
+    p.mouse.move(dst["x"] + dst["width"]/2, src["y"] + src["height"]/2, steps=14)
+    time.sleep(0.15)
+    p.mouse.up()
+    time.sleep(0.4)
+
 def click_skill_btn(p):
     # 3つ目ボタン（色変え/強化/蓄積/鍛冶タイトルを持つボタン）をDOMクリック
     p.evaluate("""(() => {
@@ -51,8 +62,9 @@ with sync_playwright() as p:
     tv0 = st(page)["tv"]
     page.evaluate("window.__test.commit(14)"); time.sleep(0.4)
     chk("board locked during btn step", st(page)["tv"] == tv0)
-    click_skill_btn(page)
+    drag_skill_to_front(page)
     chk("-> cycle1", ct(page)["step"] == "cycle1")
+    chk("skill button moved to front", st(page)["order"][0] == "heal", str(st(page)["order"]))
     ink0 = page.evaluate("window.__test.charInfo()")["paint"]
     click_skill_btn(page)
     chk("-> cycle2 (ink changed)", ct(page)["step"] == "cycle2" and page.evaluate("window.__test.charInfo()")["paint"] != ink0)
@@ -82,7 +94,7 @@ with sync_playwright() as p:
     # ―― 2) ガレス（強化） ――
     start_battle_as(page, 2)
     page.evaluate("window.__test.startCtut('buff')"); time.sleep(0.3)
-    click_skill_btn(page)
+    drag_skill_to_front(page)
     chk("buff -> toggle", ct(page)["step"] == "toggle")
     tgt0 = page.evaluate("window.__test.charInfo()")["target"]
     click_skill_btn(page)
@@ -96,7 +108,7 @@ with sync_playwright() as p:
     # ―― 3) ブロム（鍛冶）: 補充→生成切替 → 素材+3プレゼントカード → 受け取る(粒子演出) → 生成 ――
     start_battle_as(page, 5)
     page.evaluate("window.__test.startCtut('smith')"); time.sleep(0.3)
-    click_skill_btn(page)   # 選択
+    drag_skill_to_front(page)   # 先頭へ移動＝そのターン最初に使う
     chk("smith -> mode1", ct(page)["step"] == "mode1")
     stock0 = page.evaluate("window.__test.charInfo()")["stock"]
     click_skill_btn(page)   # stock->gen 切替 → プレゼントカード(gift)
