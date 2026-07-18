@@ -571,12 +571,17 @@ const genMap = (simpleStart) => {
     else if (r === ROWS-2) types = shuffle(["rest","elite"]);
     else {
       const n = 2 + (Math.random() < 0.55 ? 1 : 0);
-      types = Array.from({length:n}, () => {
-        const x = Math.random();
-        return x<0.40?"battle":x<0.60?"horde":x<0.74?"elite":x<0.88?"treasure":"rest";
-      });
-      if (!types.some(t => t==="battle"||t==="horde")) types[0] = "battle";
-      if (types.filter(t=>t==="rest").length > 1) types[types.indexOf("rest")] = "battle";
+      // 同じ行に同じ種類を並べない（選択肢は必ず全部違うものにする）
+      const roll = () => { const x = Math.random(); return x<0.40?"battle":x<0.60?"horde":x<0.74?"elite":x<0.88?"treasure":"rest"; };
+      types = [];
+      while (types.length < n) {
+        let t = null;
+        for (let k = 0; k < 16 && !t; k++) { const c = roll(); if (!types.includes(c)) t = c; }
+        if (!t) t = shuffle(["battle","horde","elite","treasure","rest"].filter(a => !types.includes(a)))[0];
+        types.push(t);
+      }
+      if (!types.some(t => t==="battle"||t==="horde")) types[0] = "battle"; // 戦闘が1つも無い行は作らない
+      shuffle(types); // 抽選順の偏りを消して左右の並びをランダムに
     }
     rows.push(types.map((t,c) => ({ id:id++, row:r, col:c, n:types.length, type:t })));
   }
@@ -590,7 +595,7 @@ const genMap = (simpleStart) => {
       if (n0===n1 && i+1<n1) edges.push({ from:na.id, to:b[i+1].id });
     });
   }
-  // ===== 強敵(elite)の配置制約: 1章あたり最大5つ / 詰み禁止 / 1ルート最大3つ =====
+  // ===== 強敵(elite)の配置制約: 1章あたり最大3つ / 詰み禁止 / 1ルート最大2つ =====
   // カード選択UI（次の2〜3択のみ見える1手先読み）を前提に、
   // 「見えている選択肢が全部強敵」という事故だけ機械的に潰す（連戦は許容する）。
   const nodes = rows.flat();
@@ -598,16 +603,20 @@ const genMap = (simpleStart) => {
   const succ = new Map(nodes.map(n => [n.id, []]));
   edges.forEach(e => succ.get(e.from).push(e.to));
   const elites = () => nodes.filter(n => n.type === "elite");
-  const demote = n => { n.type = "battle"; };
-  // (1) 総数を5以下に（超過分をランダムに通常戦へ）
+  // 強敵を落とすときも、同じ行に既にある種類とは被らせない
+  const demote = n => {
+    const used = new Set(rows[n.row].filter(x => x !== n).map(x => x.type));
+    n.type = ["battle","horde","treasure","rest"].find(t => !used.has(t)) || "battle";
+  };
+  // (1) 総数を3以下に（超過分をランダムに通常戦へ）
   let es = elites();
-  while (es.length > 5) { demote(es[Math.floor(Math.random() * es.length)]); es = elites(); }
+  while (es.length > 3) { demote(es[Math.floor(Math.random() * es.length)]); es = elites(); }
   // (2) 分岐先の全部が強敵という「選択肢なしの詰み」を作らない（必ず1つは避けられる道を残す）
   for (const n of nodes) {
     const kids = succ.get(n.id);
     if (kids.length > 1 && kids.every(k => byId.get(k).type === "elite")) demote(byId.get(kids[0]));
   }
-  // (3) 保険：どのルートでも強敵は最大3つまで。各ノードから最下層までの最大強敵数をDPで求め、
+  // (3) 保険：どのルートでも強敵は最大2つまで。各ノードから最下層までの最大強敵数をDPで求め、
   //     最大ルート上の強敵を1つ通常戦に落とす、を上限内に収まるまで繰り返す
   const routeMax = () => {
     const memo = new Map();
@@ -622,7 +631,7 @@ const genMap = (simpleStart) => {
   };
   for (let guard = 0; guard < 60; guard++) {
     const { mx, memo } = routeMax();
-    if (mx <= 3) break;
+    if (mx <= 2) break;
     let cur = rows[0].reduce((a, b) => memo.get(b.id) > memo.get(a.id) ? b : a).id;
     const onPath = [];
     while (true) {
@@ -634,6 +643,14 @@ const genMap = (simpleStart) => {
     }
     if (!onPath.length) break;
     demote(onPath[Math.floor(onPath.length / 2)]);
+  }
+  // (4) 逆に少なすぎないように：強敵が1つしか無いマップは中段に1つ足して「選択肢として2回」出す。
+  //     最終段手前(ROWS-2)の強敵は必ずルート上に来るので、中段に1つ足せばどのルートでも2回になる。
+  if (elites().length < 2) {
+    const cand = nodes.filter(n => n.row >= 2 && n.row <= ROWS - 3 && n.n > 1
+      && (n.type === "battle" || n.type === "horde" || n.type === "treasure")
+      && !rows[n.row].some(x => x.type === "elite"));
+    if (cand.length) cand[Math.floor(Math.random() * cand.length)].type = "elite";
   }
   return { nodes, edges, rows };
 };
