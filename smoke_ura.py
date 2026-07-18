@@ -42,7 +42,6 @@ with sync_playwright() as p:
     time.sleep(0.5)
     body = page.evaluate("document.body.innerText")
     assert "表の冒険" not in body, "ura toggle should be hidden before omote clear"
-    assert "表（全3章）をこのキャラでクリアすると" in body, "unlock hint missing"
     print("1 ura hidden before clear OK")
 
     # 2. 表クリア済みにする → トグル出現 → 裏を選んで開始

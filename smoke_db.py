@@ -100,8 +100,13 @@ with sync_playwright() as p:
                 if s["actClear"]: break
                 time.sleep(0.3)
             assert s["actClear"], f"actClear not shown act{a}"
-            page.evaluate("window.__test.nextAct()")
-            time.sleep(0.6)
+            # 章クリア: レリックを1つ選ぶ → 強化済み特殊ドロップ（100%＋化）を1つ受け取る → 次章
+            page.click("css=[class*=pop-in] button >> nth=0")
+            s = wait_status(page, "reward", 25)
+            assert s["rewardKind"] == "boss" and all(s["rewardUps"]), f"boss up-reward missing act{a}: {s['rewardKind']} {s['rewardUps']}"
+            page.click("css=[class*=pop-in] button >> nth=0")
+            time.sleep(1.2)
+            print(f"7b-{a} boss relic + up-reward taken OK")
             s = st(page)
             assert s["act"] == a + 1, f"act not advanced: {s['act']}"
             assert s["php"] == s["pmax"] == 300, f"act bonus wrong php={s['php']} pmax={s['pmax']}"

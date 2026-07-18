@@ -1352,6 +1352,7 @@ function DropBattle() {
   const [shop, setShop] = useState(null); // {offers:[...], relic}
   const shopRef = useRef(null); shopRef.current = shop;
   const rewardsRef = useRef(null); rewardsRef.current = rewards;
+  const upRewardForceRef = useRef(null); // テスト用: 群れの強化報酬抽選を固定（null=通常30%）
   const relicsRef = useRef([]);
   const [relicsView, setRelicsView] = useState([]);
   const addRelic = k => {
@@ -1950,6 +1951,7 @@ function DropBattle() {
     if (node && node.type === "boss") {
       SFX.win();
       if (actRef.current === 1 && modeRef.current !== "ura") unlockChar(1); // 表2章ボス撃破 → 2体目解放
+      // 章クリア（レリック選択）→ 強化済み特殊ドロップ選択 → 次章
       if (actRef.current < curActs() - 1) { setActClear({ picks: pickRelics(3, "boss") }); return; }
       recordClear();                            // 最終章ボス撃破 → クリア記録＆解放判定（裏は裏クリアとして記録）
       bumpCharClear(curCharRef.current);         // このキャラの突破数+1
@@ -1971,12 +1973,15 @@ function DropBattle() {
     let picks = shuffle(REWARD_KEYS.slice()).slice(0, hasR("magnet") ? 4 : 3);
     let healed = 0;
     if (node && node.type === "elite" && !picks.some(k => k === "atkx" || k === "defx")) picks[0] = pick(["atkx","defx"]);
+    // 群れ勝利は候補1つごとに40%抽選 → 当たった候補だけ「強化済み（＋化）」で並ぶ
+    const isHorde = !!(node && node.type === "horde");
+    const ups = picks.map(() => isHorde && (upRewardForceRef.current != null ? !!upRewardForceRef.current : Math.random() < 0.4));
     // 群れ勝利時の+30回復も廃止（バトル終了時に回復しない）
     playFx([
       { text: "🏆 敵を撃破！", color:"#ffd54a", wait:850, run: () => {} },
       { text: `💰 コイン +${gain} 獲得`, color:"#e8c06a", wait:850, run: () => SFX.coin() }
     ], () => {
-      setRewards({ picks, kind: node ? node.type : "battle", healed, coins: gain, relic: relicDrop, step: relicDrop ? "relic" : "drop" });
+      setRewards({ picks, kind: node ? node.type : "battle", healed, coins: gain, relic: relicDrop, step: relicDrop ? "relic" : "drop", ups });
       setStatus("reward"); statusRef.current = "reward";
     });
   };
@@ -1993,9 +1998,17 @@ function DropBattle() {
     setLocked(false); lockedRef.current = false;
   };
 
+  // 章クリアのレリック選択のあと: 強化済み特殊ドロップを1つ選ぶ（ボスは100%＋化）
+  const afterActClear = () => {
+    setActClear(null);
+    const bpicks = shuffle(REWARD_KEYS.slice()).slice(0, hasR("magnet") ? 4 : 3);
+    setRewards({ picks: bpicks, kind:"boss", healed:0, coins:0, relic:null, step:"drop", ups: bpicks.map(() => true) });
+    setStatus("reward"); statusRef.current = "reward";
+  };
   const afterReward = () => {
     setRewards(null);
     const pnode = pendingNodeRef.current;
+    if (pnode && pnode.type === "boss") { nextAct(); return; } // ボス報酬 → 次章へ
     if (pnode && pnode.type === "horde" && (TEST_MODE || Math.random() < 0.5)) openShop();
     else if (pnode && pnode.type === "treasure" && !TEST_MODE && Math.random() < 0.35) openShop();
     else finishNode();
@@ -2005,12 +2018,17 @@ function DropBattle() {
     addLog(["特殊ドロップは受け取らなかった（袋はそのまま）"]);
     afterReward();
   };
-  const chooseReward = key => {
+  const chooseReward = (key, up) => {
     ownedRef.current = { ...ownedRef.current, [key]: ownedRef.current[key] + 1 };
     bagRef.current = { ...bagRef.current, [key]: bagRef.current[key] + 1 };
+    if (up) { // 強化済みで獲得（鍛冶と同じ＋化状態）
+      ownedUpRef.current = { ...ownedUpRef.current, [key]: ownedUpRef.current[key] + 1 };
+      bagUpRef.current = { ...bagUpRef.current, [key]: bagUpRef.current[key] + 1 };
+    }
     syncOwned();
     SFX.pick();
-    addLog([`🎁 ${ITEMS[key].name}を獲得`]);
+    if (up) { SFX.forge(); addLog([`🎁 強化済みの${ITEMS[key].name}を獲得 → ${DESC_UP[key]}`]); }
+    else addLog([`🎁 ${ITEMS[key].name}を獲得`]);
     afterReward();
   };
 
@@ -3032,6 +3050,9 @@ function DropBattle() {
         act: actRef.current, mode: modeRef.current, pmax: pMaxRef.current, actClear: !!actClearRef.current, poison: poisonRef.current,
         relics: relicsRef.current.slice(),
         rewardPicks: rewardsRef.current ? (rewardsRef.current.picks || []).length : 0,
+        rewardUps: rewardsRef.current ? (rewardsRef.current.ups || []).map(Boolean) : [],
+        rewardKind: rewardsRef.current ? rewardsRef.current.kind : null,
+        ownedUp: { ...ownedUpRef.current }, bagUp: { ...bagUpRef.current },
         shakeSeq: shakeSeqRef.current,
         specials: boardRef.current.filter(c => c.special).length,
         ownedTotal: ITEM_KEYS.reduce((t, k) => t + ownedRef.current[k], 0),
@@ -3127,6 +3148,7 @@ function DropBattle() {
         kind: e.kind, atk: e.atk, atkFloor: e.atkFloor, bigFloor: e.bigFloor, dcap: e.dcap,
         normalDmg: intentOf({ ...e, pat: ["attack"], pi: 0, rollMul: 1 }, []).dmg,
         bigDmg: intentOf({ ...e, pat: ["bigatk"], pi: 0, rollMul: 1 }, []).dmg })),
+      forceUpReward: v => { upRewardForceRef.current = v; }, // true=群れ報酬を必ず強化 / false=必ず通常 / null=通常抽選
       setSfxVol: v => changeSfxVol(v),
       setBgmVol: v => changeBgmVol(v),
       openSound: () => setSoundOpen(true),
@@ -3737,8 +3759,10 @@ function DropBattle() {
         h("button", { onClick: closeShop, className:"w-full rounded-xl py-2.5 font-bold", style:{ background:"rgba(255,255,255,.1)", border:"2px solid #453b5c", color:"#d8cfe8" } }, "先へ進む ▶"))));
   }
   if (rewards) {
-    const rIcon = rewards.kind === "treasure" ? "assets/node_treasure.png" : rewards.kind === "elite" ? "assets/node_elite.png" : "assets/node_battle.png";
-    const rTitle = rewards.kind === "treasure" ? "宝箱発見！" : rewards.kind === "elite" ? "強敵撃破！" : "勝利！";
+    const rIcon = rewards.kind === "treasure" ? "assets/node_treasure.png" : rewards.kind === "elite" ? "assets/node_elite.png" : rewards.kind === "boss" ? "assets/node_boss.png" : "assets/node_battle.png";
+    const rTitle = rewards.kind === "treasure" ? "宝箱発見！" : rewards.kind === "elite" ? "強敵撃破！" : rewards.kind === "boss" ? "ボス撃破！" : "勝利！";
+    const rUps = rewards.ups || rewards.picks.map(() => false); // 候補ごとの＋化フラグ
+    const rAnyUp = rUps.some(Boolean);
     const rStep = rewards.step || (rewards.relic ? "relic" : "drop");
     overlays.push(h("div", { key:"reward", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:50 } },
       h("div", { className:"w-full pop-in rounded-2xl", style:{ maxWidth:380, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", padding:"16px 14px" } },
@@ -3756,16 +3780,22 @@ function DropBattle() {
         ] : [
           // ステップ2: 特殊ドロップ選択
           h("p", { key:"ddesc", className:"text-center text-xs mb-1", style:{ opacity:0.8 } },
-            rewards.kind === "treasure" ? "好きなアイテムを1つ持っていこう（不要ならスキップ可）" : "戦利品を1つ選ぼう（不要ならスキップ可）"),
+            rewards.kind === "boss" ? "強化済みの特殊ドロップを1つ選ぼう（不要ならスキップ可）"
+              : rewards.kind === "treasure" ? "好きなアイテムを1つ持っていこう（不要ならスキップ可）" : "戦利品を1つ選ぼう（不要ならスキップ可）"),
+          rAnyUp && h("p", { key:"upbadge", className:"text-center text-[11px] font-bold mb-1", style:{ color:"#ffd95c" } },
+            rUps.every(Boolean) ? "🔨 強化済み（＋化）で手に入る！" : "🔨 「＋」付きは強化済み（＋化）で手に入る！"),
           rewards.healed > 0 && h("p", { key:"heal", className:"text-center text-xs mb-1", style:{ color:"#7cffb0" } }, "群れを一掃した勢いで HP +", rewards.healed),
-          h("div", { key:"picks", className:"grid grid-cols-1 gap-2 mt-2" }, rewards.picks.map(k => {
+          h("div", { key:"picks", className:"grid grid-cols-1 gap-2 mt-2" }, rewards.picks.map((k, ki) => {
             const it = ITEMS[k];
-            return h("button", { key:k, onClick: () => chooseReward(k), className:"rounded-xl px-4 py-3 flex items-center gap-3 text-left", style:{ background:"rgba(255,255,255,.06)", border:`2px solid ${it.ring}`, boxShadow:"0 2px 4px rgba(0,0,0,.4)" } },
+            const rUp = !!rUps[ki];
+            return h("button", { key:k, onClick: () => chooseReward(k, rUp), className:"rounded-xl px-4 py-3 flex items-center gap-3 text-left", style:{ background: rUp ? "rgba(232,192,106,.12)" : "rgba(255,255,255,.06)", border:`2px solid ${rUp ? "#e8c06a" : it.ring}`, boxShadow: rUp ? "0 0 10px rgba(232,192,106,.35)" : "0 2px 4px rgba(0,0,0,.4)" } },
               h("img", { src:it.img, alt:it.name, draggable:false, style:{ width:34, height:34, objectFit:"contain", filter:"drop-shadow(0 1px 2px rgba(0,0,0,.5))" } }),
               h("span", null,
-                h("span", { className:"font-bold", style:{ color:it.glowc } }, itemName(k)),
+                h("span", { className:"font-bold", style:{ color:it.glowc } }, itemName(k), rUp && h("span", { style:{ color:"#ffd95c" } }, " ＋")),
                 h("span", { className:"block text-[11px]", style:{ opacity:0.85 } }, itemDesc(k)),
-                h("span", { className:"block text-[10px]", style:{ opacity:0.6 } }, "所持 ", ownedView[k], " → ", ownedView[k] + 1)));
+                rUp && h("span", { className:"block text-[10px]", style:{ color:"#e8d8a8" } }, DESC_UP[k]),
+                h("span", { className:"block text-[10px]", style:{ opacity:0.6 } }, "所持 ", ownedView[k], " → ", ownedView[k] + 1,
+                  rUp ? ["（強化 ", ownedUpView[k], " → ", ownedUpView[k] + 1, "）"] : null)));
           })),
           h("button", { key:"decline", onClick: declineReward, className:"w-full rounded-xl py-2 font-bold text-sm mt-2", style:{ background:"rgba(255,255,255,.07)", border:"2px solid #453b5c", color:"#c9bfe0" } },
             "受け取らない（袋をそのままにする）")
@@ -3800,14 +3830,14 @@ function DropBattle() {
         actClear.picks && actClear.picks.length > 0 && h("div", { className:"mb-2" },
           h("p", { className:"text-[11px] mb-1 font-bold", style:{ color:"#e8c06a" } }, "🏺 レリックを1つ選んで進む"),
           h("div", { className:"flex flex-col gap-1.5" }, actClear.picks.map(k =>
-            h("button", { key:k, onClick: () => { addRelic(k); nextAct(); }, className:"flex items-center gap-3 rounded-xl px-3 py-2 text-left", style:{ background:"rgba(255,255,255,.05)", border:"2px solid #6e5a3c" } },
+            h("button", { key:k, onClick: () => { addRelic(k); afterActClear(); }, className:"flex items-center gap-3 rounded-xl px-3 py-2 text-left", style:{ background:"rgba(255,255,255,.05)", border:"2px solid #6e5a3c" } },
               h("span", { style:{ minWidth:28, display:"flex", justifyContent:"center" } }, Ic(RELICS[k].img, 26)),
               h("span", null,
                 h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, RELICS[k].name),
                 h("span", { className:"block text-[10px]", style:{ opacity:0.8 } }, RELICS[k].desc)))))),
-        h("button", { onClick: nextAct, className:"w-full rounded-xl py-2.5 font-bold tracking-widest",
+        h("button", { onClick: afterActClear, className:"w-full rounded-xl py-2.5 font-bold tracking-widest",
           style:{ background:"rgba(255,255,255,.1)", color:"#c9b8e8", border:"2px solid #453b5c" } },
-          "受け取らずに第", act + 2, "章へ ▶"))));
+          "レリックを受け取らずに進む ▶"))));
   }
   if (status === "clear" || status === "lose") {
     const isClear = status === "clear";
