@@ -4496,8 +4496,8 @@ function DropBattle() {
               h("img", { src:it.img, alt:it.name, draggable:false, style:{ width:34, height:34, objectFit:"contain", filter:"drop-shadow(0 1px 2px rgba(0,0,0,.5))" } }),
               h("span", null,
                 h("span", { className:"font-bold", style:{ color:it.glowc } }, itemName(k), rUp && h("span", { style:{ color:"#ffd95c" } }, " ＋")),
-                h("span", { className:"block text-[11px]", style:{ opacity:0.85 } }, itemDesc(k)),
-                rUp && h("span", { className:"block text-[10px]", style:{ color:"#e8d8a8" } }, DESC_UP[k]),
+                // ＋化候補は強化後の説明だけを出す（通常説明との併記はしない）
+                h("span", { className:"block text-[11px]", style: rUp ? { color:"#e8d8a8" } : { opacity:0.85 } }, rUp ? DESC_UP[k] : itemDesc(k)),
                 h("span", { className:"block text-[10px]", style:{ opacity:0.6 } }, "所持 ", ownedView[k], " → ", ownedView[k] + 1,
                   rUp ? ["（強化 ", ownedUpView[k], " → ", ownedUpView[k] + 1, "）"] : null)));
           })),
