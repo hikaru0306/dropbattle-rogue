@@ -1556,6 +1556,23 @@ function DropBattle() {
   const [campfire, setCampfire] = useState(null); // null | "menu" | "remove" | "forge"
   const campfireRef = useRef(null); campfireRef.current = campfire;
   const [bagOpen, setBagOpen] = useState(false);
+  const [consumOpen, setConsumOpen] = useState(false);
+  const [dropArm, setDropArm] = useState(-1); // 「捨てる」の確認待ちインデックス（誤タップ防止の2段階）
+  const dropArmTimer = useRef(null);
+  const armDrop = i => {
+    if (dropArmTimer.current) clearTimeout(dropArmTimer.current);
+    setDropArm(i); SFX.tap();
+    dropArmTimer.current = setTimeout(() => setDropArm(-1), 3000); // 3秒で解除
+  };
+  const dropItem = i => {
+    if (dropArmTimer.current) clearTimeout(dropArmTimer.current);
+    const k = itemsRef.current[i];
+    if (!k) return;
+    setDropArm(-1);
+    setItemsBoth(itemsRef.current.filter((_, idx) => idx !== i));
+    SFX.tap();
+    addLog([`🗑 ${CONSUM[k].name}を捨てた`]);
+  };
   const [relicOpen, setRelicOpen] = useState(false);
   const [sfxOn, setSfxOn] = useState(sfxEnabled);
   const [bgmOnView, setBgmOnView] = useState(bgmOn);
@@ -3745,6 +3762,16 @@ function DropBattle() {
       soundRow("BGM", "assets/icon_note.png", bgmOnView, toggleBgm, bgmVolView, changeBgmVol, null),
       soundRow("効果音", "assets/icon_speaker.png", sfxOn, toggleSfx, sfxVolView, changeSfxVol, () => SFX.tap()),
       h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } }, "アイコンでON/OFF・スライダーで音量。設定は端末に保存されます。"))));
+  // メニューの行。アイコン幅を固定して見出しの開始位置を揃える（右端は任意の補助表示）
+  const menuBtn = (img, label, onClick, right, muted) =>
+    h("button", { key:label, onClick,
+      className:"w-full rounded-xl py-2.5 px-3 font-bold text-sm mb-2 flex items-center",
+      style:{ background:"rgba(255,255,255,.08)", color: muted ? "#c9bfe0" : "#f0e4c8", border:"2px solid #453b5c", fontFamily:"inherit", textAlign:"left", gap:14 } },
+      h("span", { style:{ width:22, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" } },
+        img ? Ic(img, 20) : null),
+      h("span", { style:{ flex:1 } }, label),
+      right && h("span", { style:{ flexShrink:0, fontSize:"0.72rem", opacity:0.65, fontVariantNumeric:"tabular-nums" } }, right));
+
   // 章の導入（読み込みが済んでいなければそのぶん長く出る）。タップで飛ばせる
   // 出るときはフェードなし（明るいマップのチラつき防止）。消えるときだけフェードアウト
   if (actIntro) overlays.push(h("div", { key:"actintro", "data-actintro":"1", className:"fixed inset-0 flex flex-col items-center justify-center",
@@ -3756,17 +3783,10 @@ function DropBattle() {
       h("div", { className:"flex justify-between items-center mb-3" },
         h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, "☰ メニュー"),
         h("button", { onClick: () => setMenuOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
-      h("button", { onClick: () => { setMenuOpen(false); setBagOpen(true); SFX.open(); },
-        className:"w-full rounded-xl py-2.5 font-bold text-sm mb-2 flex items-center justify-center gap-1.5",
-        style:{ background:"rgba(255,255,255,.08)", color:"#f0e4c8", border:"2px solid #453b5c", fontFamily:"inherit" } },
-        Ic("assets/icon_bag.png", 15), "特殊ドロップの確認"),
-      h("button", { onClick: () => { setMenuOpen(false); setSoundOpen(true); SFX.open(); },
-        className:"w-full rounded-xl py-2.5 font-bold text-sm mb-2 flex items-center justify-center gap-1.5",
-        style:{ background:"rgba(255,255,255,.08)", color:"#f0e4c8", border:"2px solid #453b5c", fontFamily:"inherit" } },
-        Ic("assets/icon_speaker.png", 15), "サウンド設定"),
-      h("button", { onClick: suspendRun,
-        className:"w-full rounded-xl py-2.5 font-bold text-sm",
-        style:{ background:"rgba(255,255,255,.08)", color:"#c9bfe0", border:"2px solid #453b5c", fontFamily:"inherit" } }, "冒険を中断してタイトルへ"),
+      menuBtn("assets/cs_potion.png", "所持アイテム確認", () => { setMenuOpen(false); setDropArm(-1); setConsumOpen(true); SFX.open(); }, `${items.length}/${itemCap()}`),
+      menuBtn("assets/icon_bag.png", "特殊ドロップの確認", () => { setMenuOpen(false); setBagOpen(true); SFX.open(); }, `${ownedTotal}個`),
+      menuBtn("assets/icon_speaker.png", "サウンド設定", () => { setMenuOpen(false); setSoundOpen(true); SFX.open(); }),
+      menuBtn(null, "冒険を中断してタイトルへ", suspendRun, null, true),
       h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } },
         "進行はマップ到達時点まで自動保存。キャラ選択で「続きから」再開できます（バトル中の進行は保存されません）。"),
       h("button", { onClick: () => { setMenuOpen(false); SFX.tap(); },
@@ -3783,6 +3803,27 @@ function DropBattle() {
           h("span", { className:"flex-1" },
             h("span", { className:"font-bold text-sm block", style:{ color:"#e8c06a" } }, RELICS[k].name),
             h("span", { className:"block text-[11px]", style:{ opacity:0.85, lineHeight:1.5 } }, RELICS[k].desc))))))));
+  // 所持アイテム（消費アイテム）の確認と処分
+  if (consumOpen) overlays.push(h("div", { key:"consum", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => { setConsumOpen(false); setDropArm(-1); } },
+    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, maxHeight:"82vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+      h("div", { className:"flex justify-between items-center mb-2" },
+        h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, Ic("assets/cs_potion.png", 18), "所持アイテム（", items.length, "/", itemCap(), "）"),
+        h("button", { onClick: () => { setConsumOpen(false); setDropArm(-1); }, className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
+      items.length === 0
+        ? h("p", { className:"text-center text-[11px] py-6", style:{ opacity:0.6 } }, "アイテムを持っていない。ショップや宝箱で手に入る。")
+        : h("div", { className:"flex flex-col gap-2" }, items.map((k, i) => {
+            const c = CONSUM[k], armed = dropArm === i;
+            return h("div", { key:k + i, className:"flex items-center gap-3 rounded-xl px-3 py-2", style:{ background:"rgba(255,255,255,.05)", border:`1px solid ${armed ? "#e0705a" : "#6e5a3c"}` } },
+              h("img", { src:c.img, alt:"", draggable:false, style:{ width:26, height:26, objectFit:"contain", flexShrink:0, filter:"drop-shadow(0 1px 1px rgba(0,0,0,.5))" } }),
+              h("span", { className:"flex-1", style:{ minWidth:0 } },
+                h("span", { className:"font-bold text-sm block", style:{ color:"#ffcf5d" } }, c.name),
+                h("span", { className:"block text-[10px]", style:{ opacity:0.78, lineHeight:1.5 } }, c.desc)),
+              h("button", { onClick: () => (armed ? dropItem(i) : armDrop(i)),
+                className:"rounded-lg px-2.5 py-1.5 text-[10px] font-bold", style:{ flexShrink:0, fontFamily:"inherit",
+                  background: armed ? "linear-gradient(180deg,#e0705a,#a8402e)" : "rgba(255,255,255,.07)",
+                  color: armed ? "#fff2ec" : "#c9bfe0", border:`1px solid ${armed ? "#8a3826" : "#453b5c"}` } },
+                armed ? "本当に捨てる？" : "捨てる"));
+          })))));
   if (bagOpen) overlays.push(h("div", { key:"bag", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setBagOpen(false) },
     h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, maxHeight:"82vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-1" },

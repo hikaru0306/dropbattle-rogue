@@ -30,7 +30,7 @@ JOBS = {
     "icon_coin":    "A single thick gold coin with an embossed six-pointed star stamp, slightly tilted.",
     "icon_bag":     "A plump brown leather drawstring pouch tied at the top with a rope.",
     "icon_note":    "A single golden musical note symbol with a round note head and a curved flag on the stem, flat bold design.",
-    "icon_speaker": "An ornate golden brass horn megaphone held sideways, wide bell opening facing left, hovering, nothing underneath.",
+    "icon_speaker": "An ornate golden brass horn megaphone held sideways, wide bell opening facing right, hovering, nothing underneath.",
     # ―― 盤面特殊ドロップのマーク ――
     "mk_star":   "A classic bold five-pointed golden star shape, flat yellow gold fill with an orange bottom shade, single star symbol.",
     "mk_plus":   "A bold bright teal plus cross symbol with slightly rounded ends.",
