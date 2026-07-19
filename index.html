@@ -1185,6 +1185,8 @@ const ringTone = (f0, dur, vol, delay) => {
 };
 const SFX = {
   tap:  () => { noise(0.05, 2600, 0.05); softTone(660, 0.07, "sine", 0.04); },
+  // 能力モード切替: tapより明るくハッキリした上昇2音（「カチッ↗ポン」）で切り替わったことを伝える
+  mode: () => { noise(0.03, 4200, 0.05, 0, 1.8); softTone(740, 0.09, "triangle", 0.1); softTone(1109, 0.16, "triangle", 0.09, 0.07); },
   // アクション別: 攻撃「ドン」/ 防御「キーン」/ 回復「キュアキュアー」
   don:  () => { softTone(130, 0.3, "sine", 0.24, 0, 42); noise(0.16, 200, 0.16, 0, 0.6, "lowpass"); noise(0.05, 1300, 0.09, 0, 1); },
   kiin: () => { ringTone(1980, 0.55, 0.09); ringTone(3060, 0.45, 0.05, 0.004); ringTone(5170, 0.3, 0.03, 0.008); noise(0.04, 6500, 0.05, 0, 2); },
@@ -2660,6 +2662,9 @@ function DropBattle() {
     storeRef.current = 0; setStoreView(0); // 蓄積はバトルごとにリセット
     stockRef.current = 0; setStockView(0); // 鍛冶素材もバトルごとにリセット
     setGambleAsk(null); gamblePendRef.current = null; // 賭けのコイントスもバトルごとに掃除
+    // フラッシュ/シェイクの連番をリセット。残したままだとシーンDOMの再マウントで
+    // CSSアニメが頭から再生され、バトル開始時に赤フラッシュ等が一瞬出てしまう
+    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null);
     setPoison(0); // 毒はバトルごとにリセット
     soloShownRef.current = false;
     turnRef.current = freshTurn(); syncTurn();
@@ -3018,8 +3023,9 @@ function DropBattle() {
     setTimeout(() => gambleSpinDone(pick, ask.retries), FAST ? 120 : 1000);
   };
   // 回転が終わって出目が出た瞬間。外れ＆チップ残ありなら自動でやり直す
+  // 初回チュートリアル中はどちらを選んでも必ず的中させる（rigCoinより優先）
   const gambleSpinDone = (pick, retriesLeft) => {
-    const face = gambleFlip();
+    const face = (ctutRef.current && ctutRef.current.skill === "gamble") ? pick : gambleFlip();
     const win = face === pick;
     SFX.coin();
     if (!win && retriesLeft > 0) {
@@ -4278,8 +4284,8 @@ function DropBattle() {
     const spinning = g.phase === "spin";
     const showFace = (g.phase === "result" || g.phase === "retry") && g.face;
     const inner = [];
-    // 見出し：賭けの種類（今のモード）
-    inner.push(h("div", { key:"h", style:{ color:"#ffcf5d", fontWeight:900, fontSize:"1.05rem", marginBottom:12 } }, gm.name));
+    // 見出し：賭けの種類（今のモード）。白文字（ユーザー指定）
+    inner.push(h("div", { key:"h", style:{ color:"#fff", fontWeight:900, fontSize:"1.05rem", marginBottom:12 } }, gm.name));
     // 当たったときに起きること（金色）。回転中も見えるよう見出し直下に常時表示
     const gEff = g.mode === "heal2" ? "回復+" + g.count * GAMBLE_HEAL_PER
       : g.mode === "rain" ? "虹ドロップ" + g.count + "個"
@@ -4897,7 +4903,14 @@ function DropBattle() {
           } else if (curSkill === "gamble") {
             // ガレス/ブロムと同じ事前トグル。ボタンタップで 治癒→虹→剛運→鉄運 と循環する
             const gm = (TX.gamble && TX.gamble.modes && TX.gamble.modes[gambleMode]) || { lbl:"賭け" };
-            iconEl = h("span", { style:{ fontSize:16, height:18, marginTop:5, lineHeight:"18px", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.4))" } }, "🪙");
+            // アイコンは賭けの内容に合わせる: 治癒=ハート / 剛運=剣 / 鉄運=盾 / 虹=虹ドロップ（盤面と同じ虹グラデの角丸）
+            const gIconImg = { heal2:"assets/mk_heart.png", atkx:"assets/icon_atk.png", defx:"assets/icon_def.png" }[gambleMode];
+            iconEl = gambleMode === "rain"
+              ? h("span", { style:{ width:16, height:16, marginTop:6, borderRadius:5, display:"inline-block",
+                  background:"linear-gradient(135deg,#ff6b6b 0%,#ffcf5d 24%,#7cffb0 48%,#5aa0ff 72%,#c9a2ff 100%)",
+                  boxShadow:"inset 0 0 0 1.5px rgba(255,255,255,.85)", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.4))" } })
+              : h("img", { src: gIconImg, alt:"", draggable:false, width:18, height:18,
+                  style:{ width:18, height:18, maxWidth:18, maxHeight:18, marginTop:5, objectFit:"contain", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.4))" } });
             const selN = isSel && info ? info.count : 0;
             const cost = selN > 0 ? gambleCost(gambleMode, selN) : 0;
             const willDie = selN > 0 && pHP - cost <= 0; // 外したら倒れる＝赤で警告
@@ -4936,15 +4949,21 @@ function DropBattle() {
               // チュートリアル中は誘導ステップ以外でのボタン操作を禁止（対象指定中の色替え等で混乱しないように）
               if (ct && !["cycle1","cycle2","toggle","mode1"].includes(ct.step)) return;
               // タップ＝モード切替（選択中かどうかは問わない。順番はドラッグで決める）
-              if (curSkill === "recolor") { setPaintColor((paintColor + 1) % 4); SFX.tap(); }
-              else if (curSkill === "smith") { setSmithMode(smithMode === "stock" ? "gen" : smithMode === "gen" ? "up" : "stock"); SFX.tap(); }
-              else if (curSkill === "buff") { setSkillTarget(skillTarget === "atk" ? "def" : "atk"); SFX.tap(); }
-              else if (curSkill === "gamble") { const gi = GAMBLE_MODES.indexOf(gambleMode); setGambleMode(GAMBLE_MODES[(gi + 1) % GAMBLE_MODES.length]); SFX.tap(); }
+              if (curSkill === "recolor") { setPaintColor((paintColor + 1) % 4); SFX.mode(); }
+              else if (curSkill === "smith") { setSmithMode(smithMode === "stock" ? "gen" : smithMode === "gen" ? "up" : "stock"); SFX.mode(); }
+              else if (curSkill === "buff") { setSkillTarget(skillTarget === "atk" ? "def" : "atk"); SFX.mode(); }
+              else if (curSkill === "gamble") { const gi = GAMBLE_MODES.indexOf(gambleMode); setGambleMode(GAMBLE_MODES[(gi + 1) % GAMBLE_MODES.length]); SFX.mode(); }
               // チュートリアルのステップ進行（切替の体験 → 対象指定へ）
               if (ct) {
                 if (ct.step === "cycle1") setCtut({ ...ct, step: "cycle2" });
                 else if (ct.step === "cycle2") setCtut({ ...ct, step: "paint", seed: pickCtutSeed(true) });
-                else if (ct.step === "toggle") setCtut({ ...ct, step: "clear", seed: pickCtutSeed(false) });
+                else if (ct.step === "toggle") {
+                  // 賭博師は「鉄運（防御）」になるまでタップさせてから消去体験へ（このタップで切り替わった後のモードで判定）
+                  if (curSkill === "gamble") {
+                    const after = GAMBLE_MODES[(GAMBLE_MODES.indexOf(gambleMode) + 1) % GAMBLE_MODES.length];
+                    if (after === "defx") setCtut({ ...ct, step: "clear", seed: pickCtutSeed(false) });
+                  } else setCtut({ ...ct, step: "clear", seed: pickCtutSeed(false) });
+                }
                 else if (ct.step === "mode1") setCtut({ ...ct, step: "gift" }); // 生成モードに切替→素材プレゼントカードへ
               }
           };
