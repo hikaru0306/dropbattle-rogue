@@ -35,9 +35,9 @@ with sync_playwright() as pw:
     page.wait_for_selector("text=冒険に出る", timeout=15000)
     page.click("text=冒険に出る"); time.sleep(0.5)
 
-    # 選択画面: 6タイル・鍛冶師選択
+    # 選択画面: 7タイル・鍛冶師選択（6体目）
     tiles = page.query_selector_all("div.flex.justify-center.gap-2 > button")
-    chk("6 tiles on select", len(tiles) == 6)
+    chk("7 tiles on select", len(tiles) == 7)
     tiles[5].click(); time.sleep(0.4)
     body = page.evaluate("document.body.innerText")
     chk("smith name/unlock shown", "鍛冶師ブロム" in body)

@@ -105,6 +105,26 @@ button:active{filter:brightness(1.12)}
 .impact-flash{background:radial-gradient(circle at 60% 45%, rgba(255,240,220,.95), rgba(255,200,160,.35) 45%, transparent 70%);animation:impactFlash .35s ease forwards;z-index:4}
 @keyframes valPulse{0%{transform:scale(1.35)}100%{transform:scale(1)}}
 .val-pulse{animation:valPulse .28s cubic-bezier(.3,1.4,.6,1)}
+/* 賭博師のコイントス演出（表=天使／裏=悪魔）。横に潰れた瞬間に面を入れ替える方式。
+   ※3D回転(preserve-3d+backface)は親のfilterで平面化されて裏面が出ない環境があるため使わない */
+@keyframes coinSquash{0%,50%,100%{transform:scaleX(1)}25%,75%{transform:scaleX(.06)}}
+.coin-flip3d{position:relative;animation:coinSquash .38s linear infinite}
+.coin-flip3d img{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 6px 14px rgba(0,0,0,.55))}
+/* 前半=天使・後半=悪魔（潰れ切る25%/75%で瞬時に入れ替え） */
+@keyframes coinFaceA{0%,24.9%{opacity:1}25%,74.9%{opacity:0}75%,100%{opacity:1}}
+@keyframes coinFaceB{0%,24.9%{opacity:0}25%,74.9%{opacity:1}75%,100%{opacity:0}}
+.coin-flip3d img:nth-child(1){animation:coinFaceA .38s linear infinite}
+.coin-flip3d img:nth-child(2){animation:coinFaceB .38s linear infinite}
+@keyframes coinPop{0%{transform:scale(.35);opacity:0}55%{transform:scale(1.18);opacity:1}100%{transform:scale(1)}}
+.coin-pop{animation:coinPop .42s cubic-bezier(.3,1.4,.6,1)}
+/* 賭博師: 虹変換のバースト（1個ずつ白い閃光が弾ける）と、賭け失敗時の赤い被弾フラッシュ */
+@keyframes wildBurst{0%{opacity:0;transform:scale(.3)}30%{opacity:1}100%{opacity:0;transform:scale(1.55)}}
+.wild-burst{position:absolute;inset:-14%;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(255,255,255,.95) 0%,rgba(255,240,200,.55) 40%,transparent 70%);animation:wildBurst .5s ease-out forwards;z-index:5}
+@keyframes hurtFlash{0%{opacity:.9}100%{opacity:0}}
+.hurt-flash{background:radial-gradient(circle at 50% 55%, rgba(255,60,50,.5), rgba(180,20,20,.3) 55%, transparent 78%);animation:hurtFlash .55s ease forwards;z-index:4}
+/* 賭け失敗: コインの上に大きく出るダメージ数字（勢いよく出て少し長く留まる） */
+@keyframes gdmgPop{0%{opacity:0;transform:scale(.4) translateY(8px)}14%{opacity:1;transform:scale(1.35) translateY(0)}30%{transform:scale(1.05)}72%{opacity:1;transform:scale(1.05) translateY(-2px)}100%{opacity:0;transform:scale(1) translateY(-14px)}}
+.gdmg-pop{animation:gdmgPop 1.1s ease forwards}
 @media (max-width:400px){
   .grid-cols-6{gap:.28rem !important}
   .grid-cols-3{gap:.35rem !important}
@@ -162,6 +182,14 @@ const P_MAX = 300;
 const NUM_SPECIAL = 5;
 const STAR_THRESHOLD = 6;
 const ATK_PER = 10, DEF_PER = 10, HEAL_PER = 1;
+// 賭博師の「賭け」: 消した数が賭け金（HP）と見返りの両方を決める。
+//   払うHP = GAMBLE_COST[モード] × 消した数（天使の羽根で最終額を半減・切り上げ）
+//   剛運/鉄運は成功すると「消した数」がそのままその倍率になる（5個消し＝×5）
+const GAMBLE_COST = { heal2:1, rain:1, atkx:10, defx:10 };
+const GAMBLE_MODES = ["heal2", "rain", "atkx", "defx"]; // 消した後の4択の並び順
+const GAMBLE_HEAL_PER = 2;    // 治癒の賭け: 消した数1つにつき回復する量
+const GAMBLE_LUCK_RATE = 0.5; // 幸運の銀貨: 外したときに貰える効果の割合
+const GAMBLE_PACT_MUL = 1.5;  // 悪魔の契約: 「悪魔」を当てたときの倍率
 const POISON_DMG = 4; // 毒：1回受けるごとに毎ターンのダメージが+4され、重ねがけで累積する（防御無視・バトル終了/章クリアで解除）
 const ROWS = 8; // マップの段数（1章=8層固定）
 const ACTS = 3;
@@ -248,7 +276,8 @@ const ITEMS = {
   store:{ mark:"蓄", img:"assets/mk_store.png", color:"#e6dcff", ring:"rgba(141,99,207,.95)", glowc:"#8d63cf", exclusive:"store" },
   warcry:{ mark:"闘", img:"assets/mk_warcry.png", color:"#ffd8c0", ring:"rgba(255,120,60,.95)", glowc:"#f07038", exclusive:"buff" },
   wildstar:{ mark:"雫", img:"assets/mk_stardust.png", color:"#fff0d0", ring:"rgba(255,210,100,.95)", glowc:"#ffcf5d", exclusive:"healx" },
-  ore:  { mark:"鉱", img:"assets/mk_ore.png", color:"#dce8f4", ring:"rgba(120,170,220,.95)", glowc:"#6f9fd8", exclusive:"smith" }
+  ore:  { mark:"鉱", img:"assets/mk_ore.png", color:"#dce8f4", ring:"rgba(120,170,220,.95)", glowc:"#6f9fd8", exclusive:"smith" },
+  chip: { mark:"賭", img:"assets/mk_chip.png", color:"#ffe9c0", ring:"rgba(224,140,60,.95)", glowc:"#e08c3c", exclusive:"gamble" }
 };
 for (const k in ITEMS) Object.assign(ITEMS[k], TX.items[k]); // 名前・説明はtexts.js
 const ITEM_KEYS = Object.keys(ITEMS);
@@ -256,7 +285,7 @@ const ITEM_KEYS = Object.keys(ITEMS);
 const REWARD_KEYS = ITEM_KEYS.filter(k => !ITEMS[k].exclusive);
 // ドロップ強化（焚き火の「鍛える」。種類単位で恒久強化）
 const DESC_UP = TX.descUp;
-const initZero = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0, store:0, warcry:0, wildstar:0, ore:0 });
+const initZero = () => ({ star:0, plus:0, three:0, pierce:0, bombx:0, bombd:0, aoe:0, gold:0, bolt:0, heal:0, def:0, atk:0, atkx:0, defx:0, store:0, warcry:0, wildstar:0, ore:0, chip:0 });
 // ===== レリック（パッシブ遺物）=====
 const RELICS = {
   // rar1=コモン rar2=レア rar3=ボス級（名前・説明はtexts.js）
@@ -311,7 +340,10 @@ const RELICS = {
   palette:    { icon:"🎨", rar:2, char:1 },
   warhorn:    { icon:"📯", rar:2, char:2 },
   starstaff:  { icon:"🌠", rar:2, char:4 },
-  anvil:      { icon:"🛠", rar:2, char:5 }
+  anvil:      { icon:"🛠", rar:2, char:5 },
+  luckcoin:   { icon:"🪙", rar:2, char:6 },
+  devilpact:  { icon:"😈", rar:2, char:6 },
+  angelfeather:{ icon:"🪽", rar:2, char:6 }
 };
 for (const k in RELICS) Object.assign(RELICS[k], TX.relics[k]);
 for (const k in RELICS) RELICS[k].img = "assets/rl_" + k + ".png"; // 塗りアイコン（rl_<key>.png）
@@ -330,6 +362,11 @@ let RELICSET = new Set();
 const hasR = k => RELICSET.has(k);
 const specialTarget = () => NUM_SPECIAL + (hasR("stardust") ? 1 : 0) + (hasR("bigstar") ? 2 : 0);
 const itemCap = () => hasR("pouch") ? 4 : 3;
+// 賭博師: 払うHP＝基礎コスト×消した数。天使の羽根を持っていれば最終額を半減（切り上げ）
+const gambleCost = (mode, count) => {
+  const raw = GAMBLE_COST[mode] * count;
+  return hasR("angelfeather") ? Math.ceil(raw / 2) : raw;
+};
 const FORGE_COST = 50;
 const itemDesc = k => ITEMS[k].desc;
 const itemName = k => ITEMS[k].name;
@@ -367,11 +404,12 @@ const CHARS = [
   { skill:"store",   img:"assets/hero4.png", color:"#8d63cf" },
   { skill:"healx",   img:"assets/hero5.png", color:"#e8c06a" },
   { skill:"smith",   img:"assets/hero6.png", color:"#6f9fd8" },
+  { skill:"gamble",  img:"assets/hero7.png", color:"#c0483f" },
 ];
 CHARS.forEach((c, i) => Object.assign(c, TX.chars[i]));
 const CHAR_ALL = [0, 1, 2, 3]; // 「すべてのキャラ」判定に使う基本4体（5体目は報酬）
 function loadCharState() {
-  if (TEST_MODE) return { u:[0, 1, 2, 3, 4, 5], c:[], cu:[] };
+  if (TEST_MODE) return { u:[0, 1, 2, 3, 4, 5, 6], c:[], cu:[] };
   try { const j = JSON.parse(localStorage.getItem("db_chars")); if (j && Array.isArray(j.u)) return { u:j.u, c:j.c || [], cu:j.cu || [] }; } catch (e) {}
   return { u:[0], c:[], cu:[] };
 }
@@ -1385,6 +1423,15 @@ function DropBattle() {
   const setSmithMode = v => { smithModeRef.current = v; setSmithMode_(v); };
   const stockRef = useRef(0);                              // 鍛冶キャラの素材（バトルをまたいで保持・冒険単位）
   const [stockView, setStockView] = useState(0);
+  const [gambleMode, setGambleMode_] = useState("heal2"); // 賭博師のモード（heal2=治癒/rain=虹/atkx=剛運/defx=鉄運）。ボタンタップで循環
+  const gambleModeRef = useRef("heal2");
+  const setGambleMode = v => { gambleModeRef.current = v; setGambleMode_(v); };
+  // 天使/悪魔のコイントス オーバーレイ: {mode, cost, count, retries, phase, pick, face, win}
+  const [gambleAsk, setGambleAsk] = useState(null);
+  const gambleAskRef = useRef(null); gambleAskRef.current = gambleAsk;
+  const gamblePendRef = useRef(null);                      // 消去演出中に持ち回る賭けの内容（finishClearでオーバーレイへ）
+  const gambleUsedRef = useRef(null);                      // 結果確定後にターンを進めるための used セット
+  const coinRigRef = useRef(null);                         // テスト用: コインの出目を固定する（"angel"/"demon"）
   const [selView, setSelView] = useState(0);               // キャラ選択画面で眺めているキャラ
   const [selMode, setSelMode] = useState("omote");         // キャラ選択画面のモード（表/裏）
   const [resumeAsk, setResumeAsk] = useState(null);        // 中断データの再開確認 {save, mode}
@@ -1768,6 +1815,9 @@ function DropBattle() {
   const [shakeSeq, setShakeSeq] = useState(0);
   const shakeSeqRef = useRef(0); shakeSeqRef.current = shakeSeq; // テスト検証用に最新値をrefへ
   const [flashSeq, setFlashSeq] = useState(0);
+  const [hurtSeq, setHurtSeq] = useState(0);            // 賭博師: 賭け失敗の赤い被弾フラッシュ
+  const [wildFx, setWildFx] = useState(new Set());      // 賭博師: 虹変換バースト中のセル番号
+  const [gambleDmg, setGambleDmg] = useState(null);     // 賭博師: ウィンドウが閉じた後に画面中央へ出す大ダメージ {cost,key}
   const [pops, setPops] = useState({}); // ダメージポップ {key:{text,color,seq}}
   const popSeq = useRef(0);
   const addPop = (key, text, color) => {
@@ -2185,6 +2235,7 @@ function DropBattle() {
     if (node && node.type === "boss") {
       SFX.win();
       if (actRef.current === 1 && modeRef.current !== "ura") unlockChar(1); // 表2章ボス撃破 → 2体目解放
+      if (pRef.current <= 10) unlockChar(6);    // HP10以下でボス撃破 → 賭博師ジン解放
       // 章クリア（レリック選択）→ 強化済み特殊ドロップ選択 → 次章
       if (actRef.current < curActs() - 1) { setActClear({ picks: pickRelics(3, "boss") }); return; }
       recordClear();                            // 最終章ボス撃破 → クリア記録＆解放判定（裏は裏クリアとして記録）
@@ -2587,6 +2638,7 @@ function DropBattle() {
     setPreview(null); setClearing(new Set());
     storeRef.current = 0; setStoreView(0); // 蓄積はバトルごとにリセット
     stockRef.current = 0; setStockView(0); // 鍛冶素材もバトルごとにリセット
+    setGambleAsk(null); gamblePendRef.current = null; // 賭けのコイントスもバトルごとに掃除
     setPoison(0); // 毒はバトルごとにリセット
     soloShownRef.current = false;
     turnRef.current = freshTurn(); syncTurn();
@@ -2707,6 +2759,40 @@ function DropBattle() {
       setUsed(nu); usedRef.current = nu;
       if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
       else { const na = nextInOrder(nu); setAction(na); actionRef.current = na; }
+      return;
+    }
+    // 賭博師：3つ目の「賭け」。今のモード（ボタンで循環）でグループを消し、天使/悪魔のコイントスへ。
+    // 効果とHP消費はコイントスの後（成功=効果のみ・ノーコスト／失敗=HPだけ払う）
+    if (act === "heal" && skill === "gamble") {
+      const cell = boardRef.current[idx];
+      if (cell.type === JUNK) { SFX.tap(); return; } // お邪魔だけのグループには賭けられない（アクション消費なし）
+      const gx = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed);
+      if (gx.blast) turnRef.current.blastUsed = true;
+      if (gx.cross) turnRef.current.crossUsed = true;
+      const ginfo = groupInfo(boardRef.current, gx.ids);
+      if (ginfo.junk) { SFX.tap(); return; }
+      const count = ginfo.count;
+      const mode = gambleModeRef.current;
+      const cost = gambleCost(mode, count); // 外したときに失うHP（成功時は0）
+      // 賭けチップ（ジン専用）: グループ内の枚数だけ、外れたときに自動でコイントスをやり直す（＋化は2回分）
+      const retries = ((ginfo.sp.chip || 0) - (ginfo.spu.chip || 0)) + (ginfo.spu.chip || 0) * 2;
+      const { next, newPositions } = refill(boardRef.current, gx.ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
+      // 賭けを持ち回る（消去演出の後にオーバーレイを開く）。newPositions は虹の賭けの落下先
+      gamblePendRef.current = { mode, cost, count, retries, newPositions };
+      const nu = new Set(usedRef.current); nu.add("heal");
+      gambleUsedRef.current = nu; // 結果確定後にこの used でターン進行を判定
+      setUsed(nu); usedRef.current = nu;
+      const clearedIdxs = [];
+      boardRef.current.forEach((c, i) => { if (gx.ids.has(c.id)) clearedIdxs.push(i); });
+      setLocked(true); lockedRef.current = true;
+      flyParticles(clearedIdxs, "heal");
+      setClearing(new Set(gx.ids));
+      SFX.clear();
+      setTimeout(() => {
+        commitBoard(next); setClearing(new Set()); syncBag();
+        // 消した直後に天使/悪魔のコイントスへ（この時点では効果もHP消費も未発動）
+        setGambleAsk({ mode, cost, count, retries, phase: "pick", pick: null, face: null, win: null });
+      }, FAST ? 40 : 240);
       return;
     }
     const { ids, seedJunk, blast, cross, red } = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed);
@@ -2901,6 +2987,130 @@ function DropBattle() {
     }
   }, [resolveTurn]);
   commitRef.current = commit;
+
+  // ===== 賭博師のコイントス =====
+  // コインの出目（テストでは coinRigRef で固定できる）
+  const gambleFlip = () => coinRigRef.current || (Math.random() < 0.5 ? "angel" : "demon");
+  // 天使/悪魔を選択 → 回転演出 → 出目判定
+  const gambleChoose = pick => {
+    const ask = gambleAskRef.current;
+    if (!ask || ask.phase !== "pick") return;
+    SFX.pick();
+    setGambleAsk({ ...ask, pick, phase: "spin", face: null, win: null });
+    setTimeout(() => gambleSpinDone(pick, ask.retries), FAST ? 120 : 1000);
+  };
+  // 回転が終わって出目が出た瞬間。外れ＆チップ残ありなら自動でやり直す
+  const gambleSpinDone = (pick, retriesLeft) => {
+    const face = gambleFlip();
+    const win = face === pick;
+    SFX.coin();
+    if (!win && retriesLeft > 0) {
+      setGambleAsk(a => a ? { ...a, phase: "retry", face, win: false } : a);
+      setTimeout(() => {
+        setGambleAsk(a => a ? { ...a, phase: "spin", face: null, retries: retriesLeft - 1 } : a);
+        setTimeout(() => gambleSpinDone(pick, retriesLeft - 1), FAST ? 120 : 800);
+      }, FAST ? 140 : 900);
+      return;
+    }
+    setGambleAsk(a => a ? { ...a, phase: "result", face, win } : a);
+    if (win) SFX.win();
+    // 失敗は「はずれ…」を一拍見せてから閉じ、閉じた後に大きくダメージを出す
+    setTimeout(() => gambleFinish(pick, win), FAST ? 160 : win ? 1100 : 1300);
+  };
+  // 結果確定：効果を発動（当たり=全部 / 外れ＋幸運の銀貨=50% / 外れ=なし）→ HPコストを支払う → ターン進行
+  const gambleFinish = (pick, win) => {
+    const pend = gamblePendRef.current;
+    if (!pend) { setGambleAsk(null); return; }
+    const { mode, count, cost } = pend;
+    const pactWin = win && pick === "demon" && hasR("devilpact"); // 悪魔の契約: 悪魔を当てたときだけ倍率アップ
+    const boost = pactWin ? GAMBLE_PACT_MUL : 1;
+    const scale = win ? 1 : (hasR("luckcoin") ? GAMBLE_LUCK_RATE : 0); // 幸運の銀貨: 外れても効果の50%
+    const logs = [];
+    let shownAmt = 0; // ボタン表示用の結果値（回復量/虹の数/倍率）
+    if (scale > 0) {
+      if (mode === "heal2") {
+        // 回復はここでは発動しない。他キャラと同じくターン解決の回復フェーズで反映される（予約のみ）
+        const amt = Math.max(1, Math.round(count * GAMBLE_HEAL_PER * scale * boost));
+        turnRef.current.heal += amt; syncTurn();
+        shownAmt = amt;
+        logs.push(`🪙 治癒の賭け${win ? "的中" : "（幸運）"}！回復+${amt}を準備`);
+      } else if (mode === "rain") {
+        const n = Math.max(1, Math.floor(count * scale * boost));
+        // 盤面全体からランダムに選んで虹化（消した跡に固まらないように）。特殊なしを優先
+        const pos = boardRef.current.map((c, i) => (!c.wild && c.type !== JUNK) ? i : -1).filter(i => i >= 0);
+        const cand = shuffle(pos.filter(i => !boardRef.current[i].special)).concat(shuffle(pos.filter(i => boardRef.current[i].special)));
+        const targets = cand.slice(0, n);
+        // 1個ずつ順番に「白いバースト→虹化」させる（変換の瞬間が見えるように）。FAST時は間隔なし
+        targets.forEach((ti, k) => setTimeout(() => {
+          const nb = boardRef.current.slice();
+          nb[ti] = { ...nb[ti], wild: true };
+          commitBoard(nb);
+          SFX.coin();
+          setWildFx(s => { const ns = new Set(s); ns.add(ti); return ns; });
+          setTimeout(() => setWildFx(s => { const ns = new Set(s); ns.delete(ti); return ns; }), 520);
+        }, FAST ? 0 : 160 * k));
+        shownAmt = targets.length;
+        if (targets.length) logs.push(`🌈 虹の賭け${win ? "的中" : "（幸運）"}！虹ドロップ${targets.length}個`);
+      } else {
+        // 剛運/鉄運：消した数がそのまま倍率。ガレスの強化と同じ「予約」で攻撃直前に計算する
+        const st = mode === "atkx" ? "atk" : "def";
+        const mult = (win ? count : (1 + (count - 1) * GAMBLE_LUCK_RATE)) * boost;
+        turnRef.current.buffPend = { st, mult, horn: 0 };
+        shownAmt = mult;
+        syncTurn();
+        logs.push(`🎲 ${st === "atk" ? "剛運" : "鉄運"}の賭け${win ? "的中" : "（幸運）"}！${st === "atk" ? "攻撃" : "防御"} ×${mult % 1 ? mult.toFixed(1) : mult} を準備（攻撃の直前に計算）`);
+      }
+      if (pactWin) logs.push(`😈 悪魔の契約 ×${GAMBLE_PACT_MUL}！`);
+      if (win) logs.push("✨ 的中！ノーコストで効果発動");
+    } else {
+      logs.push(`💀 賭けに外れた…HP${cost}を失う`);
+    }
+    // ボタン表示用: 賭けた数と結果を次のターンのリセット（freshTurn）まで残す
+    turnRef.current.gambleShown = { mode, count, amt: shownAmt, win };
+    syncTurn();
+    if (logs.length) addLog(logs);
+    // HPを失うのは「外した」ときだけ。成功すればHP消費ゼロで効果だけ得る（＝コスト＝失敗の罰）
+    const dead = win ? false : payGambleCost(cost);
+    gamblePendRef.current = null;
+    setGambleAsk(null);
+    // ウィンドウが閉じた直後、目線のあった画面中央へ大きく「HP-◯」を出す
+    if (!win && cost > 0) {
+      setGambleDmg({ cost, key: UID++ });
+      setTimeout(() => setGambleDmg(null), 1200);
+    }
+    if (dead) return; // 敗北処理済み（盤面ロックのまま）
+    if (ctutRef.current && ctutRef.current.skill === "gamble") ctutFinish(); // 賭けチュートリアルの締めへ
+    // コイントスは消した直後に解決する。3アクション目ならターン解決へ、まだなら次のアクションへ
+    const nu = gambleUsedRef.current || usedRef.current;
+    if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
+    else { const na = nextInOrder(nu); setAction(na); actionRef.current = na; setLocked(false); lockedRef.current = false; }
+  };
+  // 賭け金の支払い。HPが0以下になったら敗北処理（不死鳥の羽で復活）を通す。敗北したら true
+  const payGambleCost = cost => {
+    if (cost <= 0) return false;
+    const np = pRef.current - cost;
+    // 賭けの代償はしっかり痛く見せる: 被弾アニメ＋画面シェイク＋赤フラッシュ＋ダメージポップ
+    setAnim("hero", "hit"); SFX.hurt(); flash("player");
+    setShakeSeq(q => q + 1); setHurtSeq(q => q + 1);
+    // ダメージ数字はウィンドウが閉じた後の画面中央大表示（gambleDmg）で見せる（ここでは出さない）
+    if (np <= 0) {
+      const fi = itemsRef.current.indexOf("phoenix");
+      if (fi >= 0) {
+        setItemsBoth(itemsRef.current.filter((_, i) => i !== fi));
+        setPHP(Math.round(pMaxRef.current * 0.4));
+        setAnim("hero", "heal"); SFX.heal(); flash("heal");
+        addLog(["🪶 不死鳥の羽が燃え上がる！HP40%で復活"]);
+        return false;
+      }
+      setPHP(0);
+      setStatus("lose"); statusRef.current = "lose";
+      setLocked(true); lockedRef.current = true;
+      SFX.lose();
+      return true;
+    }
+    setPHP(np);
+    return false;
+  };
 
   // 爆発バースト（爆弾セルの位置に）
   const boomAt = idxs => {
@@ -3183,7 +3393,7 @@ function DropBattle() {
   const codeBufRef = useRef("");
   const logoTapRef = useRef({ n: 0, t: 0 });
   const unlockAll = () => {
-    const all = [0, 1, 2, 3, 4, 5];
+    const all = [0, 1, 2, 3, 4, 5, 6];
     setCharState(s => { const ns = { u: all, c: all, cu: s.cu || [] }; saveCharState(ns); return ns; });
     setCodeOpen(false); setCodeVal("");
     setCodeMsg("🔓 隠しコード発動！ キャラクターと裏の冒険がすべて解放された");
@@ -3213,6 +3423,7 @@ function DropBattle() {
     UID = 1;
     storeRef.current = 0; setStoreView(0);          // 蓄積リセット（冒険をやり直す）
     stockRef.current = 0; setStockView(0);          // 鍛冶素材もリセット
+    setGambleMode("heal2"); setGambleAsk(null); gamblePendRef.current = null; // 賭けもリセット
     CUR_SKILL = charSkillRef.current;               // 「もう一度挑む」は同キャラを維持
     CUR_HERO = CHARS[curCharRef.current].img.replace("assets/", "").replace(".png", "");
     ownedRef.current = initOwned(curCharRef.current);
@@ -3276,6 +3487,7 @@ function DropBattle() {
     setMode(sv.mode === "ura" ? "ura" : "omote");
     storeRef.current = 0; setStoreView(0);
     stockRef.current = 0; setStockView(0); setSmithMode("stock");
+    setGambleMode("heal2"); setGambleAsk(null); gamblePendRef.current = null;
     setPaintColor(0); setSkillTarget("atk");
     setActOrder(Array.isArray(sv.order) && sv.order.length === 3 && ORDER.every(k => sv.order.includes(k)) ? sv.order.slice() : ORDER.slice());
     ownedRef.current = { ...initZero(), ...sv.owned };
@@ -3392,6 +3604,7 @@ function DropBattle() {
       start: () => { setStatus("map"); statusRef.current = "map"; },
       enter: id => { const n = mapRef.current.nodes.find(n => n.id === id); if (n) enterNode(n); },
       weaken: () => { const ens = enemiesRef.current.map(e => e.alive ? { ...e, hp:1 } : e); setEnemiesBoth(ens); },
+      setPHP: v => setPHP(v),
       killMinions: () => { const ens = enemiesRef.current.map(e => e.boss ? e : { ...e, hp:0, alive:false }); setEnemiesBoth(ens); },
       spawn: kinds => {
         const ens = kinds.map((kind,i) => { const k = KINDS[kind];
@@ -3486,7 +3699,7 @@ function DropBattle() {
       setSfxVol: v => changeSfxVol(v),
       setBgmVol: v => changeBgmVol(v),
       openSound: () => setSoundOpen(true),
-      setChar: i => { setCurChar(i); storeRef.current = 0; setStoreView(0); stockRef.current = 0; setStockView(0); setSmithMode("stock"); },
+      setChar: i => { setCurChar(i); storeRef.current = 0; setStoreView(0); stockRef.current = 0; setStockView(0); setSmithMode("stock"); setGambleMode("heal2"); setGambleAsk(null); gamblePendRef.current = null; },
       relicPool: () => RELIC_KEYS.filter(k => !relicsRef.current.includes(k) && (RELICS[k].char === undefined || RELICS[k].char === curCharRef.current) && (!RELICS[k].skills || RELICS[k].skills.includes(charSkillRef.current))),
       charState: () => ({ u:charStateRef.current.u.slice(), c:charStateRef.current.c.slice(), cu:(charStateRef.current.cu || []).slice() }),
       setMode: m => setMode(m),
@@ -3501,14 +3714,19 @@ function DropBattle() {
         ACT_NAMES, URA_ACT_NAMES, ACT_POOLS, URA_POOLS, BOSS_BY_ACT, URA_BOSS_BY_ACT,
         URA_HP_ACT, URA_ATK_ACT, URA_BOSSHP_ACT, URA_BOSSATK_ACT, CHARS }),
       setCleared: i => setCharState(s => { const c = s.c.includes(i) ? s.c : [...s.c, i]; const ns = { u:s.u, c, cu:s.cu }; saveCharState(ns); return ns; }),
-      charInfo: () => ({ cur:curCharRef.current, skill:charSkillRef.current, paint:paintColorRef.current, target:skillTargetRef.current, store:storeRef.current, smithMode:smithModeRef.current, stock:stockRef.current }),
+      charInfo: () => ({ cur:curCharRef.current, skill:charSkillRef.current, paint:paintColorRef.current, target:skillTargetRef.current, store:storeRef.current, smithMode:smithModeRef.current, stock:stockRef.current, gambleMode:gambleModeRef.current }),
       setPaint: c => setPaintColor(c),
       setSkillTarget: t => setSkillTarget(t),
       setSmithMode: m => setSmithMode(m),
       showDcap: cap => setDcapTut(cap),
       showSpTut: () => setSpTut(0),
       unlockChar: i => unlockChar(i),
-      recordClear: () => recordClear()
+      recordClear: () => recordClear(),
+      // 賭博師テスト用: コインの出目固定 / 4択のモード選択 / 天使悪魔選択 / オーバーレイ状態
+      rigCoin: face => { coinRigRef.current = face; }, // "angel"/"demon"/null
+      setGambleMode: m => setGambleMode(m),
+      gambleChoose: f => gambleChoose(f),
+      gambleAsk: () => gambleAskRef.current ? { ...gambleAskRef.current } : null
     };
   }, []);
 
@@ -4031,6 +4249,65 @@ function DropBattle() {
         h("button", { onClick: () => { SFX.tap(); setDcapTut(null); try { localStorage.setItem("db_tut_dcap", "1"); } catch (e) {} },
           className:"w-full rounded-xl py-2.5 font-bold", style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } }, TX.dcapInfo.btn))));
   }
+  // 賭博師の天使/悪魔コイントス オーバーレイ（消した時点で賭けは成立・キャンセル不可）
+  if (gambleAsk) {
+    const g = gambleAsk;
+    const gt = TX.gamble;
+    const gm = (gt.modes && gt.modes[g.mode]) || { name:"賭け" };
+    const willDie = pHP - g.cost <= 0; // 外したら倒れる
+    const spinning = g.phase === "spin";
+    const showFace = (g.phase === "result" || g.phase === "retry") && g.face;
+    const inner = [];
+    // 見出し：賭けの種類（今のモード）
+    inner.push(h("div", { key:"h", style:{ color:"#ffcf5d", fontWeight:900, fontSize:"1.05rem", marginBottom:12 } }, gm.name));
+    // 当たったときに起きること（金色）。回転中も見えるよう見出し直下に常時表示
+    const gEff = g.mode === "heal2" ? "回復+" + g.count * GAMBLE_HEAL_PER
+      : g.mode === "rain" ? "虹ドロップ" + g.count + "個"
+      : (g.mode === "atkx" ? "攻撃" : "防御") + "×" + g.count;
+    inner.push(h("div", { key:"eff", style:{ marginBottom:8, fontSize:"0.82rem", fontWeight:800, color:"#cfc0dc" } },
+      gt.winLabel + " ",
+      h("span", { style:{ fontSize:"1.3rem", fontWeight:900, color:"#ffd75e", textShadow:"0 0 8px rgba(255,210,90,.5)", marginLeft:6 } }, gEff)));
+    // 外したときに失うHPを明示（成功時はノーコスト・失敗時だけ払う）
+    inner.push(h("div", { key:"cost", style:{ marginBottom:20, fontSize:"0.82rem", fontWeight:800, color: willDie ? "#ff6a6a" : "#cfc0dc" } },
+      gt.costLabel + " ",
+      h("span", { style:{ fontSize:"1.3rem", fontWeight:900, color: willDie ? "#ff5a5a" : "#ffb27a", textShadow: willDie ? "0 0 12px rgba(255,60,60,.95)" : "0 0 8px rgba(255,150,80,.5)", marginLeft:6 } }, "HP " + g.cost),
+      willDie && h("div", { style:{ color:"#ff5a5a", fontSize:"0.8rem", fontWeight:900, marginTop:6 } }, gt.deadWarn)));
+    if (g.phase === "pick") {
+      inner.push(h("div", { key:"pick", style:{ display:"flex", gap:16, justifyContent:"center", marginTop:4 } },
+        ["angel", "demon"].map(f => h("button", { key:f, onClick: () => gambleChoose(f),
+          className:"rounded-xl", style:{ flex:1, maxWidth:136, padding:"16px 10px", cursor:"pointer",
+            background: f === "angel" ? "rgba(120,150,220,.16)" : "rgba(200,70,60,.16)",
+            border:`2px solid ${f === "angel" ? "#7f9bdc" : "#c0483f"}`, color:"#f4eef9", fontFamily:"inherit" } },
+          h("div", { style:{ marginBottom:10 } }, Ic(f === "angel" ? "assets/coin_angel.png" : "assets/coin_demon.png", 64)),
+          h("div", { style:{ fontWeight:800, fontSize:"0.92rem" } }, f === "angel" ? gt.angel : gt.demon)))));
+    } else if (spinning) {
+      // 回転中は表(天使)/裏(悪魔)の2枚を交互に見せる
+      inner.push(h("div", { key:"spin", style:{ minHeight:128, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"6px 0" } },
+        h("div", { className:"coin-flip3d", style:{ width:76, height:76, marginBottom:14 } },
+          h("img", { src:"assets/coin_angel.png", alt:"", draggable:false }),
+          h("img", { src:"assets/coin_demon.png", alt:"", draggable:false })),
+        h("div", { style:{ color:"#e7d8b8", fontSize:"0.82rem", fontWeight:700 } }, gt.spin)));
+    } else if (showFace) {
+      const face = g.face;
+      inner.push(h("div", { key:"res", style:{ minHeight:128, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"6px 0", position:"relative" } },
+        h("div", { key:"f" + face + g.phase, className:"coin-pop", style:{ width:80, height:80, marginBottom:12 } }, Ic(face === "angel" ? "assets/coin_angel.png" : "assets/coin_demon.png", 80)),
+        h("div", { style:{ fontWeight:900, fontSize:"1.1rem", color: g.win ? "#8ce8b0" : "#ff8a8a", textShadow:`0 0 10px ${g.win ? "rgba(120,230,150,.7)" : "rgba(255,90,90,.7)"}` } },
+          g.phase === "retry" ? gt.lose : g.win ? gt.win : gt.lose),
+        g.phase === "retry" && h("div", { style:{ color:"#ffcf5d", fontSize:"0.8rem", fontWeight:800, marginTop:8 } }, gt.retry)));
+    }
+    overlays.push(h("div", { key:"gamble", className:"fixed inset-0 flex items-center justify-center fade-in", style:{ background:"rgba(6,3,12,.82)", zIndex:85 } },
+      // 賭けオーバーレイの枠は最初から最後まで金色（死の警告は中の文字で見せる）
+      h("div", { className:"rounded-2xl pop-in", style:{ maxWidth:360, width:"92%", padding:"26px 22px 28px", background:"rgba(28,20,34,.98)",
+        border:"2px solid #ffd75e", textAlign:"center",
+        boxShadow:"0 10px 34px rgba(0,0,0,.6), 0 0 22px rgba(255,215,94,.45)" } }, inner)));
+  }
+  // 賭け失敗: ウィンドウが閉じた後、目線のあった画面中央へ大きく「HP-◯」
+  if (gambleDmg) {
+    overlays.push(h("div", { key:"gdmg" + gambleDmg.key, className:"fixed inset-0 pointer-events-none flex items-center justify-center", style:{ zIndex:84 } },
+      h("div", { className:"gdmg-pop", style:{ fontSize:"2.6rem", fontWeight:900, color:"#ff4646",
+        // 白縁取り（8方向シャドウ）＋下に黒の落ち影で、どの背景でも読めるように
+        textShadow:"-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, -2px 0 0 #fff, 2px 0 0 #fff, 0 -2px 0 #fff, 0 2px 0 #fff, 0 4px 10px rgba(0,0,0,.75)" } }, "HP-" + gambleDmg.cost)));
+  }
   if (armed !== null && items[armed]) {
     const c = CONSUM[items[armed]];
     overlays.push(h("div", { key:"armed", className:"fixed pop-in", style:{ top:12, left:"50%", transform:"translateX(-50%)", zIndex:75,
@@ -4301,6 +4578,7 @@ function DropBattle() {
                 zIndex: gHi ? 46 : "auto",
                 transition:"transform .12s ease, opacity .2s ease, box-shadow .12s ease",
                 touchAction:"none" } },
+              wildFx.has(i) && h("span", { key:"wb", className:"wild-burst" }), // 虹の賭け: 変換の瞬間のバースト
               cell.type === JUNK ? h("img", { src:"assets/mk_skull.png", alt:"", draggable:false, className:"mark-img", style:{ position:"absolute", left:"22%", top:"22%", width:"56%", height:"56%", objectFit:"contain", pointerEvents:"none", opacity:0.92, filter:"drop-shadow(0 1px 1px rgba(0,0,0,.5))" } })
                  : rgem ? h("span", { key:"g", style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"1.5rem", fontWeight:900, lineHeight:1, color:"#3a2f52", textShadow:"0 0 2px #fff, 0 1px 1px rgba(255,255,255,.9)", pointerEvents:"none" } }, rgem.glyph)
                  : norm ? [h("img", { key:"m", src:norm.img, alt:norm.name, draggable:false, className:"mark-img", style:{ position:"absolute", left:"19%", top:"19%", width:"62%", height:"62%", objectFit:"contain", pointerEvents:"none", filter: isWild ? "drop-shadow(0 1px 2px rgba(0,0,0,.7))" : "drop-shadow(0 1px 2px rgba(0,0,0,.55))", animation:"markPulse 1.6s ease-in-out infinite" } }),
@@ -4407,6 +4685,7 @@ function DropBattle() {
       // 戦闘シーン
       h("div", { key:"scn", className:"relative w-full mb-1 scene-h" + (shakeSeq > 0 ? (shakeSeq % 2 ? " scene-shake" : " scene-shake2") : ""), style:{ borderRadius:16, overflow:"hidden", border: gtut === "warn" ? "2px solid #ff6b6b" : "2px solid #453b5c", background:"#191424", opacity: gSceneDim ? 0.34 : 1, transition:"opacity .3s ease, border-color .3s ease" } },
         flashSeq > 0 && h("div", { key:"fl" + flashSeq, className:"absolute inset-0 pointer-events-none impact-flash" }),
+        hurtSeq > 0 && h("div", { key:"hf" + hurtSeq, className:"absolute inset-0 pointer-events-none hurt-flash" }),
         h("img", { src: mode === "ura" ? (URA_BATTLE_BGS[act] || URA_BATTLE_BGS[0]).src : (BATTLE_BGS[act] || BATTLE_BGS[0]), alt:"", draggable:false, className:"absolute pointer-events-none", style:{ left:0, top:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center bottom", opacity: gtut === "warn" ? 0.28 : .92, transition:"opacity .3s ease", filter: mode === "ura" ? (URA_BATTLE_BGS[act] || URA_BATTLE_BGS[0]).filter : "none" } }),
         h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"linear-gradient(180deg, rgba(15,11,22,.5) 0%, rgba(15,11,22,.08) 45%, rgba(15,11,22,.42) 100%)" } }),
         // 攻撃予告チュートリアル: 敵と予告以外を暗くする暗幕（敵ボタンは zIndex を上げて明るく残す）
@@ -4536,7 +4815,7 @@ function DropBattle() {
         const dragSt = actDragStyle(key, oi);
         const dragProps = { onPointerDown: e => actDragStart(e, key), onPointerMove: actDragMove };
         // 3つ目のアクションがキャラ固有スキル（色変え/強化/蓄積）の場合は専用ボタン
-        if (key === "heal" && (curSkill === "recolor" || curSkill === "buff" || curSkill === "store" || curSkill === "smith")) {
+        if (key === "heal" && (curSkill === "recolor" || curSkill === "buff" || curSkill === "store" || curSkill === "smith" || curSkill === "gamble")) {
           const sc = CHARS[curChar].color;
           const isUsed = used.has("heal");
           const isSel = action === "heal" && !isUsed;
@@ -4592,6 +4871,31 @@ function DropBattle() {
               : selN > 0
               ? h("span", { style:{ fontSize:"1rem", fontWeight:900, color:"#ffd75e" } }, "×" + (1 + incN * selN + wcB).toFixed(1))
               : h("span", { style:{ fontSize:"0.9rem", fontWeight:900 } }, "+" + incN + "/個");
+          } else if (curSkill === "gamble") {
+            // ガレス/ブロムと同じ事前トグル。ボタンタップで 治癒→虹→剛運→鉄運 と循環する
+            const gm = (TX.gamble && TX.gamble.modes && TX.gamble.modes[gambleMode]) || { lbl:"賭け" };
+            iconEl = h("span", { style:{ fontSize:16, height:18, marginTop:5, lineHeight:"18px", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.4))" } }, "🪙");
+            const selN = isSel && info ? info.count : 0;
+            const cost = selN > 0 ? gambleCost(gambleMode, selN) : 0;
+            const willDie = selN > 0 && pHP - cost <= 0; // 外したら倒れる＝赤で警告
+            // 使用後はコイントスの結果（賭けた数・結果値）を次のターンのリセットまで表示し続ける
+            const gs = isUsed ? tv.gambleShown : null;
+            // 攻撃/防御ボタンと同じ構造に合わせる: タイトル行(11px)=「HP{基礎}×数」(代償)、数値行=「{効果}×数」
+            title = "HP" + GAMBLE_COST[gambleMode] + "×" + (gs ? gs.count : selN);
+            // 治癒は実回復量「+N(×2)」、それ以外は「{効果}×数」。(×2)だけタイトル行と同じ11pxで小さく添える
+            const effTxt = gambleMode === "heal2"
+              ? [gm.lbl + "+" + selN * GAMBLE_HEAL_PER,
+                 h("span", { key:"x", style:{ fontSize:11, fontWeight:800, marginLeft:1, opacity:0.85 } }, "(×" + GAMBLE_HEAL_PER + ")")]
+              : gm.lbl + "×" + selN;
+            const fmtN = v => (v % 1 ? v.toFixed(1) : v);
+            valEl = gs
+              // 結果表示: 的中/幸運=金色で効果値、丸外れ=赤「はずれ」
+              ? (gs.amt > 0
+                ? h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color:"#ffd75e" } },
+                    gs.mode === "heal2" ? gm.lbl + "+" + fmtN(gs.amt) : gm.lbl + "×" + fmtN(gs.amt))
+                : h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color:"#ff8a8a" } }, "はずれ"))
+              : h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color: selN > 0 ? (willDie ? "#ff6a6a" : "#ffd75e") : "#e0d8f0", textShadow: willDie ? "0 0 8px rgba(255,60,60,.9)" : "none" } },
+                  effTxt);
           } else {
             title = "蓄積";
             iconEl = h("img", { src:"assets/mk_store.png", alt:"", draggable:false, width:18, height:18, style:{ width:18, height:18, maxWidth:18, maxHeight:18, marginTop:5, objectFit:"contain", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.4))" } });
@@ -4612,6 +4916,7 @@ function DropBattle() {
               if (curSkill === "recolor") { setPaintColor((paintColor + 1) % 4); SFX.tap(); }
               else if (curSkill === "smith") { setSmithMode(smithMode === "stock" ? "gen" : smithMode === "gen" ? "up" : "stock"); SFX.tap(); }
               else if (curSkill === "buff") { setSkillTarget(skillTarget === "atk" ? "def" : "atk"); SFX.tap(); }
+              else if (curSkill === "gamble") { const gi = GAMBLE_MODES.indexOf(gambleMode); setGambleMode(GAMBLE_MODES[(gi + 1) % GAMBLE_MODES.length]); SFX.tap(); }
               // チュートリアルのステップ進行（切替の体験 → 対象指定へ）
               if (ct) {
                 if (ct.step === "cycle1") setCtut({ ...ct, step: "cycle2" });
@@ -4631,7 +4936,7 @@ function DropBattle() {
               boxShadow: ctOn ? "0 0 0 3px #ffe08a, 0 0 18px rgba(255,207,93,.9)" : "none",
               zIndex: ctOn ? 46 : "auto", position:"relative",
               // 倍率予約中はターン終了まで読めるよう、使用後でも明るさを残す
-              opacity: isUsed ? (curSkill === "buff" && tv.buffPend ? 0.9 : 0.4) : 1, transition:"background .25s ease, border-color .25s ease, opacity .25s ease, box-shadow .25s ease", ...(dragSt || {}) } },
+              opacity: isUsed ? ((curSkill === "buff" && tv.buffPend) || (curSkill === "gamble" && tv.gambleShown) ? 0.9 : 0.4) : 1, transition:"background .25s ease, border-color .25s ease, opacity .25s ease, box-shadow .25s ease", ...(dragSt || {}) } },
             h("span", { style:{ position:"absolute", top:0, left:"14%", right:"14%", height:3, borderRadius:"0 0 4px 4px", background:sc, opacity: isUsed ? 0.25 : 0.9, pointerEvents:"none" } }),
             iconEl,
             h("span", { style:{ fontSize:11, height:15, lineHeight:"15px", whiteSpace:"nowrap", color: isUsed ? "#777" : "#e7e0ef" } }, title),
@@ -4678,8 +4983,12 @@ function DropBattle() {
           valEl = h("span", null, valEl,
             h("span", { style:{ color:"#b9a4ff", fontSize:"0.82rem", marginLeft:3, fontWeight:900 } }, "+" + tv.storePend.add));
         }
-        // 強化の倍率計算中は対象ボタン、蓄積の加算中は攻撃・防御の両方を光らせる（暗転も解除）
-        const lit = (fx.length > 0 && fx[fx.length-1].act === key) || !!bAn || !!sAn;
+        // 強化の倍率計算中は対象ボタン、蓄積の加算中は攻撃・防御の両方を光らせる（暗転も解除）。
+        // 光らせるのは計算中の stage2 だけ。stage3（×倍率を出したまま待つ段階）は
+        // ターン終了まで残るので、そこまで lit にすると使用済みで暗くなったはずのボタンが
+        // ターン中ずっと明るいままになり、防御が敵の攻撃時に光り直す演出も潰れる
+        const litBuff = !!(bAn && bAn.stage === 2), litStore = !!(sAn && sAn.stage === 2);
+        const lit = (fx.length > 0 && fx[fx.length-1].act === key) || litBuff || litStore;
         const gWarn = gtut === "warn", gDef = gtut === "def", gClear = gtut === "clear";
         const guideTgt = gDef && key === "def";        // 「防御」を光らせて誘導
         const guideOff = gWarn || (gDef && key !== "def") || gClear || (ctut && ctut.step !== "done"); // 誘導中の対象外ボタンは暗く
