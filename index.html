@@ -148,7 +148,7 @@ button:active{filter:brightness(1.12)}
   var R = window.React, RD = window.ReactDOM;
   if(!R || !RD){ document.getElementById('root').innerHTML = '<p style="color:#fff;padding:20px">読み込みに失敗しました。通信環境を確認して再読み込みしてください。</p>'; return; }
   var h = R.createElement;
-  var useState=R.useState, useRef=R.useRef, useEffect=R.useEffect, useCallback=R.useCallback;
+  var useState=R.useState, useRef=R.useRef, useEffect=R.useEffect, useCallback=R.useCallback, useLayoutEffect=R.useLayoutEffect;
   var FONT = "'M PLUS Rounded 1c','Hiragino Kaku Gothic ProN','Hiragino Sans','Yu Gothic',sans-serif";
 
 // ===== 基本設定 =====
@@ -483,7 +483,9 @@ const PATTERNS = {
   attack:  { icon:"⚔",  img:"assets/icon_atk.png",      label:"こうげき",   color:"#ffb3a8" },
   double:  { icon:"⚔⚔", img:"assets/mk_aoe.png",        label:"れんぞく",   color:"#ffb3a8" },
   bigatk:  { icon:"💥", img:"assets/intent_big.png",    label:"おおわざ",   color:"#ff6b6b" },
-  charge:  { icon:"⏳", img:"assets/intent_charge.png", label:"ためる",     color:"#ffd88a" },
+  // 「ためる」だけ塗りアイコン未作成（intent_charge の画像が無い）。表示は絵文字⏳を使用
+  // 注意: プリロードはスクリプト本文から assets/... を拾うため、コメント内にも実在しないパスを書かないこと
+  charge:  { icon:"⏳", label:"ためる",     color:"#ffd88a" },
   jam:     { icon:"🌀", img:"assets/intent_jam.png",    label:"おじゃま",   color:"#c9a2ff" },
   healally:{ icon:"💚", img:"assets/mk_heart.png",      label:"なかま回復", color:"#8ce8b0" },
   drain:   { icon:"🩸", img:"assets/intent_drain.png",  label:"吸血",       color:"#ff9ad0" },
@@ -1223,6 +1225,70 @@ const bgmKick = () => {
 };
 window.addEventListener("pointerdown", bgmKick, { passive: true });
 
+// ===== 画像プリロード =====
+// <img>は「初めて描画される瞬間」に取得が走るため、敵スプライトや予告アイコンが一拍遅れて出る。
+// 先に Image() で取ってブラウザキャッシュを温めておく。同時4本の緩いキューで、
+// 回線・ディスクを占有せず、必要になる前に間に合わせる。
+const IMG_WARM = new Map(); // src -> Image（GC でキャッシュを落とさないよう保持）
+const IMG_DONE = new Set(); // 読み込み（成否問わず）が済んだsrc
+const imgWaiters = new Set();
+const imgQueue = [];
+let imgActive = 0;
+const pumpImg = () => {
+  while (imgActive < 6 && imgQueue.length) {
+    const src = imgQueue.shift();
+    if (IMG_WARM.has(src)) continue;
+    const im = new Image();
+    IMG_WARM.set(src, im);
+    imgActive++;
+    const done = () => { imgActive--; IMG_DONE.add(src); imgWaiters.forEach(f => f()); pumpImg(); };
+    im.onload = done; im.onerror = done;
+    im.decoding = "async";
+    im.src = src;
+  }
+};
+// front=true で列の先頭に割り込ませる（すぐ要る画像を優先）
+const warmImgs = (list, front) => {
+  const add = list.filter(s => s && !IMG_WARM.has(s) && imgQueue.indexOf(s) < 0);
+  if (!add.length) return;
+  if (front) imgQueue.unshift(...add); else imgQueue.push(...add);
+  pumpImg();
+};
+// リストが揃うまで待つ。onProgress(済, 全) で進捗、timeoutMs で打ち切り（揃わなくても先へ進む）
+const waitImgs = (list, onProgress, timeoutMs) => new Promise(resolve => {
+  const uniq = [...new Set(list.filter(Boolean))];
+  warmImgs(uniq, true);
+  let fin = false;
+  const finish = ok => { if (fin) return; fin = true; imgWaiters.delete(check); clearTimeout(timer); resolve(ok); };
+  const check = () => {
+    const n = uniq.filter(s => IMG_DONE.has(s)).length;
+    if (onProgress) onProgress(n, uniq.length);
+    if (n >= uniq.length) finish(true);
+  };
+  const timer = setTimeout(() => finish(false), timeoutMs || 15000);
+  imgWaiters.add(check);
+  check();
+});
+// 章に出る敵（雑魚プール＋ボス候補）とその章の背景
+const actImgs = (ura, act) => {
+  const pools = ura ? URA_POOLS : ACT_POOLS;
+  const pool = pools[act] || pools[0];
+  const bosses = (ura ? URA_BOSS_BY_ACT : BOSS_BY_ACT)[act] || [];
+  const kinds = [...new Set([...pool.light, ...pool.mid, ...pool.heavy, ...bosses])];
+  return [...kinds.map(k => "assets/" + k + ".png"),
+    ura ? (URA_BATTLE_BGS[act] || URA_BATTLE_BGS[0]).src : (BATTLE_BGS[act] || BATTLE_BGS[0]),
+    MAP_BGS[act] || MAP_BGS[0]];
+};
+// 「冒険に出る」で待つぶん：小さいUIアイコン（レリック/マーク/消費/ノード等）＋キャラ画像
+const bootImgs = () => {
+  const icons = document.documentElement.innerHTML.match(/assets\/(?:rl_|mk_|cs_|icon_|node_|st_|sk_|intent_)[\w-]+\.png/g) || [];
+  return [...new Set([...icons, ...CHARS.map(c => c.img)])];
+};
+// タイトルは即出したいので、その背景だけ最優先。残りは手が空き次第バックグラウンドで温める
+// （タップまでに終わっていれば「冒険に出る」は待ち時間ゼロで進む）
+warmImgs(["assets/bg_title2.jpg", "assets/bg_texture.jpg"], true);
+(window.requestIdleCallback || (f => setTimeout(f, 200)))(() => warmImgs(bootImgs()));
+
 // ===== キャラ画像スプライト（ComfyUI生成・透過PNG） =====
 const CharImg = ({ kind, size }) => h("img", {
   src: "assets/" + (kind === "hero" ? CUR_HERO : kind) + ".png", alt: kind, draggable: false,
@@ -1297,7 +1363,7 @@ function DropBattle() {
   const [curChar, setCurChar_] = useState(0);
   const curCharRef = useRef(0);
   const charSkillRef = useRef("heal");
-  const setCurChar = i => { curCharRef.current = i; charSkillRef.current = CHARS[i].skill; CUR_SKILL = CHARS[i].skill; CUR_HERO = CHARS[i].img.replace("assets/", "").replace(".png", ""); setCurChar_(i); };
+  const setCurChar = i => { curCharRef.current = i; charSkillRef.current = CHARS[i].skill; CUR_SKILL = CHARS[i].skill; CUR_HERO = CHARS[i].img.replace("assets/", "").replace(".png", ""); setCurChar_(i); warmImgs([CHARS[i].img], true); };
   const [paintColor, setPaintColor_] = useState(0);       // 色変えキャラの現在インク色
   const paintColorRef = useRef(0);
   const setPaintColor = v => { paintColorRef.current = v; setPaintColor_(v); };
@@ -1388,6 +1454,47 @@ function DropBattle() {
   const actClearRef = useRef(false); actClearRef.current = actClear;
   const [turn, setTurn] = useState(1);
   const [status, setStatus] = useState("title"); // title | map | battle | reward | clear | lose
+  // ===== 「冒険に出る」のロードゲート =====
+  // タイトルは即出す。タップした時点で共通アセットが未読なら、タイトルを薄暗くして中央に進捗を出す。
+  // 読み終わっていればゲートは出ずそのままキャラ選択へ（12秒で打ち切って先へ進む）
+  const [loadGate, setLoadGate] = useState(null); // {prog:0..1} | null
+  const goSelect = () => {
+    SFX.pick();
+    const toSelect = () => { setLoadGate(null); setStatus("select"); statusRef.current = "select"; };
+    const list = bootImgs();
+    const remain = list.filter(s => !IMG_DONE.has(s));
+    if (!remain.length) return toSelect();
+    setLoadGate({ prog: (list.length - remain.length) / list.length });
+    const t0 = Date.now();
+    waitImgs(list, (n, all) => setLoadGate({ prog: all ? n / all : 1 }), 12000).then(() => {
+      // 一瞬で終わったときに光って見えないよう最低400msは出す
+      setTimeout(toSelect, Math.max(0, 400 - (Date.now() - t0)));
+    });
+  };
+  // ===== 章の導入演出（兼ロードゲート） =====
+  // 章が変わったら「第N章 ○○」を出し、その章の敵が揃うまで（最長5秒）引き延ばす。
+  // 揃っていれば最短表示のぶんだけ出て素通り＝ロード画面に見せずポップインを防ぐ
+  const [actIntro, setActIntro] = useState(null);
+  const introKeyRef = useRef("");
+  // 明るいマップが一瞬見えてしまわないよう useLayoutEffect（描画前）で出す
+  const closeIntro = () => {
+    setActIntro(v => (v && !v.closing ? { ...v, closing: true } : v));
+    setTimeout(() => setActIntro(null), 260);
+  };
+  useLayoutEffect(() => {
+    if (status === "title" || status === "boot") { introKeyRef.current = ""; } // 次の冒険では出し直す
+    // マップ以外（バトル等）へ移ったら導入は即畳む
+    if (status !== "map") { setActIntro(v => (v ? null : v)); return; }
+    const key = mode + ":" + act;
+    if (introKeyRef.current === key) return;   // 同じ章に戻ってきただけなら出さない
+    introKeyRef.current = key;
+    const ura = mode === "ura";
+    setActIntro({ head: `${ura ? "裏・" : ""}第${act + 1}章`, name: actNameOf(mode, act) });
+    const t0 = Date.now();
+    waitImgs(actImgs(ura, act), null, 5000).then(() => {
+      setTimeout(closeIntro, Math.max(0, 1200 - (Date.now() - t0)));
+    });
+  }, [mode, act, status]);
   const [log, setLog] = useState([]);
   const [fx, setFx] = useState([]);
   const [rewards, setRewards] = useState(null); // {picks, kind:'battle'|'elite'|'treasure'|'horde', healed}
@@ -3454,8 +3561,13 @@ function DropBattle() {
         h("p", { style:{ position:"relative", zIndex:1, fontSize:"clamp(0.72rem,2.5vw,0.95rem)", color:"#e8d8a8", letterSpacing:"0.42em", fontWeight:800, textShadow:"0 1px 3px #000", margin:"0 0 10px", paddingLeft:"0.42em" } }, "DROPSIA")),
       h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
         h("button", {
-          onClick: () => { setStatus("select"); statusRef.current = "select"; SFX.pick(); },
+          onClick: () => { if (!loadGate) goSelect(); },
           style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", borderRadius:14, padding:"clamp(13px,3.2vw,16px) clamp(48px,12vw,66px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", boxShadow:"0 4px 0 #6e4e1a, 0 6px 12px rgba(0,0,0,.4)", border:"2px solid #6e4e1a", fontFamily:"inherit" } }, "冒険に出る")),
+      // ロードゲート：タイトルを薄暗くして中央に進捗（フェードは出さない＝チラつき防止）
+      loadGate && h("div", { "data-loadgate":"1", style:{ position:"fixed", inset:0, zIndex:80, background:"rgba(8,10,16,.72)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:14, padding:"0 40px" } },
+        h("div", { style:{ width:"100%", maxWidth:250, height:8, borderRadius:999, background:"rgba(20,17,32,.9)", border:"1px solid #3c3450", overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,.5)" } },
+          h("div", { style:{ height:"100%", width:Math.round(loadGate.prog * 100) + "%", borderRadius:999, background:"linear-gradient(90deg,#b8862e,#e8c06a)", transition:"width .2s ease" } })),
+        h("p", { style:{ margin:0, fontSize:"0.72rem", letterSpacing:"0.26em", color:"#e8d8a8", fontWeight:800, textShadow:"0 1px 3px #000" } }, "NOW LOADING ", Math.round(loadGate.prog * 100), "%")),
       codeMsg && h("div", { className:"pop-in", style:{ position:"fixed", top:16, left:"4%", right:"4%", margin:"0 auto", maxWidth:380, zIndex:70, background:"rgba(30,24,42,.97)", border:"2px solid #8a6f3c", color:"#ffe9b0", borderRadius:12, padding:"10px 14px", fontSize:"0.82rem", fontWeight:800, boxShadow:"0 3px 8px rgba(0,0,0,.5)", textAlign:"center" } }, codeMsg),
       codeOpen && h("div", { className:"fade-in", style:{ position:"fixed", inset:0, zIndex:60, background:"rgba(8,4,14,.82)", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 24px" } },
         h("div", { className:"pop-in rounded-2xl p-4 w-full", style:{ maxWidth:300, background:"rgba(30,24,42,.98)", border:"2px solid #3c3450", textAlign:"center" } },
@@ -3633,6 +3745,12 @@ function DropBattle() {
       soundRow("BGM", "assets/icon_note.png", bgmOnView, toggleBgm, bgmVolView, changeBgmVol, null),
       soundRow("効果音", "assets/icon_speaker.png", sfxOn, toggleSfx, sfxVolView, changeSfxVol, () => SFX.tap()),
       h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } }, "アイコンでON/OFF・スライダーで音量。設定は端末に保存されます。"))));
+  // 章の導入（読み込みが済んでいなければそのぶん長く出る）。タップで飛ばせる
+  // 出るときはフェードなし（明るいマップのチラつき防止）。消えるときだけフェードアウト
+  if (actIntro) overlays.push(h("div", { key:"actintro", "data-actintro":"1", className:"fixed inset-0 flex flex-col items-center justify-center",
+    style:{ background:"rgba(8,4,14,.92)", zIndex:75, opacity: actIntro.closing ? 0 : 1, transition:"opacity .25s ease" }, onClick: closeIntro },
+    h("p", { className:"pop-in", style:{ margin:0, fontSize:"0.78rem", letterSpacing:"0.34em", color:"#c9bfe0", fontWeight:800 } }, actIntro.head),
+    h("h2", { className:"pop-in", style:{ margin:"6px 0 0", fontSize:"clamp(1.5rem,7vw,2rem)", fontWeight:900, color:"#e8c06a", textShadow:"0 2px 0 rgba(0,0,0,.55)" } }, actIntro.name)));
   if (menuOpen) overlays.push(h("div", { key:"menu", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setMenuOpen(false) },
     h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-3" },

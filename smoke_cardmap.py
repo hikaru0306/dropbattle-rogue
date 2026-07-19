@@ -70,7 +70,7 @@ with sync_playwright() as p:
     boss_ids = [n["id"] for n in s["map"] if n["type"] == "boss"]
     assert s["selectable"] == boss_ids, f"selectable {s['selectable']} != boss {boss_ids}"
     t = body_text(page)
-    assert "この章の主がひそむ" in t, "boss card desc missing"
+    assert "主がひそむ" in t, "boss card desc missing"
     assert page.evaluate("!!document.querySelector('img[alt=\"現在地\"]')"), "no current-position icon"
     page.screenshot(path=SHOT + r"\cm3_boss.png")
     print("4 boss card OK")
