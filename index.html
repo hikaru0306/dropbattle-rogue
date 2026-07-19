@@ -969,6 +969,7 @@ const expandClear = (b, idx, blastOk, crossOk) => {
   const seedJunk = b[idx].type === JUNK;
   const ids0 = findGroup(b, idx);
   if (seedJunk) return { ids: ids0, seedJunk, blast: false, cross: false, red: [] };
+  const seedIds = new Set(ids0); // タップした素の同色グループ（核レリックはここだけを起点にする）
   let blast = false, cross = false, red = [];
   const N = SIZE * SIZE;
   const addIdx = i => { if (i >= 0 && i < N) ids0.add(b[i].id); };
@@ -991,10 +992,11 @@ const expandClear = (b, idx, blastOk, crossOk) => {
       });
     }
   }
-  // 核レリック: タップした色の核を持っていれば、消した同色の上下も爆破（赤/黄/紫/翠の4色）
+  // 核レリック: タップした色の核を持っていれば、タップした素の同色グループの各ドロップの上下も爆破（赤/黄/紫/翠の4色）。
+  // 爆破核/十字晶/X字晶・爆弾・雷などに「巻き込まれて」消える同色は起点にしない＝連鎖しない
   const coreK = CORE_BY_COLOR[b[idx].type];
   if (coreK && hasR(coreK)) {
-    const coreIdx = b.map((c, i) => (ids0.has(c.id) && c.type === b[idx].type) ? i : -1).filter(i => i >= 0);
+    const coreIdx = b.map((c, i) => (seedIds.has(c.id) && c.type === b[idx].type) ? i : -1).filter(i => i >= 0);
     coreIdx.forEach(i => { addIdx(i - SIZE); addIdx(i + SIZE); });
     red = coreIdx;
   }
@@ -1556,6 +1558,15 @@ function DropBattle() {
   const [puzzle, setPuzzle] = useState(null); // {target, moves, cleared, relics:[3], done}
   const puzzleRef = useRef(null);
   const [restMsg, setRestMsg] = useState(null);
+  const [buyMsg, setBuyMsg] = useState(null); // ショップ購入トースト {img, icon, name, seq}
+  const buyMsgTmRef = useRef(null);
+  const buyMsgSeqRef = useRef(0);
+  const showBuyMsg = m => { // 連続購入でも毎回ポップし直す（seqでkeyを変えて再マウント）
+    buyMsgSeqRef.current += 1;
+    setBuyMsg({ ...m, seq: buyMsgSeqRef.current });
+    if (buyMsgTmRef.current) clearTimeout(buyMsgTmRef.current);
+    buyMsgTmRef.current = setTimeout(() => setBuyMsg(null), 1300);
+  };
   const [coins, setCoins] = useState(0);
   const coinsRef = useRef(0);
   const setCoinsBoth = v => { coinsRef.current = v; setCoins(v); };
@@ -2370,8 +2381,9 @@ function DropBattle() {
     setCoinsBoth(coinsRef.current - cost);
     addRelic(k);
     setShop(sp => sp ? { ...sp, relic: null } : sp);
+    showBuyMsg({ img: RELICS[k].img, name: RELICS[k].name });
   };
-  const closeShop = () => { setShop(null); SFX.step(); finishNode(); };
+  const closeShop = () => { setShop(null); setBuyMsg(null); SFX.step(); finishNode(); };
   const buyItem = k => {
     const c = CONSUM[k];
     const cost = priceOf(c.price, shopRate(k));
@@ -2379,6 +2391,7 @@ function DropBattle() {
     setCoinsBoth(coinsRef.current - cost);
     setItemsBoth([...itemsRef.current, k]);
     addLog([`🛒 ${c.name}を購入（-${cost}）`]);
+    showBuyMsg({ img: c.img, icon: c.icon, name: c.name });
     SFX.pick();
   };
 
@@ -2715,7 +2728,7 @@ function DropBattle() {
       else { const na = nextInOrder(nu); setAction(na); actionRef.current = na; }
       return;
     }
-    // 鍛冶キャラ：生成＝袋の特殊ドロップを素材の数だけタップしたグループへ打ち出す／
+    // 鍛冶キャラ：生成＝袋の中身と同じ比率で抽選した特殊(複製)を素材の数だけタップしたグループへ打ち出す／
     // 強化＝グループ内の特殊ドロップを素材の数だけ＋に鍛える（どちらも消さない）
     if (act === "heal" && skill === "smith" && smithModeRef.current !== "stock") {
       const cell = boardRef.current[idx];
@@ -2726,21 +2739,18 @@ function DropBattle() {
       let done = 0;
       if (mode === "gen") {
         const target = boardRef.current.map((c, i) => (grp.has(c.id) && c.type !== JUNK && !c.wild && !c.special) ? i : -1).filter(i => i >= 0);
-        // 生成数は素材と対象数だけで決まる（袋の数ではキャップしない）。
-        // 「所持しているが盤面に出ていない」特殊がある間は袋から引き、尽きたら
-        // 剣20%/盾20%/魔鉱石60%の追加分(extra=所持外・袋会計に影響しない)で埋める
-        let availLeft = ITEM_KEYS.reduce((s, k) => s + ownedRef.current[k], 0) - boardRef.current.filter(c => c.special && !c.extra).length;
+        // 生成数は素材と対象数だけで決まる。種類は「今の袋の中身」から重み付き抽選
+        // （袋が空なら所持全体を袋とみなす）。生成物はすべて extra=所持外の複製で、
+        // 袋の残数・所持数・補充の会計には一切影響しない
+        const pool = bagTotal(bagRef.current) > 0 ? bagRef.current : ownedRef.current;
+        const poolUp = bagTotal(bagRef.current) > 0 ? bagUpRef.current : ownedUpRef.current;
+        const poolTotal = bagTotal(pool);
         const n = Math.min(stockRef.current, target.length);
         for (let t = 0; t < n; t++) {
-          if (availLeft > 0) {
-            const d = drawFromBag(bagRef, ownedRef, bagUpRef, ownedUpRef, nb);
-            nb[target[t]] = { ...nb[target[t]], special: d.k, up: d.up };
-            availLeft--;
-          } else {
-            const r = Math.random();
-            const kind = r < 0.2 ? "atk" : r < 0.4 ? "def" : "ore";
-            nb[target[t]] = { ...nb[target[t]], special: kind, up: false, extra: true };
-          }
+          let kind = "ore", r = Math.floor(Math.random() * poolTotal);
+          for (const k of ITEM_KEYS) { if (r < pool[k]) { kind = k; break; } r -= pool[k]; }
+          const up = poolUp[kind] > 0 && Math.random() < poolUp[kind] / pool[kind];
+          nb[target[t]] = { ...nb[target[t]], special: kind, up, extra: true };
           done++;
         }
         if (done) addLog([`⚒ 素材${done}を打ち、特殊ドロップ${done}個を生成した`]);
@@ -4497,6 +4507,10 @@ function DropBattle() {
           style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } }, "先へ進む ▶"))));
   }
   if (restMsg) overlays.push(h("div", { key:"rest", className:"fixed pop-in", style:{ top:18, left:"50%", transform:"translateX(-50%)", zIndex:70, background:"rgba(30,24,42,.97)", border:"2px solid #3c5a48", color:"#c8ffdd", borderRadius:12, padding:"10px 18px", fontSize:"0.85rem", fontWeight:800, boxShadow:"0 3px 8px rgba(0,0,0,.5)" } }, restMsg));
+  // ショップ購入トースト（ショップウィンドウより手前・1.3秒で自動で消える）
+  if (buyMsg) overlays.push(h("div", { key:"buymsg" + buyMsg.seq, id:"buy-toast", className:"fixed pop-in flex items-center gap-2", style:{ top:18, left:"50%", transform:"translateX(-50%)", zIndex:70, background:"rgba(30,24,42,.97)", border:"2px solid #8a6f3c", color:"#f0d89a", borderRadius:12, padding:"10px 18px", fontSize:"0.85rem", fontWeight:800, boxShadow:"0 3px 8px rgba(0,0,0,.5)", whiteSpace:"nowrap" } },
+    buyMsg.img ? Ic(buyMsg.img, 20) : buyMsg.icon ? h("span", { style:{ fontSize:"1.1rem" } }, buyMsg.icon) : null,
+    h("span", null, "「", buyMsg.name, "」を購入した！")));
 
   if (actClear) {
     overlays.push(h("div", { key:"actclear", className:"fixed inset-0 flex items-center justify-center px-6 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:56 } },
@@ -4843,8 +4857,7 @@ function DropBattle() {
                 let n = 0;
                 if (smithMode === "gen") {
                   const targets = cells.filter(c => c.type !== JUNK && !c.wild && !c.special).length;
-                  const avail = ITEM_KEYS.reduce((s, k) => s + ownedView[k], 0) - board.filter(c => c.special).length;
-                  n = avail <= 0 ? Math.min(stockView, targets) : Math.min(stockView, targets, avail); // 枯渇時は魔鉱石生成なのでavailに縛られない
+                  n = Math.min(stockView, targets); // 生成は袋会計と無関係の複製なので所持数ではキャップしない
                 } else n = Math.min(stockView, cells.filter(c => c.special && !c.up).length);
                 if (n > 0) stPrev = stockView - n;
               } else if (!isSel && oreN > 0 && (action === "atk" || action === "def")) stPrev = stockView + oreN;

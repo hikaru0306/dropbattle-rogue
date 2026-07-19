@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""鍛冶師（smith）検証: 補充で素材蓄積 / 生成で袋から特殊配置 / 強化で＋化 / 素材のバトル間持ち越し / 素材0はアクション消費なし / 出せる特殊が尽きたら魔鉱石を生成"""
+"""鍛冶師（smith）検証: 補充で素材蓄積 / 生成は袋の中身比率で抽選した複製(extra)を配置し袋会計に影響しない / 強化で＋化 / 素材のバトル間持ち越し / 素材0はアクション消費なし"""
 import time
 from playwright.sync_api import sync_playwright
 
@@ -58,10 +58,11 @@ with sync_playwright() as pw:
     chk("heal not gained", s["tv"]["heal"] == 0)
     chk("action consumed", "heal" in s["used"])
 
-    # 2) 生成: 別グループ(6個)に素材5で特殊5個配置（袋から引く）
+    # 2) 生成: 別グループ(6個)に素材5で特殊5個配置（袋の中身比率で抽選した複製・袋会計に影響しない）
     page.evaluate("window.__test.resolve()"); time.sleep(1.2)
     make_group(page, [6, 7, 8, 9, 10, 11], 0); time.sleep(0.2)
     bag_before = st(page)["bagLeft"]
+    owned_before = st(page)["ownedTotal"]
     sp_before = st(page)["specials"]
     page.evaluate("window.__test.setSmithMode('gen')")
     page.evaluate("window.__test.setAct('heal')")
@@ -70,10 +71,12 @@ with sync_playwright() as pw:
     gen_n = s["specials"] - sp_before
     chk("gen placed 5 specials", gen_n == 5, f"gen={gen_n}")
     chk("stock spent to 0", info["stock"] == 0, f"stock={info['stock']}")
-    # 生成しても所持数を超えない（袋+盤面 <= 所持合計 = 複製なし）
-    chk("no duplication (bag+board<=owned)", s["bagLeft"] + s["specials"] <= s["ownedTotal"], f"bag{s['bagLeft']}+sp{s['specials']} vs owned{s['ownedTotal']}")
-    row_sp = [s["board"][i]["sp"] for i in [6, 7, 8, 9, 10, 11]]
-    chk("specials on tapped group", sum(1 for x in row_sp if x) == 5, str(row_sp))
+    # 袋の残数・所持数は一切変わらない（生成物は複製）
+    chk("bag untouched by gen", s["bagLeft"] == bag_before, f"bag {bag_before}->{s['bagLeft']}")
+    chk("owned untouched by gen", s["ownedTotal"] == owned_before, f"owned {owned_before}->{s['ownedTotal']}")
+    row = [s["board"][i] for i in [6, 7, 8, 9, 10, 11]]
+    chk("specials on tapped group", sum(1 for c in row if c["sp"]) == 5, str([c["sp"] for c in row]))
+    chk("all gen drops flagged extra", all(c["x"] for c in row if c["sp"]), str([(c["sp"], c["x"]) for c in row]))
     chk("board not cleared (gen)", all(s["board"][i]["t"] == 0 for i in [6, 7, 8, 9, 10, 11]))
 
     # 3) 素材0で生成 → アクション消費なし
@@ -121,19 +124,19 @@ with sync_playwright() as pw:
         info = ci(page)
         chk("stock resets per battle", info["stock"] == 0, f"stock={info['stock']}")
 
-        # 6) 生成の枯渇フォールバック: 所持特殊が全て盤面に出ている（リロードしても出せない）
-        #    → 剣20%/盾20%/魔鉱石60%で追加生成（extra=所持外・袋会計に影響しない）
+        # 6) 生成は所持特殊が全て盤面に出ていても袋比率の抽選で生成できる（複製なので枯渇の概念なし）
         page.evaluate("window.__test.spawn(['golem'])"); time.sleep(0.3)  # 高HPで撃破を避ける
         page.evaluate("window.__test.setSmithMode('stock')")
         make_group(page, [0, 1, 2], 1); time.sleep(0.2)
         page.evaluate("window.__test.setAct('heal')")
         page.evaluate("window.__test.commit(0)"); time.sleep(0.8)  # 素材3を確保
-        chk("stock 3 for fallback test", ci(page)["stock"] == 3, f"stock={ci(page)['stock']}")
+        chk("stock 3 for saturated test", ci(page)["stock"] == 3, f"stock={ci(page)['stock']}")
         page.evaluate("window.__test.resolve()"); time.sleep(1.2)
-        # make_groupで盤面の特殊を全消去してから、所持特殊を全数(9個)盤面に配置
+        # make_groupで盤面の特殊を全消去してから、所持特殊を全数盤面に配置
         make_group(page, [6, 7, 8], 1); time.sleep(0.2)
         owned = st(page)["owned"]
         owned_total_before = st(page)["ownedTotal"]
+        bag_before = st(page)["bagLeft"]
         cells = list(range(24, 36)); ptr = 0
         for k, v in owned.items():
             for _ in range(v):
@@ -146,38 +149,35 @@ with sync_playwright() as pw:
         s = st(page); info = ci(page)
         row_sp = [s["board"][i]["sp"] for i in [6, 7, 8]]
         row_x = [s["board"][i]["x"] for i in [6, 7, 8]]
-        chk("gen fallback made 3 specials in {atk,def,ore}", len([x for x in row_sp if x]) == 3 and all(x in ("atk", "def", "ore") for x in row_sp), str(row_sp))
-        chk("fallback drops flagged extra", all(row_x), str(row_x))
-        chk("fallback did not add to owned", st(page)["ownedTotal"] == owned_total_before, f"{owned_total_before}->{st(page)['ownedTotal']}")
-        chk("fallback stock spent to 0", info["stock"] == 0, f"stock={info['stock']}")
-        chk("fallback action consumed", "heal" in s["used"])
+        chk("gen still made 3 specials when saturated", len([x for x in row_sp if x]) == 3, str(row_sp))
+        chk("saturated gen drops flagged extra", all(row_x), str(row_x))
+        chk("saturated gen did not add to owned", st(page)["ownedTotal"] == owned_total_before, f"{owned_total_before}->{st(page)['ownedTotal']}")
+        chk("saturated gen did not touch bag", st(page)["bagLeft"] == bag_before, f"bag {bag_before}->{st(page)['bagLeft']}")
+        chk("saturated gen stock spent to 0", info["stock"] == 0, f"stock={info['stock']}")
+        chk("saturated gen action consumed", "heal" in s["used"])
 
-        # 7) 部分フォールバック: 所持のうち盤面外が2つ + 素材5 → 袋2 + 追加3 の計5生成（袋数でキャップされない）
+        # 7) 素材5で5個生成しても袋は一切減らない（全て複製・所持数でキャップされない）
         page.evaluate("window.__test.resolve()"); time.sleep(1.2)
         page.evaluate("window.__test.spawn(['golem'])"); time.sleep(0.3)
         page.evaluate("window.__test.setSmithMode('stock')")
         make_group(page, [0, 1, 2, 3, 4], 1); time.sleep(0.2)
         page.evaluate("window.__test.setAct('heal')")
         page.evaluate("window.__test.commit(0)"); time.sleep(0.8)  # 素材+5
-        chk("stock>=5 for partial test", ci(page)["stock"] >= 5, f"stock={ci(page)['stock']}")
+        chk("stock>=5 for bulk test", ci(page)["stock"] >= 5, f"stock={ci(page)['stock']}")
         page.evaluate("window.__test.resolve()"); time.sleep(1.2)
-        # 5個の生成対象グループ + 所持特殊を7個だけ盤面に配置(availLeft = 9-7 = 2)
         make_group(page, [18, 19, 20, 21, 22], 1); time.sleep(0.2)
-        owned = st(page)["owned"]
-        flat = []
-        for k, v in owned.items(): flat += [k] * v
-        for c, k in zip([24, 25, 26, 27, 28, 29, 30], flat[:7]):
-            page.evaluate(f"window.__test.setCellSpecial({c}, '{k}', false, false)")
-        time.sleep(0.1)
+        bag_before = st(page)["bagLeft"]
+        owned_total_before = st(page)["ownedTotal"]
         page.evaluate("window.__test.setSmithMode('gen')")
         page.evaluate("window.__test.setAct('heal')")
         page.evaluate("window.__test.commit(18)"); time.sleep(0.6)
         s = st(page)
         row = [s["board"][i] for i in [18, 19, 20, 21, 22]]
-        n_extra = sum(1 for c in row if c["x"])
-        n_bag = sum(1 for c in row if c["sp"] and not c["x"])
-        chk("partial gen: 5 total (袋数でキャップされない)", n_extra + n_bag == 5, f"bag={n_bag} extra={n_extra}")
-        chk("partial gen: 袋2 + 追加3", n_bag == 2 and n_extra == 3, f"bag={n_bag} extra={n_extra}")
+        n_gen = sum(1 for c in row if c["sp"])
+        chk("bulk gen: 5 placed", n_gen == 5, f"gen={n_gen}")
+        chk("bulk gen: all extra", all(c["x"] for c in row if c["sp"]), str([(c["sp"], c["x"]) for c in row]))
+        chk("bulk gen: bag untouched", s["bagLeft"] == bag_before, f"bag {bag_before}->{s['bagLeft']}")
+        chk("bulk gen: owned untouched", s["ownedTotal"] == owned_total_before, f"owned {owned_total_before}->{s['ownedTotal']}")
     else:
         chk("stock resets per battle (skipped: status=" + s["status"] + ")", False)
 
