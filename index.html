@@ -2417,19 +2417,20 @@ function DropBattle() {
       if (!turnRef.current.stun) { turnRef.current.stun = true; syncTurn(); addLog(["⏳ 時止めの砂：このターン敵は行動しない"]); SFX.pick(); used = true; }
     } else if (k === "bomb") {
       const ens = enemiesRef.current.map(e => ({ ...e }));
-      let hitAny = false;
+      const hitIds = new Set(); // 爆風を実際に浴びた敵だけ。既に倒れていた敵は対象外
       for (const en of ens) {
         if (!en.alive) continue;
-        hitAny = true;
+        hitIds.add(en.id);
         let dmg = 80;
         if ((en.shd || 0) > 0) { const bs = Math.min(en.shd, dmg); en.shd -= bs; dmg -= bs; }
         en.hp = Math.max(0, en.hp - dmg);
         if (en.hp <= 0) en.alive = false;
         addPop(en.id, "-" + dmg, "#ffb08a");
       }
-      if (hitAny) {
+      if (hitIds.size) {
         setEnemiesBoth(ens);
-        ens.forEach(en => setAnim(en.id, en.alive ? "hit" : "die"));
+        // 以前のターンで倒した敵にまで die を流すと、消えたはずの敵が一瞬復活して見える
+        ens.forEach(en => { if (hitIds.has(en.id)) setAnim(en.id, en.alive ? "hit" : "die"); });
         SFX.atk(); setShakeSeq(q => q + 1); addLog(["💣 爆裂瓶：敵全体に80ダメージ"]); // アイテムで実ダメージ→画面を揺らす
         used = true;
         if (ens.every(e => !e.alive)) {
@@ -4452,24 +4453,26 @@ function DropBattle() {
               : [IIco(pm.img), iv.dmg]
               ).concat(twice ? [h("span", { style:{ color:"#ff9a5a", fontWeight:900, marginLeft:1 } }, "×2")] : []);
             const isDmgIntent = iv.act === "attack" || iv.act === "double" || iv.act === "bigatk" || iv.act === "drain" || iv.act === "jamatk";
+            // 状態バッジ（激昂・怒気）の有無。予告バッジはこの行の分だけ上へ逃がして重なりを防ぐ
+            const hasStat = (en.enr || 0) > 0 || !!(en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id));
             return h("button", { key:en.id,
               onClick: () => { if (en.alive && !locked && status === "battle") { setTargetId(en.id); targetRef.current = en.id; SFX.tap(); } },
               className:"relative flex flex-col items-center", style:{ width:Math.max(sz + 4, 58), cursor: en.alive ? "pointer" : "default",
                 filter: gtut === "warn" && en.alive ? "drop-shadow(0 0 12px rgba(255,190,90,.95)) drop-shadow(0 0 5px rgba(255,120,60,.85))" : "none",
                 transition:"filter .3s ease" } },
-              // 名前は表示しない。激昂・強敵の状態だけスプライトの上にバッジで出す（下に積むと表示量で足元が浮くため）
+              // 名前は表示しない。激昂の状態だけスプライトの上にバッジで出す（下に積むと表示量で足元が浮くため）
+              // 精鋭（どくろ）マークは廃止。バトル中に意味が伝わらず、予告バッジの裏に潜って表示も壊れていたため
               // 条件は必ず真偽値にする: soloUp は 0 を持つため素で && すると 0 が返り、React が「0」を描画してしまう
-              ((en.enr || 0) > 0 || !!en.elite || !!(en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id))) && h("span", { className:"flex items-center justify-center", style:{ gap:3, marginTop:2, marginBottom:2, maxWidth:"none" } },
-                h("span", { className:"text-[9px] font-bold inline-flex items-center", style:{ gap:2, padding:"1px 6px", borderRadius:6, background:"rgba(10,8,16,.72)", border:"1px solid rgba(255,255,255,.12)", color: en.boss ? "#ff5c7a" : en.elite ? "#d05cff" : "#d8cbe8", opacity: en.alive ? 0.95 : 0.35, textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } },
+              hasStat && h("span", { className:"flex items-center justify-center", style:{ gap:3, marginTop:2, marginBottom:2, maxWidth:"none" } },
+                h("span", { className:"text-[9px] font-bold inline-flex items-center", style:{ gap:2, padding:"1px 6px", borderRadius:6, background:"rgba(10,8,16,.72)", border:"1px solid rgba(255,255,255,.12)", color: en.boss ? "#ff5c7a" : "#d8cbe8", opacity: en.alive ? 0.95 : 0.35, textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } },
                   (en.enr || 0) > 0 && h("img", { src:"assets/st_enrage.png", alt:"激昂", draggable:false, width:11, height:11, style:{ width:11, height:11, maxWidth:11, maxHeight:11, flexShrink:0, objectFit:"contain" } }),
                   (en.enr || 0) > 0 && en.enr,
-                  en.elite && h("img", { src:"assets/mk_skull.png", alt:"精鋭", draggable:false, width:12, height:12, style:{ width:12, height:12, maxWidth:12, maxHeight:12, flexShrink:0, objectFit:"contain", marginLeft:(en.enr||0)>0?2:0 } }),
                   // 取り巻き全滅で火力アップ中（裏5章ボス）
-                  !!(en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id)) && h("span", { style:{ marginLeft:(en.enr||0)>0||en.elite?3:0, color:"#ff5c7a", fontWeight:900 } }, "怒気"))),
+                  !!(en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id)) && h("span", { style:{ marginLeft:(en.enr||0)>0?3:0, color:"#ff5c7a", fontWeight:900 } }, "怒気"))),
               h("span", { style:{ position:"relative", display:"block" } },
                 // 予告（攻撃など）はスプライトに重ねて表示。ボスは縦に高く、別の行として積むと低い画面高で見切れるため
                 // ボスはスプライトが高く予告が枠上端からはみ出しうるため少し下げる
-                en.alive && h("span", { className:"absolute text-[10px] font-bold inline-flex items-center", style:{ top: en.boss ? -24 : -28, left:"50%", gap:2,
+                en.alive && h("span", { className:"absolute text-[10px] font-bold inline-flex items-center", style:{ top: (en.boss ? -24 : -28) - (hasStat ? 18 : 0), left:"50%", gap:2,
                   transform: gtut === "warn" && isDmgIntent ? "translateX(-50%) scale(1.15)" : "translateX(-50%)",
                   height:18, lineHeight:"16px", padding:"0 6px", borderRadius:9, whiteSpace:"nowrap", zIndex:2,
                   background: isDmgIntent ? (iv.act === "bigatk" ? "rgba(150,26,40,.9)" : "rgba(120,32,32,.8)") : "rgba(0,0,0,.55)",
