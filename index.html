@@ -96,7 +96,11 @@ button:active{filter:brightness(1.12)}
 @keyframes dmgPop{0%{opacity:0;transform:translate(-50%,8px) scale(.7)}15%{opacity:1;transform:translate(-50%,0) scale(1.2)}35%{transform:translate(-50%,-4px) scale(1)}100%{opacity:0;transform:translate(-50%,-30px) scale(.95)}}
 .dmg-pop{position:absolute;top:6%;left:50%;font-weight:900;font-size:1.05rem;text-shadow:0 2px 0 #000,0 0 3px #000;animation:dmgPop .9s ease forwards;pointer-events:none;z-index:6;white-space:nowrap}
 @keyframes sceneShake{0%,100%{transform:translate(0,0)}15%{transform:translate(-7px,3px)}30%{transform:translate(6px,-3px)}45%{transform:translate(-5px,2px)}60%{transform:translate(4px,-2px)}75%{transform:translate(-2px,1px)}}
+@keyframes sceneShake2{0%,100%{transform:translate(0,0)}15%{transform:translate(-7px,3px)}30%{transform:translate(6px,-3px)}45%{transform:translate(-5px,2px)}60%{transform:translate(4px,-2px)}75%{transform:translate(-2px,1px)}}
+/* 揺れは key 再マウントではなく2つの同一アニメを交互に当てて再生する（再マウントすると
+   ヒーローの攻撃モーションと演出テキストが頭から再生され「2回攻撃」に見えるため） */
 .scene-shake{animation:sceneShake .45s ease}
+.scene-shake2{animation:sceneShake2 .45s ease}
 @keyframes impactFlash{0%{opacity:.55}100%{opacity:0}}
 .impact-flash{background:radial-gradient(circle at 60% 45%, rgba(255,240,220,.95), rgba(255,200,160,.35) 45%, transparent 70%);animation:impactFlash .35s ease forwards;z-index:4}
 @keyframes valPulse{0%{transform:scale(1.35)}100%{transform:scale(1)}}
@@ -320,7 +324,8 @@ for (const k in RGEM) Object.assign(RGEM[k], TX.rgem[k]);
 const RELIC_KEYS = Object.keys(RELICS);
 // 核レリック（色ごとの上下爆破）: ドロップ色 → レリックキー
 const CORE_BY_COLOR = { 0:"redcore", 1:"ambercore", 2:"violetcore", 3:"jadecore" };
-const RELIC_PRICE = { 1:90, 2:130, 3:180 };
+// 価格は全体2倍。レア度が高い（＝強い）レリックはさらに上乗せ
+const RELIC_PRICE = { 1:180, 2:280, 3:460 };
 let RELICSET = new Set();
 const hasR = k => RELICSET.has(k);
 const specialTarget = () => NUM_SPECIAL + (hasR("stardust") ? 1 : 0) + (hasR("bigstar") ? 2 : 0);
@@ -330,16 +335,16 @@ const itemDesc = k => ITEMS[k].desc;
 const itemName = k => ITEMS[k].name;
 // 消費アイテム（最大3個・ショップでコイン交換）
 const CONSUM = {
-  potion:   { icon:"🧪", img:"assets/cs_potion.png",   price:45 },
-  might:    { icon:"💪", img:"assets/cs_might.png",    price:55 },
-  aegis:    { icon:"🛡", img:"assets/cs_aegis.png",    price:55 },
-  colorize: { icon:"🎨", img:"assets/cs_colorize.png", price:60 },
-  purify:   { icon:"🧹", img:"assets/cs_purify.png",   price:50 },
-  stun:     { icon:"⏳", img:"assets/cs_stun.png",     price:65 },
-  bomb:     { icon:"💣", img:"assets/cs_bomb.png",     price:60 },
-  venom:    { icon:"🐍", img:"assets/cs_venom.png",    price:55 },
-  gemrain:  { icon:"💎", img:"assets/cs_gemrain.png",  price:60 },
-  phoenix:  { icon:"🪶", img:"assets/cs_phoenix.png",  price:80 }
+  potion:   { icon:"🧪", img:"assets/cs_potion.png",   price:90 },
+  might:    { icon:"💪", img:"assets/cs_might.png",    price:110 },
+  aegis:    { icon:"🛡", img:"assets/cs_aegis.png",    price:110 },
+  colorize: { icon:"🎨", img:"assets/cs_colorize.png", price:120 },
+  purify:   { icon:"🧹", img:"assets/cs_purify.png",   price:100 },
+  stun:     { icon:"⏳", img:"assets/cs_stun.png",     price:150 }, // 敵の行動を止める＝強力なので上乗せ
+  bomb:     { icon:"💣", img:"assets/cs_bomb.png",     price:120 },
+  venom:    { icon:"🐍", img:"assets/cs_venom.png",    price:110 },
+  gemrain:  { icon:"💎", img:"assets/cs_gemrain.png",  price:120 },
+  phoenix:  { icon:"🪶", img:"assets/cs_phoenix.png",  price:240 } // 復活は最も高価
 };
 for (const k in CONSUM) Object.assign(CONSUM[k], TX.consum[k]);
 const ACTIONS = {
@@ -508,8 +513,11 @@ const intentOf = (en, allies) => {
     : act === "double" ? hit * 2
     : act === "bigatk" ? Math.max(1, Math.round(en.atk * (en.boss ? (k.bigMul || 2) : Math.min(k.bigMul || 2, 2.4)) * (en.bigX || 1) * roll)) : 0;
   if (act === "bigatk" && en.bigFloor) dmg = Math.max(dmg, en.bigFloor); // 弱エリートの溜め攻撃下限
+  // jamatk（攻撃と同時に汚染）は単発の jam より汚染数を1つ減らす。
+  // 予告バッジもこの値を出すので、表示と実際の汚染数が食い違わない
+  const jamBase = Math.max(1, (k.jamN || 3) - (hasR("salt") ? 1 : 0));
   return { act, dmg, hit, hits: act === "double" ? 2 : 1,
-    jamN: Math.max(1, (k.jamN || 3) - (hasR("salt") ? 1 : 0)), heal: Math.round(en.atk * (k.healMul || 1.5)) };
+    jamN: act === "jamatk" ? Math.max(1, jamBase - 1) : jamBase, heal: Math.round(en.atk * (k.healMul || 1.5)) };
 };
 const rollDmg = () => SIM_MODE ? 1 : 0.85 + Math.random() * 0.3;
 // 大攻撃まであと何ターンか（ため表示用）
@@ -1509,8 +1517,9 @@ function DropBattle() {
   const setItemsBoth = a => { itemsRef.current = a; setItems(a); };
   const [armed, setArmed] = useState(null); // アイテム確認中スロット
   const armedTimer = useRef(null);
-  const [shop, setShop] = useState(null); // {offers:[...], relic}
+  const [shop, setShop] = useState(null); // {offers:[...], relic, sale, disc}
   const shopRef = useRef(null); shopRef.current = shop;
+  const shopNumRef = useRef(0); // 何人目の行商人か（1人目は半額セール）
   const rewardsRef = useRef(null); rewardsRef.current = rewards;
   const upRewardForceRef = useRef(null); // テスト用: 群れの強化報酬抽選を固定（null=通常30%）
   const relicsRef = useRef([]);
@@ -1745,7 +1754,9 @@ function DropBattle() {
         return;
       }
       const item = items[i];
-      if (item.text) setFx(prev => [...prev.slice(-2), item]);
+      // _k は行ごとに固定のキー。index をキーにすると 3 行目以降で DOM が使い回されて
+      // 既に再生済みの fxPop が当たったまま文字だけ差し替わり、点滅して見える
+      if (item.text) setFx(prev => [...prev.slice(-2), { ...item, _k: i }]);
       if (item.run) item.run();
       i++;
       fxTimer.current = setTimeout(step, FAST ? 40 : (item.wait || 680));
@@ -1793,14 +1804,34 @@ function DropBattle() {
       // 段階演出: 「強化」テキストと同時に ×倍率 を表示 → 最終値（元の値だけ見せる待ちは廃止・1テンポ短縮）
       setBuffAnim({ st: pend.st, from: oldV, to: newV, mult: pend.mult, stage: 2 });
       setTimeout(() => setBuffAnim(a => (a && a.to === newV ? { ...a, stage: 3 } : a)), 620);
-      setTimeout(() => setBuffAnim(a => (a && a.to === newV ? null : a)), 1450);
-      buffStep = { text: `💪 ${pend.st === "atk" ? "攻撃" : "防御"}強化 ×${pend.mult.toFixed(1)}`, color:"#ffd75e", act:"heal", wait: FAST ? 40 : 1100, run: () => { SFX.charge(); } };
+      // 消すのはターン終了時（攻撃/防御の数値が0に戻るタイミング）— resolveTurn 末尾の freshTurn を参照
+      // text は持たせない: 敵/プレイヤー側に出す演出テキストはダメージと被ダメージだけにする。
+      // 効果音も鳴らさない（攻撃音と重なって「ダダン」と二度鳴りして聞こえるため）。
+      // 数値の段階表示(620ms)を見せるぶんの間だけ確保する
+      buffStep = { act:"heal", wait: FAST ? 40 : 700 };
+    }
+    // ノアの蓄積: 強化と同じくここで攻防へ加算する（消した瞬間ではなく攻撃の直前）
+    const spend = turnRef.current.storePend;
+    let storeStep = null;
+    if (spend) {
+      const fromAtk = turnRef.current.atk, fromDef = turnRef.current.def;
+      const toAtk = fromAtk + spend.add, toDef = fromDef + spend.add;
+      turnRef.current.atk = toAtk;
+      turnRef.current.def = toDef;
+      turnRef.current.storePend = null;
+      syncTurn();
+      setStoreAnim({ fromAtk, fromDef, toAtk, toDef, add: spend.add, stage: 2 });
+      setTimeout(() => setStoreAnim(a => (a && a.toAtk === toAtk ? { ...a, stage: 3 } : a)), 620);
+      // 消すのはターン終了時（攻撃/防御が0に戻るタイミング）
+      // 強化と同様、テキストも効果音も出さず間だけ（加算は攻撃/防御の数値と光りで見せる）
+      storeStep = { act:"heal", wait: FAST ? 40 : 700 };
     }
     let { atk, def, heal } = turnRef.current;
     recordCharStats(curCharRef.current, atk, def); // このターンの攻撃力/防御力で記録更新
     const seq = [];
     const logs = [`― ターン ${turnNumRef.current} ―`];
     if (buffStep) seq.push(buffStep);
+    if (storeStep) seq.push(storeStep);
     const ens = enemiesRef.current.map(e => ({ ...e }));
     const tn = turnNumRef.current;
 
@@ -1826,7 +1857,10 @@ function DropBattle() {
         const isFirst = first; first = false;
         const dead = !en.alive;
         seq.push({
-          text: `${isFirst ? "乱れ斬り！" : ""}${en.name}に ${dealtH}！`, color: "#ff9a3c", act: "atk",
+          text: dealtH > 0
+            ? `${isFirst ? "乱れ斬り！" : ""}${en.name}に ${dealtH}！`
+            : `${en.name}のシールドが受け止めた！`,
+          color: dealtH > 0 ? "#ff9a3c" : "#9db8e8", act: "atk",
           wait: 520,
           run: () => {
             if (isFirst) setAnim("hero", "attack");
@@ -1867,7 +1901,7 @@ function DropBattle() {
         const isFirst = first; first = false;
         const dead = !en.alive;
         const txt = dealtH > 0
-          ? `${isFirst ? "" : "貫通！"}${en.name}に${dealtS > 0 ? `シールド${dealtS}を砕き` : ""} ${dealtH}！`
+          ? `${isFirst ? "" : "貫通！"}${en.name}に ${dealtH}！`
           : `${en.name}のシールドが受け止めた！`;
         seq.push({
           text: txt, color: dealtH > 0 ? "#ff6b6b" : "#9db8e8", act: "atk",
@@ -1928,7 +1962,7 @@ function DropBattle() {
       const iv = intentOf(en, ens);
       en.pi++;
       if (iv.act === "jamatk") {
-        const jn = Math.max(1, iv.jamN - 1);
+        const jn = iv.jamN; // 減算は intentOf 側で済ませてある（予告と同じ数）
         seq.push({ text: `${en.name}の呪撃！ドロップ${jn}個汚染`, color: "#e8a2ff",
           run: () => { setTimeout(() => { commitBoard(jamBoard(boardRef.current, jn)); SFX.jam(); }, 150); } });
         logs.push(`⚔🌀 ${en.name}の呪撃（お邪魔${jn}個）`);
@@ -2119,6 +2153,8 @@ function DropBattle() {
         }
       }
       turnRef.current = freshTurn();
+      setBuffAnim(null); setStoreAnim(null); // 強化の×倍率・蓄積の+N表示は攻撃/防御が0に戻るここまで残す
+      setPops({}); // 前ターンのダメージ表示を掃除（撃破された敵の分が残り続けていた）
       if (hasR("ironwill") && shield > 0) turnRef.current.def += Math.floor(shield / 2);
       if (overheal > 0) { turnRef.current.def += overheal; addLog([`📿 祈祷書: あふれた回復${overheal}が防御に`]); }
       if (hasR("regen")) setPHP(Math.min(pMaxRef.current, pRef.current + 2));
@@ -2252,9 +2288,25 @@ function DropBattle() {
   };
 
   // ===== ショップ（群れ勝利後・休憩所） =====
-  const priceOf = base => Math.round(base * (hasR("member") ? 0.8 : 1));
+  const priceOf = (base, rate = 1) => Math.max(1, Math.round(base * (hasR("member") ? 0.8 : 1) * rate));
+  // 商品ごとの割引率（初回セールと重ねない）。たまに 10/20/30%off が混ざる
+  const rollDisc = () => { const r = Math.random(); return r < 0.70 ? 0 : r < 0.85 ? 0.1 : r < 0.95 ? 0.2 : 0.3; };
+  const shopRate = k => { // 表示・購入で共通に使う倍率
+    const s = shopRef.current;
+    if (!s) return 1;
+    return (s.sale || 1) * (1 - (s.disc && s.disc[k] ? s.disc[k] : 0));
+  };
   const openShop = () => {
-    setShop({ offers: shuffle(Object.keys(CONSUM)).slice(0, hasR("dice") ? 6 : 4), relic: pickRelics(1)[0] || null, intro: true });
+    shopNumRef.current += 1;
+    const first = shopNumRef.current === 1; // 最初の行商人だけ半額セール
+    const offers = shuffle(Object.keys(CONSUM)).slice(0, hasR("dice") ? 6 : 4);
+    const relic = pickRelics(1)[0] || null;
+    const disc = {};
+    if (!first) { // 半額セール中は個別割引を出さない（値引きの二重掛けを避ける）
+      for (const k of offers) disc[k] = rollDisc();
+      if (relic) disc["__relic"] = rollDisc();
+    }
+    setShop({ offers, relic, intro: true, sale: first ? 0.5 : 1, disc });
     SFX.open();
     setTimeout(() => {
       setShop(sp => sp && sp.intro ? { ...sp, intro: false } : sp);
@@ -2262,7 +2314,7 @@ function DropBattle() {
     }, 1600);
   };
   const buyRelic = k => {
-    const cost = priceOf(RELIC_PRICE[RELICS[k].rar]);
+    const cost = priceOf(RELIC_PRICE[RELICS[k].rar], shopRate("__relic"));
     if (coinsRef.current < cost) { SFX.tap(); return; }
     setCoinsBoth(coinsRef.current - cost);
     addRelic(k);
@@ -2271,10 +2323,11 @@ function DropBattle() {
   const closeShop = () => { setShop(null); SFX.step(); finishNode(); };
   const buyItem = k => {
     const c = CONSUM[k];
-    if (coinsRef.current < priceOf(c.price) || itemsRef.current.length >= itemCap()) { SFX.tap(); return; }
-    setCoinsBoth(coinsRef.current - priceOf(c.price));
+    const cost = priceOf(c.price, shopRate(k));
+    if (coinsRef.current < cost || itemsRef.current.length >= itemCap()) { SFX.tap(); return; }
+    setCoinsBoth(coinsRef.current - cost);
     setItemsBoth([...itemsRef.current, k]);
-    addLog([`🛒 ${c.name}を購入（-${c.price}）`]);
+    addLog([`🛒 ${c.name}を購入（-${cost}）`]);
     SFX.pick();
   };
 
@@ -2686,7 +2739,6 @@ function DropBattle() {
       if (Math.min(n, cand.length) > 0) addLog(["雫 虹ドロップが生まれた！"]);
     }
     let mainAdd = eff.main;
-    let storeFxFrom = null; // ノア蓄積の段階演出用（加算前の攻防値）
     if (act === "atk" && turnRef.current.atkBoost) mainAdd *= 2;
     if (act === "def" && turnRef.current.defBoost) mainAdd *= 2;
     if (act === "heal" && skill === "buff") {
@@ -2710,11 +2762,11 @@ function DropBattle() {
       const spAdd = (info.sp.store + info.spu.store) * 2;
       storeRef.current += info.count * sinc + spAdd;
       setStoreView(storeRef.current);
-      storeFxFrom = { fromAtk: turnRef.current.atk, fromDef: turnRef.current.def, add: storeRef.current }; // 演出用に加算前の値を記録
-      turnRef.current.atk += storeRef.current;
-      turnRef.current.def += storeRef.current;
+      // 攻防への加算は「予約」だけ。実際に足すのはガレスの強化と同じくターン解決の攻撃直前
+      // （＝蓄積を先に消しても、後から積んだ攻撃/防御にちゃんと乗る）
+      turnRef.current.storePend = { add: storeRef.current };
       if (spAdd > 0) addLog([`📚 蓄積石 +${spAdd}`]);
-      addLog([`📚 蓄積 ${storeRef.current}（攻撃と防御へ加算）`]);
+      addLog([`📚 蓄積 ${storeRef.current} を準備！（攻撃の直前に加算）`]);
       ctutFinish(); // 蓄積チュートリアルの対象を消したら締めへ
     } else if (act === "heal" && skill === "smith") {
       // 鍛冶キャラ・補充：消した数だけ素材を貯める（回復はしない）。名工の金床で2倍
@@ -2729,14 +2781,6 @@ function DropBattle() {
     if (eff.splitAtk) turnRef.current.atk += eff.splitAtk;
     if (eff.splitDef) turnRef.current.def += eff.splitDef;
     if (eff.healBonus) turnRef.current.heal += eff.healBonus;
-    // ノア蓄積: ガレス式の段階演出（元の値 +蓄積 → 最終値。剣盾の分割加算も最終値に含む）
-    if (storeFxFrom) {
-      const toAtk = turnRef.current.atk, toDef = turnRef.current.def;
-      setStoreAnim({ ...storeFxFrom, toAtk, toDef, stage: 2 });
-      setTimeout(() => setStoreAnim(a => (a && a.toAtk === toAtk ? { ...a, stage: 3 } : a)), 620);
-      setTimeout(() => setStoreAnim(a => (a && a.toAtk === toAtk ? null : a)), 1450);
-      SFX.charge();
-    }
     if (info.sp.pierce > 0) turnRef.current.pierce = true;
     if (act === "atk" && info.sp.aoe > 0) {
       turnRef.current.aoe = true;
@@ -3196,7 +3240,7 @@ function DropBattle() {
     ownedUpRef.current = initZero(); bagUpRef.current = initZero();
     setAct(0); setPMax(P_MAX); setActClear(null);
     relicsRef.current = []; RELICSET = new Set(); setRelicsView([]);
-    battleNumRef.current = 0; setGuide(null);
+    battleNumRef.current = 0; shopNumRef.current = 0; setGuide(null);
     setStatus(toTitle ? "title" : "map"); statusRef.current = toTitle ? "title" : "map";
     setLog(toTitle ? [] : ["― ルートを選んで進もう ―"]);
     setFx([]);
@@ -3222,7 +3266,7 @@ function DropBattle() {
         edges: m.edges.map(e => ({ from:e.from, to:e.to })),
         cur: curNodeRef.current, visited: [...visitedRef.current],
         order: actOrderRef.current.slice(),
-        battleNum: battleNumRef.current }));
+        battleNum: battleNumRef.current, shopNum: shopNumRef.current }));
     } catch (e) {}
   };
   const resumeRun = sv => {
@@ -3256,6 +3300,7 @@ function DropBattle() {
     setCoinsBoth(sv.coins || 0);
     setItemsBoth((sv.items || []).filter(k => CONSUM[k]));
     battleNumRef.current = sv.battleNum || 1;
+    shopNumRef.current = sv.shopNum || 0; // 再開後にセールがやり直しにならないよう引き継ぐ
     commitBoard(makePlainBoard()); // 袋から引かない（セーブされた袋をそのまま復元）
     syncBag(); setPops({});
     setAction(actOrderRef.current[0]); actionRef.current = actOrderRef.current[0];
@@ -3495,9 +3540,10 @@ function DropBattle() {
     for (let ai = 0; ai < actsN; ai++) if (pat[(e.pi + ai) % pat.length] === "poison") c++;
     return n + c * POISON_DMG;
   }, 0);
-  // 防御はガレスの予約倍率（攻撃直前に計算される分）も織り込んで予測する
-  const effDef = tv.buffPend && tv.buffPend.st === "def" ? Math.round(tv.def * tv.buffPend.mult)
-    : tv.buffPend && tv.buffPend.horn > 0 ? Math.round(tv.def * tv.buffPend.horn) : tv.def;
+  // 防御はガレスの予約倍率・ノアの予約蓄積（どちらも攻撃直前に反映される分）を織り込んで予測する
+  const pendDef = tv.def + (tv.storePend ? tv.storePend.add : 0);
+  const effDef = tv.buffPend && tv.buffPend.st === "def" ? Math.round(pendDef * tv.buffPend.mult)
+    : tv.buffPend && tv.buffPend.horn > 0 ? Math.round(pendDef * tv.buffPend.horn) : pendDef;
   const incomingPreview = Math.max(0, enemies.filter(e => e.alive).reduce((s,e) => s + intentOf(e, enemies).dmg * ((e.enr || 0) >= 3 ? 2 : 1), 0) - effDef) + poisonPreview; // 毒は防御無視で確定発生するため別枠で加算
   const rootStyle = {
     fontFamily: FONT,
@@ -4056,39 +4102,58 @@ function DropBattle() {
             filter:"drop-shadow(0 0 18px rgba(232,192,106,.55))" } })),
       h("p", { className:"font-bold mt-5", style:{ color:"#e8c06a", fontSize:"1.35rem", textShadow:"0 2px 0 #000, 0 0 12px rgba(232,192,106,.4)", animation:"merchTxt .9s ease .3s both" } }, "行商人が現れた！")));
   } else if (shop) {
+    // 値札: 割引があれば元値に取り消し線を添えて「いくら安いか」を見せる
+    const priceTag = (base, rate) => {
+      const now = priceOf(base, rate), was = priceOf(base);
+      return now < was
+        ? h("span", { className:"flex items-center gap-1" },
+            h("span", { style:{ fontSize:"0.62rem", opacity:0.6, textDecoration:"line-through" } }, was),
+            Ic("assets/icon_coin.png", 12), " ", now)
+        : h("span", { className:"flex items-center gap-1" }, Ic("assets/icon_coin.png", 12), " ", now);
+    };
+    const discBadge = rate => { // 「-20%」バッジ（セール中は上のバナーに任せる）
+      const off = Math.round((1 - rate) * 100);
+      return shop.sale < 1 || off <= 0 ? null
+        : h("span", { className:"ml-1.5 rounded px-1 py-0.5 text-[9px] font-bold align-middle",
+            style:{ background:"#c8443c", color:"#fff2ec" } }, "-" + off + "%");
+    };
     overlays.push(h("div", { key:"shop", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:58 } },
       h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:370, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
         h("div", { className:"flex justify-between items-center mb-1" },
           h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#e8c06a", fontSize:"1.05rem" } }, Ic("assets/merchant.png", 20), "行商人"),
           h("span", { className:"text-sm font-bold flex items-center gap-1", style:{ color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, Ic("assets/icon_coin.png", 14), coins)),
         h("p", { className:"text-[10px] mb-2", style:{ opacity:0.7 } }, "コインでアイテムと交換できる（所持 ", items.length, "/", itemCap(), "）"),
+        shop.sale < 1 && h("div", { className:"rounded-lg px-3 py-1.5 mb-2 text-center text-xs font-bold",
+          style:{ background:"linear-gradient(180deg,#c8443c,#8e2a24)", border:"2px solid #e8968e", color:"#fff2ec" } },
+          "🎉 開店記念セール　全品 半額！"),
         shop.relic && (() => {
-          const rk = shop.relic, rc = priceOf(RELIC_PRICE[RELICS[rk].rar]);
+          const rk = shop.relic, rRate = shopRate("__relic"), rc = priceOf(RELIC_PRICE[RELICS[rk].rar], rRate);
           const can = coins >= rc;
           return h("div", { className:"flex items-center gap-3 rounded-xl px-3 py-2 mb-2", style:{ background:"rgba(232,192,106,.08)", border:"2px solid #6e5a3c" } },
             h("span", { style:{ minWidth:30, display:"flex", justifyContent:"center" } }, Ic(RELICS[rk].img, 26)),
             h("span", { className:"flex-1" },
-              h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, "🏺 ", RELICS[rk].name),
+              h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, "🏺 ", RELICS[rk].name, discBadge(rRate)),
               h("span", { className:"block text-[10px]", style:{ opacity:0.75 } }, RELICS[rk].desc)),
             h("button", { onClick: () => buyRelic(rk), disabled:!can,
               className:"rounded-lg px-3 py-1.5 text-xs font-bold",
               style:{ background: can ? "linear-gradient(180deg,#e8c06a,#b8862e)" : "rgba(255,255,255,.08)",
                 color: can ? "#2c2030" : "#776f88",
-                border: can ? "1px solid #6e4e1a" : "1px solid #3c3450" } }, Ic("assets/icon_coin.png", 12), " ", rc));
+                border: can ? "1px solid #6e4e1a" : "1px solid #3c3450" } }, priceTag(RELIC_PRICE[RELICS[rk].rar], rRate)));
         })(),
         h("div", { className:"flex flex-col gap-2 mb-3" }, shop.offers.map(k => {
           const c = CONSUM[k];
-          const can = coins >= priceOf(c.price) && items.length < itemCap();
+          const rate = shopRate(k);
+          const can = coins >= priceOf(c.price, rate) && items.length < itemCap();
           return h("div", { key:k, className:"flex items-center gap-3 rounded-xl px-3 py-2", style:{ background:"rgba(255,255,255,.05)", border:"2px solid #453b5c" } },
             h("span", { style:{ minWidth:30, textAlign:"center", display:"flex", alignItems:"center", justifyContent:"center" } }, c.img ? Ic(c.img, 26) : h("span", { style:{ fontSize:"1.4rem" } }, c.icon)),
             h("span", { className:"flex-1" },
-              h("span", { className:"font-bold text-sm", style:{ color:"#f0e4c8" } }, c.name),
+              h("span", { className:"font-bold text-sm", style:{ color:"#f0e4c8" } }, c.name, discBadge(rate)),
               h("span", { className:"block text-[10px]", style:{ opacity:0.75 } }, c.desc)),
             h("button", { onClick: () => buyItem(k), disabled: !can,
               className:"rounded-lg px-3 py-1.5 text-xs font-bold",
               style:{ background: can ? "linear-gradient(180deg,#e8c06a,#b8862e)" : "rgba(255,255,255,.08)",
                 color: can ? "#2c2030" : "#776f88",
-                border: can ? "1px solid #6e4e1a" : "1px solid #3c3450" } }, Ic("assets/icon_coin.png", 12), " ", priceOf(c.price)));
+                border: can ? "1px solid #6e4e1a" : "1px solid #3c3450" } }, priceTag(c.price, rate)));
         })),
         items.length >= itemCap() && h("p", { className:"text-[10px] mb-2 text-center", style:{ color:"#f0a8a0" } }, "持ち物がいっぱい（", itemCap(), "個まで）"),
         h("button", { onClick: closeShop, className:"w-full rounded-xl py-2.5 font-bold", style:{ background:"rgba(255,255,255,.1)", border:"2px solid #453b5c", color:"#d8cfe8" } }, "先へ進む ▶"))));
@@ -4339,7 +4404,7 @@ function DropBattle() {
       header,
       relicBarEl,
       // 戦闘シーン
-      h("div", { key:"scn" + shakeSeq, className:"relative w-full mb-1 scene-h" + (shakeSeq > 0 ? " scene-shake" : ""), style:{ borderRadius:16, overflow:"hidden", border: gtut === "warn" ? "2px solid #ff6b6b" : "2px solid #453b5c", background:"#191424", opacity: gSceneDim ? 0.34 : 1, transition:"opacity .3s ease, border-color .3s ease" } },
+      h("div", { key:"scn", className:"relative w-full mb-1 scene-h" + (shakeSeq > 0 ? (shakeSeq % 2 ? " scene-shake" : " scene-shake2") : ""), style:{ borderRadius:16, overflow:"hidden", border: gtut === "warn" ? "2px solid #ff6b6b" : "2px solid #453b5c", background:"#191424", opacity: gSceneDim ? 0.34 : 1, transition:"opacity .3s ease, border-color .3s ease" } },
         flashSeq > 0 && h("div", { key:"fl" + flashSeq, className:"absolute inset-0 pointer-events-none impact-flash" }),
         h("img", { src: mode === "ura" ? (URA_BATTLE_BGS[act] || URA_BATTLE_BGS[0]).src : (BATTLE_BGS[act] || BATTLE_BGS[0]), alt:"", draggable:false, className:"absolute pointer-events-none", style:{ left:0, top:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center bottom", opacity: gtut === "warn" ? 0.28 : .92, transition:"opacity .3s ease", filter: mode === "ura" ? (URA_BATTLE_BGS[act] || URA_BATTLE_BGS[0]).filter : "none" } }),
         h("div", { className:"absolute inset-0 pointer-events-none", style:{ background:"linear-gradient(180deg, rgba(15,11,22,.5) 0%, rgba(15,11,22,.08) 45%, rgba(15,11,22,.42) 100%)" } }),
@@ -4393,13 +4458,14 @@ function DropBattle() {
                 filter: gtut === "warn" && en.alive ? "drop-shadow(0 0 12px rgba(255,190,90,.95)) drop-shadow(0 0 5px rgba(255,120,60,.85))" : "none",
                 transition:"filter .3s ease" } },
               // 名前は表示しない。激昂・強敵の状態だけスプライトの上にバッジで出す（下に積むと表示量で足元が浮くため）
-              ((en.enr || 0) > 0 || en.elite || (en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id))) && h("span", { className:"flex items-center justify-center", style:{ gap:3, marginTop:2, marginBottom:2, maxWidth:"none" } },
+              // 条件は必ず真偽値にする: soloUp は 0 を持つため素で && すると 0 が返り、React が「0」を描画してしまう
+              ((en.enr || 0) > 0 || !!en.elite || !!(en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id))) && h("span", { className:"flex items-center justify-center", style:{ gap:3, marginTop:2, marginBottom:2, maxWidth:"none" } },
                 h("span", { className:"text-[9px] font-bold inline-flex items-center", style:{ gap:2, padding:"1px 6px", borderRadius:6, background:"rgba(10,8,16,.72)", border:"1px solid rgba(255,255,255,.12)", color: en.boss ? "#ff5c7a" : en.elite ? "#d05cff" : "#d8cbe8", opacity: en.alive ? 0.95 : 0.35, textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } },
                   (en.enr || 0) > 0 && h("img", { src:"assets/st_enrage.png", alt:"激昂", draggable:false, width:11, height:11, style:{ width:11, height:11, maxWidth:11, maxHeight:11, flexShrink:0, objectFit:"contain" } }),
                   (en.enr || 0) > 0 && en.enr,
                   en.elite && h("img", { src:"assets/mk_skull.png", alt:"精鋭", draggable:false, width:12, height:12, style:{ width:12, height:12, maxWidth:12, maxHeight:12, flexShrink:0, objectFit:"contain", marginLeft:(en.enr||0)>0?2:0 } }),
                   // 取り巻き全滅で火力アップ中（裏5章ボス）
-                  en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id) && h("span", { style:{ marginLeft:(en.enr||0)>0||en.elite?3:0, color:"#ff5c7a", fontWeight:900 } }, "怒気"))),
+                  !!(en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id)) && h("span", { style:{ marginLeft:(en.enr||0)>0||en.elite?3:0, color:"#ff5c7a", fontWeight:900 } }, "怒気"))),
               h("span", { style:{ position:"relative", display:"block" } },
                 // 予告（攻撃など）はスプライトに重ねて表示。ボスは縦に高く、別の行として積むと低い画面高で見切れるため
                 // ボスはスプライトが高く予告が枠上端からはみ出しうるため少し下げる
@@ -4412,7 +4478,8 @@ function DropBattle() {
                   fontSize: gtut === "warn" && isDmgIntent ? 14 : iv.act === "bigatk" ? 11 : 10,
                   boxShadow: gtut === "warn" && isDmgIntent ? "0 0 0 2px #ff6b6b, 0 0 14px rgba(255,107,107,.8)" : "none",
                   animation: charging ? "intentBlink .9s ease-in-out infinite" : "none", textShadow:"0 1px 2px #000" } }, ...intentEls),
-                en.alive && enrLeft(en, turn) === 0 && h("img", { src:"assets/st_enrage.png", alt:"激昂", draggable:false, width:22, height:22, className:"absolute pointer-events-none", style:{ top:-8, right:-8, width:22, height:22, maxWidth:22, maxHeight:22, objectFit:"contain", zIndex:3, animation:"angerPulse .6s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)" } }),
+                // 激昂の警告は左上へ。右上だと真上の攻撃予告バッジの下に食い込んで重なる
+                en.alive && enrLeft(en, turn) === 0 && h("img", { src:"assets/st_enrage.png", alt:"激昂", draggable:false, width:18, height:18, className:"absolute pointer-events-none", style:{ top:6, left:-9, width:18, height:18, maxWidth:18, maxHeight:18, objectFit:"contain", zIndex:3, animation:"angerPulse .6s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)" } }),
                 isT && h("span", { className:"absolute pointer-events-none", style:{ top:-8, left:"50%", animation:"targetBob 1s ease-in-out infinite", color:"#e8c05a", fontSize:12, textShadow:"0 1px 2px #000", zIndex:2 } }, "▼"),
                 pops[en.id] && h("span", { key:pops[en.id].seq, className:"dmg-pop", style:{ color:pops[en.id].color } }, pops[en.id].text),
                 h(SpriteBox, { kind:en.kind, size:sz, idle:k.idle, anim:a, charge:charging, dead:!en.alive }),
@@ -4430,11 +4497,12 @@ function DropBattle() {
               h("span", { style:{ width:sz * 0.6, height:6, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-4, filter:"blur(2px)", opacity: en.alive ? 1 : 0, transition:"opacity .5s" } }),
               h("span", { className:"w-full mt-1", style:{ opacity: en.alive ? 1 : 0, transition:"opacity .5s", maxWidth:74 } },
                 h(Bar, { value:en.hp, max:en.max, from:"#7a1d1d", to:"#ef4444", height:6 }),
-                h("span", { className:"block text-[9px] font-bold text-center", style:{ color:"#f0b8b0", fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000", marginTop:1 } }, en.hp, "/", en.max)));
+                // 撃破後は数値を出さない（フェードアウトの0.5秒間「0/130」が見えて敵が残っているように見えるため）
+                en.alive && h("span", { className:"block text-[9px] font-bold text-center", style:{ color:"#f0b8b0", fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000", marginTop:1 } }, en.hp, "/", en.max)));
           })),
         // 演出ポップ
         fx.length > 0 && h("div", { className:"absolute inset-0 flex flex-col items-center justify-center pointer-events-none", style:{ gap:6, zIndex:3 } },
-          fx.filter(Boolean).map((f,i) => h("div", { key:i, style:{ fontSize:"1.35rem", fontWeight:900, color:f.color, textShadow:"0 2px 0 #000", animation:"fxPop .7s ease forwards" } }, f.text)))),
+          fx.filter(Boolean).map((f,i) => h("div", { key: f._k != null ? f._k : i, style:{ fontSize:"1.35rem", fontWeight:900, color:f.color, textShadow:"0 2px 0 #000", animation:"fxPop .7s ease forwards" } }, f.text)))),
       // ターン情報
       h("div", { className:"flex items-center justify-between rounded-lg px-3 py-1 mb-1 text-xs", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", opacity: gActive ? 0.34 : 1, transition:"opacity .3s ease" } },
         h("span", { className:"font-bold", style:{ color:"#e8c06a" } }, "ターン ", turn),
@@ -4513,8 +4581,11 @@ function DropBattle() {
             // 使用後は予約中の倍率をターン終了まで表示 / ドロップ選択中は実倍率プレビュー / 未選択時は単価
             const selN = isSel && info ? info.count : 0;
             const wcB = isSel && info ? ((info.sp.warcry || 0) - (info.spu.warcry || 0)) * 0.2 + (info.spu.warcry || 0) * 0.4 : 0;
-            valEl = isUsed && tv.buffPend
-              ? h("span", { style:{ fontSize:"1rem", fontWeight:900, color:"#ffd75e" } }, "×" + tv.buffPend.mult.toFixed(1))
+            // 倍率確定（buffPend→null）後も buffAnim が残っている間は倍率を出し続ける。
+            // これが無いと計算した瞬間に「+0.1/個」へ戻ってしまう
+            const shownMult = tv.buffPend ? tv.buffPend.mult : buffAnim ? buffAnim.mult : null;
+            valEl = isUsed && shownMult != null
+              ? h("span", { style:{ fontSize:"1rem", fontWeight:900, color:"#ffd75e" } }, "×" + shownMult.toFixed(1))
               : selN > 0
               ? h("span", { style:{ fontSize:"1rem", fontWeight:900, color:"#ffd75e" } }, "×" + (1 + incN * selN + wcB).toFixed(1))
               : h("span", { style:{ fontSize:"0.9rem", fontWeight:900 } }, "+" + incN + "/個");
@@ -4574,17 +4645,19 @@ function DropBattle() {
         const bAn = buffAnim && buffAnim.st === key ? buffAnim : null;
         const sAn = storeAnim && (key === "atk" || key === "def") ? storeAnim : null;
         if (bAn) {
-          // ガレス強化の段階表示: 元の値 → 「元の値 ×倍率」 → 最終値（金色）
+          // ガレス強化の段階表示: 元の値 → 「元の値 ×倍率」 → 最終値（金色・倍率を併記）
           valEl = bAn.stage === 1 ? String(bAn.from)
             : bAn.stage === 2 ? h("span", null, String(bAn.from),
                 h("span", { style:{ color:"#ffd75e", fontSize:"0.82rem", marginLeft:3, fontWeight:900 } }, "×" + bAn.mult.toFixed(1)))
-            : h("span", { style:{ color:"#ffd75e" } }, String(bAn.to));
+            : h("span", null, h("span", { style:{ color:"#ffd75e" } }, String(bAn.to)),
+                h("span", { style:{ color:"#ffd75e", fontSize:"0.82rem", marginLeft:3, fontWeight:900, opacity:0.85 } }, "×" + bAn.mult.toFixed(1)));
         } else if (sAn) {
           // ノア蓄積の段階表示（攻防同時）: 「元の値 +蓄積」 → 最終値（金色）
           const from = key === "atk" ? sAn.fromAtk : sAn.fromDef;
           const to = key === "atk" ? sAn.toAtk : sAn.toDef;
           valEl = sAn.stage === 2 ? h("span", null, String(from),
               h("span", { style:{ color:"#ffd75e", fontSize:"0.82rem", marginLeft:3, fontWeight:900 } }, "+" + sAn.add))
+            // 加算し終えたら「+N」は消して最終値だけ見せる
             : h("span", { style:{ color:"#ffd75e" } }, String(to));
         } else if (isSel && selEff) {
           let v = selEff.main;
@@ -4597,7 +4670,13 @@ function DropBattle() {
           const base = dispTv[key];
           valEl = base > 0 ? mkBreakdown(base + crossBonus, base, crossBonus, "#ffcf5d") : `+${crossBonus}`;
         } else valEl = String(dispTv[key]);
-        const lit = (fx.length > 0 && fx[fx.length-1].act === key) || !!bAn; // 強化の倍率計算中は対象ボタンの暗転を解除して見せる
+        // ノアの蓄積は予約中（解決前）も攻撃・防御の両方に「+N」を出しっぱなしにする
+        if (!bAn && !sAn && (key === "atk" || key === "def") && tv.storePend) {
+          valEl = h("span", null, valEl,
+            h("span", { style:{ color:"#b9a4ff", fontSize:"0.82rem", marginLeft:3, fontWeight:900 } }, "+" + tv.storePend.add));
+        }
+        // 強化の倍率計算中は対象ボタン、蓄積の加算中は攻撃・防御の両方を光らせる（暗転も解除）
+        const lit = (fx.length > 0 && fx[fx.length-1].act === key) || !!bAn || !!sAn;
         const gWarn = gtut === "warn", gDef = gtut === "def", gClear = gtut === "clear";
         const guideTgt = gDef && key === "def";        // 「防御」を光らせて誘導
         const guideOff = gWarn || (gDef && key !== "def") || gClear || (ctut && ctut.step !== "done"); // 誘導中の対象外ボタンは暗く
