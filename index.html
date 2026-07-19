@@ -536,12 +536,17 @@ const PATTERNS = {
   poison:  { icon:"🐍", img:"assets/st_poison.png",     label:"どく",       color:"#8ce87c" }
 };
 // 敵の次の行動。仲間がいないヒーラーは攻撃に切り替わる
+// なかま回復→攻撃への切り替え判定用: ターン開始時点の「味方が生きていたか」スナップショット（敵id→bool）。
+// 敵オブジェクトに持たせると演出のsetTimeout内のsetEnemiesBoth(旧snap)で巻き戻るため、モジュール変数で持つ
+let HAD_ALLIES = {};
 const intentOf = (en, allies) => {
   const k = KINDS[en.kind];
   const pat = en.pat || k.pats[0];
   let act = pat[en.pi % pat.length];
   const aliveAllies = (allies || []).some(a => a.alive && a.id !== en.id);
-  if (act === "healally" && !aliveAllies) act = "attack";
+  // ターン中に味方が倒れても予告した行動は変わらない（回復対象がいなければ様子見になる）
+  const healAllies = HAD_ALLIES[en.id] !== undefined ? HAD_ALLIES[en.id] : aliveAllies;
+  if (act === "healally" && !healAllies) act = "attack";
   // 取り巻きが全滅すると火力アップ（裏5章ボス・真魔王ヴァルガ）
   const solo = (en.soloUp && !aliveAllies) ? en.soloUp : 1;
   const roll = (en.rollMul || 1) * solo; // 1行動ごとに振り直されるダメージロール
@@ -2184,6 +2189,7 @@ function DropBattle() {
       for (const en of ens) {
         if (!en.alive) continue;
         en.rollMul = rollDmg(); // 次の行動のダメージを振り直す
+        HAD_ALLIES[en.id] = ens.some(a => a.alive && a.id !== en.id); // 次ターンの回復役判定用スナップショット
         if (!SIM_MODE && en.enrEvery && tn % en.enrEvery === 0) {
           en.enr = (en.enr || 0) + 1;
           en.atk = Math.round(en.atk * 1.08);
@@ -2637,6 +2643,8 @@ function DropBattle() {
     try { gtutDone = localStorage.getItem("db_gtut") || ""; } catch (e) {}
     const guided = battleNumRef.current === 2 && !gtutDone && !TEST_MODE; // 2戦目のガイド付きチュートリアル
     const ens = guided ? makeTutorialEnemy() : encounterFor(node, actRef.current, modeRef.current);
+    HAD_ALLIES = {};
+    ens.forEach(e => { HAD_ALLIES[e.id] = ens.some(a => a.alive && a.id !== e.id); });
     setEnemiesBoth(ens);
     setTargetId(ens[0].id); targetRef.current = ens[0].id;
     let bd0 = guided ? makeTutorialBoard() : makeBoard(bagRef, ownedRef, bagUpRef, ownedUpRef);
@@ -3619,6 +3627,8 @@ function DropBattle() {
       spawn: kinds => {
         const ens = kinds.map((kind,i) => { const k = KINDS[kind];
           return { id:"e"+(UID++), kind, name:k.name, hp:k.hp, max:k.hp, atk:k.atk, alive:true, pi:0, pat:k.pats[0], rollMul:1, shd:0, shdMax:(SHIELDS[kind]||{}).sh||0, shdC:0, enr:0, enrEvery:0, dcap: kind==="demon" ? Math.max(10, Math.round(k.hp / 4.5 / 10) * 10) : 0, elite:false, boss:kind==="demon", idx:i }; });
+        HAD_ALLIES = {};
+        ens.forEach(e => { HAD_ALLIES[e.id] = ens.some(a => a.alive && a.id !== e.id); });
         setEnemiesBoth(ens); setTargetId(ens[0].id); targetRef.current = ens[0].id;
       },
       hurtEnemies: () => { const ens = enemiesRef.current.map(e => e.alive ? { ...e, hp: Math.max(1, e.hp - 30) } : e); setEnemiesBoth(ens); },
