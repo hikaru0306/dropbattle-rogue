@@ -3912,10 +3912,8 @@ function DropBattle() {
         h("button", {
           onClick: () => { if (!loadGate) goSelect(); },
           style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", borderRadius:14, padding:"clamp(13px,3.2vw,16px) clamp(48px,12vw,66px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", boxShadow:"0 4px 0 #6e4e1a, 0 6px 12px rgba(0,0,0,.4)", border:"2px solid #6e4e1a", fontFamily:"inherit" } }, "冒険に出る"),
-        // フッター: 同期バッジ＋各種リンク＋©表記
+        // フッター: 各種リンク＋©表記（同期状態はアカウントモーダル内でのみ表示）
         h("div", { style:{ marginTop:14, display:"flex", flexDirection:"column", alignItems:"center", gap:6 } },
-          cloudSt && h("p", { style:{ margin:0, fontSize:"0.62rem", color: cloudSt.status === "synced" ? "#9fd8a8" : cloudSt.status === "conflict" ? "#ffce78" : "#8f86a8", fontWeight:800, textShadow:"0 1px 2px #000" } },
-            cloudSt.status === "synced" ? "☁✓ 同期済み" : cloudSt.status === "syncing" || cloudSt.status === "init" ? "☁… 同期中" : cloudSt.status === "conflict" ? "☁! データの確認が必要です" : "☁× オフライン（この端末に保存中）"),
           h("div", { style:{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:"4px 12px", fontSize:"0.66rem", fontWeight:800 } },
             h("button", { onClick: () => { setAcctOpen(true); setAcctMsg(null); SFX.open(); }, style:FOOT_LINK }, "アカウント"),
             TXC.contactUrl ? h("button", { onClick: () => window.open(TXC.contactUrl, "_blank", "noopener"), style:FOOT_LINK }, "お問い合わせ") : null,
