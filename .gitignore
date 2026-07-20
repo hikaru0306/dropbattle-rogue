@@ -1,4 +1,5 @@
 assets_raw/
+assets_raw*/
 v[0-9]*.png
 *_check.png
 gen_new_enemies.log
