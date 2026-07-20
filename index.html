@@ -3894,7 +3894,8 @@ function DropBattle() {
   };
 
   // レリックが増えても段組みにせず、アイコン列だけ横スクロール（「効果一覧」は右端に固定）
-  const relicBarEl = relicsView.length > 0 && h("div", { className:"flex items-center gap-1 mb-1" },
+  // paddingRight: 「効果一覧」ボタンが画面右端にぴったり付くと窮屈なので少し余白を空ける
+  const relicBarEl = relicsView.length > 0 && h("div", { className:"flex items-center gap-1 mb-1", style:{ paddingRight:6 } },
     h("div", { className:"relic-scroll flex items-center gap-1", ref: relicScrollRef, onScroll: updRelicMore,
       style:{ flex:"1 1 auto", minWidth:0,
         maskImage: relicMore ? "linear-gradient(90deg,#000 calc(100% - 16px),transparent)" : "none",
@@ -3903,7 +3904,7 @@ function DropBattle() {
         onClick: () => { setRelicOpen(true); SFX.open(); },
         className:"rounded-lg flex items-center justify-center", style:{ width:26, height:26, flex:"0 0 auto", background:"rgba(30,24,42,.92)", border:"1px solid #6e5a3c" } }, Ic(RELICS[k].img, 20)))),
     h("button", { onClick: () => { setRelicOpen(true); SFX.open(); },
-      className:"rounded-lg px-2 text-[9px] font-bold", style:{ height:26, flex:"0 0 auto", background:"rgba(30,24,42,.92)", border:"1px solid #3c3450", color:"#c9bfe0" } },
+      className:"rounded-lg text-[9px] font-bold", style:{ height:26, padding:"0 12px", flex:"0 0 auto", background:"rgba(30,24,42,.92)", border:"1px solid #3c3450", color:"#c9bfe0" } },
       "効果一覧", h("span", { style:{ opacity:0.7, marginLeft:3 } }, relicsView.length)));
 
   const tapItem = i => {
@@ -3933,7 +3934,8 @@ function DropBattle() {
       c ? (c.img ? Ic(c.img, Math.round(sz * 0.62)) : c.icon) : "");
   });
   const itemBarEl = h("div", { className:"flex items-center gap-2 mb-1" },
-    h("span", { className:"text-[10px] font-bold", style:{ color:"#c9bfe0", width:44 } }, "アイテム"),
+    // width固定だと320px幅で「アイテ/ム」に折れるため nowrap+shrink禁止（幅は内容なり）
+    h("span", { className:"text-[10px] font-bold", style:{ color:"#c9bfe0", whiteSpace:"nowrap", flexShrink:0 } }, "アイテム"),
     itemSlots(44),
     h("span", { className:"text-[9px]", style:{ opacity:0.55, marginLeft:2 } }, "タップで使用（最大", itemCap(), "個）"));
 
@@ -3941,10 +3943,12 @@ function DropBattle() {
     h("h1", { className:"font-bold", style:{ fontSize:"0.98rem", color: mode === "ura" ? "#cf9af8" : "#f2e6c8", whiteSpace:"nowrap", textShadow:"0 2px 0 rgba(0,0,0,.55)" } },
       mode === "ura" ? "裏・" : "", "第", act + 1, "章"),
     h("div", { className:"flex items-center gap-2" },
-      h("span", { className:"rounded-xl px-3 py-1.5 text-sm font-bold flex items-center justify-center gap-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c", color:"#e8c06a", fontVariantNumeric:"tabular-nums", minWidth:78 } }, Ic("assets/icon_coin.png", 15), coins),
-      h("button", { onClick: () => { setBagOpen(true); SFX.open(); }, className:"relative rounded-xl px-3 py-1.5 flex items-center gap-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c" } },
+      // コインが5桁になっても「残N」袋バッジが押されて縦2行に折れないよう、
+      // 各バッジは nowrap+shrink禁止、コインだけ桁数に応じてフォントを縮める
+      h("span", { className:"rounded-xl px-3 py-1.5 font-bold flex items-center justify-center gap-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c", color:"#e8c06a", fontVariantNumeric:"tabular-nums", minWidth:78, whiteSpace:"nowrap", fontSize: coins > 9999 ? "0.75rem" : "0.875rem" } }, Ic("assets/icon_coin.png", 15), coins),
+      h("button", { onClick: () => { setBagOpen(true); SFX.open(); }, className:"relative rounded-xl px-3 py-1.5 flex items-center gap-1.5", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #8a6f3c", flexShrink:0 } },
         Ic("assets/icon_bag.png", 16),
-        h("span", { className:"font-bold text-sm", style:{ color:"#ffcf5d", fontVariantNumeric:"tabular-nums" } }, "残", bagLeft)),
+        h("span", { className:"font-bold text-sm", style:{ color:"#ffcf5d", fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap" } }, "残", bagLeft)),
       // サウンド設定は☰メニュー内から（ヘッダーの🔊ボタンは撤去）
       h("button", { onClick: () => { setMenuOpen(true); SFX.open(); }, className:"rounded-xl px-4 py-1.5", "aria-label":"メニュー",
         style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", lineHeight:1 } },
@@ -4564,7 +4568,8 @@ function DropBattle() {
             style:{ background:"#c8443c", color:"#fff2ec" } }, "-" + off + "%");
     };
     overlays.push(h("div", { key:"shop", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:58 } },
-      h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:370, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
+      // サイコロ(6品)+レリック枠+セールバナーが揃うと低背端末(568px級)で画面からあふれるためスクロール可に
+      h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:370, maxHeight:"88vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
         h("div", { className:"flex justify-between items-center mb-1" },
           h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#e8c06a", fontSize:"1.05rem" } }, Ic("assets/merchant.png", 20), "行商人"),
           h("span", { className:"text-sm font-bold flex items-center gap-1", style:{ color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, Ic("assets/icon_coin.png", 14), coins)),
@@ -4611,7 +4616,8 @@ function DropBattle() {
     const rAnyUp = rUps.some(Boolean);
     const rStep = rewards.step || (rewards.relic ? "relic" : "drop");
     overlays.push(h("div", { key:"reward", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:50 } },
-      h("div", { className:"w-full pop-in rounded-2xl", style:{ maxWidth:380, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", padding:"16px 14px" } },
+      // 磁石レリック(候補4つ)+＋化説明行が揃うと低背端末(568px級)で画面からあふれるためスクロール可に
+      h("div", { className:"w-full pop-in rounded-2xl", style:{ maxWidth:380, maxHeight:"88vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", padding:"16px 14px" } },
         h("h2", { className:"text-center font-bold mb-1 flex items-center justify-center gap-2", style:{ fontSize:"1.25rem", color:"#e0b45c", textShadow:"0 2px 0 rgba(0,0,0,.6)" } }, Ic(rIcon, 22), rTitle),
         rewards.coins > 0 && h("p", { key:"coin", className:"text-center text-xs mb-1", style:{ color:"#e8c06a", fontWeight:800 } }, Ic("assets/icon_coin.png", 13), " コイン +", rewards.coins),
         // ステップ1: レリック獲得の告知（強敵のみ）→「特殊ドロップを選ぶ」で次へ
@@ -4957,10 +4963,12 @@ function DropBattle() {
           fx.filter(Boolean).map((f,i) => h(FxLine, { key: f._k != null ? f._k : i, text:f.text, color:f.color })))),
       // ターン情報
       h("div", { className:"flex items-center justify-between rounded-lg px-3 py-1 mb-1 text-xs", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", opacity: gActive ? 0.34 : 1, transition:"opacity .3s ease" } },
-        h("span", { className:"font-bold", style:{ color:"#e8c06a" } }, "ターン ", turn),
-        h("span", { className:"flex items-center gap-1" }, "残り",
+        // 320px幅+攻撃4桁+バッジ複数でも「ターン 1」「残り」が文字の途中で縦に折れないよう
+        // nowrap+shrink禁止。あふれる分は右のバッジ群がチップ単位で折り返して吸収する
+        h("span", { className:"font-bold", style:{ color:"#e8c06a", whiteSpace:"nowrap", flexShrink:0 } }, "ターン ", turn),
+        h("span", { className:"flex items-center gap-1", style:{ whiteSpace:"nowrap", flexShrink:0 } }, "残り",
           Array.from({ length:3 }).map((_,i) => h("span", { key:i, className:"inline-block rounded-full", style:{ width:9, height:9, background: i < remaining ? "#d8a848" : "rgba(255,255,255,.18)" } }))),
-        h("span", { className:"flex gap-1 items-center" },
+        h("span", { className:"flex gap-1 items-center", style:{ flexWrap:"wrap", justifyContent:"flex-end", rowGap:2 } },
           tv.pierce && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#f06aae", border:"1px solid #f06aae", padding:"1px 4px" } }, "貫通"),
           tv.aoe && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#ff9a3c", border:"1px solid #ff9a3c", padding:"1px 4px" } }, "全体"),
           tv.atkBoost && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#e05a50", border:"1px solid #e05a50", padding:"1px 4px" } }, "攻2倍"),
@@ -4972,9 +4980,12 @@ function DropBattle() {
             h("img", { src:"assets/icon_def.png", alt:"防", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), dispTv.def),
           h("span", { className:"flex items-center", style:{ color:"#8ce8b0", ...numCell, gap:2, justifyContent:"flex-end" } },
             h("img", { src:"assets/icon_heal.png", alt:"回", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), dispTv.heal))),
-      h("div", { className:"flex items-center justify-between mb-1", style:{ opacity: gActive ? 0.34 : 1, transition:"opacity .3s ease", pointerEvents: gActive ? "none" : "auto" } },
+      // 320px幅+スロット4個(袋)+予測3桁+（盾N）だと1行に収まらないことがある。
+      // 「被ダメ予測」が文字の途中で折れて2段になるのを避け、あふれた場合は
+      // 予測グループを丸ごと次の行へ右寄せで折り返す（flexWrap+marginLeft:auto）
+      h("div", { className:"flex items-center justify-between mb-1", style:{ flexWrap:"wrap", rowGap:2, opacity: gActive ? 0.34 : 1, transition:"opacity .3s ease", pointerEvents: gActive ? "none" : "auto" } },
         h("div", { className:"flex items-center gap-1.5" }, itemSlots(38)),
-        h("div", { className:"flex items-center", style:{ fontSize:11, gap:4 } },
+        h("div", { className:"flex items-center", style:{ fontSize:11, gap:4, marginLeft:"auto", whiteSpace:"nowrap" } },
           h("span", { style:{ opacity:0.75 } }, "被ダメ予測"),
           h("b", { style:{ color: incomingPreview > 0 ? "#ff8a80" : "#7cffb0", fontSize:15, fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000" } }, incomingPreview),
           effDef > 0 && h("span", { className:"flex items-center", style:{ gap:2, fontSize:10, color:"#9db8e8" } },
