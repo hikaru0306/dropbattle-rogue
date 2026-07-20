@@ -3580,14 +3580,21 @@ function DropBattle() {
   // ===== 中断セーブ（マップ到達ごとに自動保存・キャラごとに1スロット） =====
   const saveKey = ci => "db_save_" + ci;
   const RESUME_UI = !TEST_MODE || location.search.indexOf("resume=1") >= 0; // 既存テストを壊さないようTEST_MODEでは resume=1 指定時のみ再開モーダルを出す
-  const loadSave = ci => { try { const j = JSON.parse(localStorage.getItem(saveKey(ci))); return j && j.v === 1 ? j : null; } catch (e) { return null; } };
+  const loadSave = ci => { try { const j = JSON.parse(localStorage.getItem(saveKey(ci))); return j && (j.v === 1 || j.v === 2) ? j : null; } catch (e) { return null; } };
   const clearSave = ci => { try { localStorage.removeItem(saveKey(ci)); } catch (e) {} };
+  // v2: マップ到達時点だけでなく、バトル/報酬選択/宝箱パズル/焚き火/ショップの「途中」も丸ごと保存する。
+  // 演出中(locked)・チュートリアル中・コイントス確認中は保存しない＝直前の安定時点のセーブが残る
   const saveRun = () => {
     try {
-      if (!visitedRef.current.size && actRef.current === 0) return; // 進行ゼロは保存しない（再開する意味がない）
+      const stt = statusRef.current;
+      if (stt !== "map" && stt !== "battle" && stt !== "reward" && stt !== "puzzle") return;
+      if (stt === "map" && !visitedRef.current.size && actRef.current === 0 && !campfireRef.current) return; // 進行ゼロは保存しない
+      // lockedはバトル演出中の保存だけを弾く（勝利演出後の報酬画面などはlockedのままなので対象外）
+      if (stt === "battle" && lockedRef.current) return;
+      if (stt === "battle" && (tut !== null || gtut || (ctut && ctut.step !== "done") || gambleAsk)) return;
       const m = mapRef.current;
-      localStorage.setItem(saveKey(curCharRef.current), JSON.stringify({
-        v: 1, char: curCharRef.current, mode: modeRef.current, act: actRef.current,
+      const sv = {
+        v: 2, phase: stt, char: curCharRef.current, mode: modeRef.current, act: actRef.current,
         php: pRef.current, pmax: pMaxRef.current, coins: coinsRef.current, uid: UID,
         items: itemsRef.current.slice(), relics: relicsRef.current.slice(),
         owned: { ...ownedRef.current }, ownedUp: { ...ownedUpRef.current },
@@ -3596,7 +3603,28 @@ function DropBattle() {
         edges: m.edges.map(e => ({ from:e.from, to:e.to })),
         cur: curNodeRef.current, visited: [...visitedRef.current],
         order: actOrderRef.current.slice(),
-        battleNum: battleNumRef.current, shopNum: shopNumRef.current }));
+        battleNum: battleNumRef.current, shopNum: shopNumRef.current,
+        // ノード内の進行状態（攻略中ノード・開いている選択画面）
+        pend: pendingNodeRef.current ? pendingNodeRef.current.id : null,
+        campfire: campfireRef.current || null,
+        shop: shopRef.current ? { offers: shopRef.current.offers.slice(), relic: shopRef.current.relic || null,
+          sale: shopRef.current.sale || 1, disc: { ...(shopRef.current.disc || {}) } } : null,
+        rewards: rewardsRef.current ? { ...rewardsRef.current } : null,
+        actClear: actClearRef.current ? { picks: actClearRef.current.picks.slice() } : null,
+        puzzle: puzzleRef.current ? { ...puzzleRef.current } : null };
+      if (stt === "battle" || stt === "reward" || stt === "puzzle") {
+        // 盤面と戦闘の生データ（敵HP・ターン値・使用済みアクション・毒・蓄積/素材・スキルUIモード）
+        sv.board = boardRef.current.map(c => ({ t: c.type, sp: c.special || null, u: !!c.up, w: !!c.wild, x: !!c.extra }));
+        sv.enemies = enemiesRef.current.map(e => ({ ...e }));
+        sv.turnNum = turnNumRef.current;
+        sv.tv = { ...turnRef.current };
+        sv.used = [...usedRef.current];
+        sv.target = targetRef.current;
+        sv.poison = poisonRef.current;
+        sv.store = storeRef.current; sv.stock = stockRef.current;
+        sv.ui = { pc: paintColor, st: skillTarget, sm: smithMode, gm: gambleMode };
+      }
+      localStorage.setItem(saveKey(curCharRef.current), JSON.stringify(sv));
     } catch (e) {}
   };
   const resumeRun = sv => {
@@ -3621,9 +3649,7 @@ function DropBattle() {
     setMap(m); mapRef.current = m;
     setCurNodeId(sv.cur); curNodeRef.current = sv.cur;
     setVisited(new Set(sv.visited));
-    pendingNodeRef.current = null;
-    setEnemiesBoth([]);
-    setPMax(sv.pmax); setPHP(sv.php); setPoison(0);
+    setPMax(sv.pmax); setPHP(sv.php);
     setAct(sv.act);
     relicsRef.current = (sv.relics || []).filter(k => RELICS[k]);
     RELICSET = new Set(relicsRef.current);
@@ -3632,27 +3658,96 @@ function DropBattle() {
     setItemsBoth((sv.items || []).filter(k => CONSUM[k]));
     battleNumRef.current = sv.battleNum || 1;
     shopNumRef.current = sv.shopNum || 0; // 再開後にセールがやり直しにならないよう引き継ぐ
-    commitBoard(makePlainBoard()); // 袋から引かない（セーブされた袋をそのまま復元）
+    // ---- 共通の一時状態リセット ----
     syncBag(); setPops({});
-    setAction(actOrderRef.current[0]); actionRef.current = actOrderRef.current[0];
-    setUsed(new Set()); usedRef.current = new Set();
-    setPreview(null); setClearing(new Set());
+    setPreview(null); setClearing(new Set()); setArmed(null);
+    setRestMsg(null); setAnims({}); setGuide(null);
+    setBuffAnim(null); setStoreAnim(null); setDcapTut(null);
+    // 連番を残すとシーン再マウントでCSSアニメが頭から再生される（v99の教訓）
+    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null);
+    soloShownRef.current = false;
     setLocked(false); lockedRef.current = false;
-    setTurn(1);
-    setRewards(null); setRestMsg(null); setAnims({});
-    setShop(null); setCampfire(null); setActClear(null);
-    setGuide(null);
-    setStatus("map"); statusRef.current = "map";
-    setLog(["― 冒険を再開した ―"]);
     setFx([]);
-    turnRef.current = freshTurn(); syncTurn();
+    // ---- フェーズ別の復元（v2セーブはバトル/報酬/宝箱パズルの途中から再開できる）----
+    const phase = sv.v === 2 ? sv.phase : "map";
+    const pendNode = sv.v === 2 && sv.pend != null ? (nodes.find(n => n.id === sv.pend) || null) : null;
+    const restoreBoard = () => commitBoard((sv.board || []).map(c => ({ id: UID++, type: c.t, special: c.sp || false, up: !!c.u, wild: !!c.w, extra: !!c.x })));
+    if (phase === "battle" && sv.enemies && (sv.enemies.some(e => e.alive) || sv.actClear)) {
+      // バトルの続きから: 敵HP・盤面・ターン値・使用済みアクション・毒などをそのまま復元
+      // （敵全滅でも章クリアのレリック選択(actClear)が開いていればその画面から）
+      pendingNodeRef.current = pendNode;
+      const ens = sv.enemies.map(e => ({ ...e }));
+      HAD_ALLIES = {};
+      ens.forEach(e => { HAD_ALLIES[e.id] = ens.some(a => a.alive && a.id !== e.id); });
+      setEnemiesBoth(ens);
+      const tgt = ens.find(e => e.id === sv.target && e.alive) || ens.find(e => e.alive) || ens[0];
+      if (tgt) { setTargetId(tgt.id); targetRef.current = tgt.id; }
+      restoreBoard();
+      turnRef.current = { ...freshTurn(), ...(sv.tv || {}) }; syncTurn();
+      setTurn(sv.turnNum || 1); turnNumRef.current = sv.turnNum || 1;
+      const us = new Set(sv.used || []); setUsed(us); usedRef.current = us;
+      const nxt = actOrderRef.current.find(k => !us.has(k)) || actOrderRef.current[0];
+      setAction(nxt); actionRef.current = nxt;
+      setPoison(sv.poison || 0);
+      storeRef.current = sv.store || 0; setStoreView(storeRef.current);
+      stockRef.current = sv.stock || 0; setStockView(stockRef.current);
+      if (sv.ui) { setPaintColor(sv.ui.pc || 0); setSkillTarget(sv.ui.st || "atk"); setSmithMode(sv.ui.sm || "stock"); setGambleMode(sv.ui.gm || "heal2"); }
+      setRewards(null); setShop(null); setCampfire(null);
+      setActClear(sv.actClear || null);
+      setStatus("battle"); statusRef.current = "battle";
+      setLog(["― 冒険を再開した（バトルの続きから）―"]);
+    } else if (phase === "puzzle" && sv.puzzle) {
+      // 不思議な宝箱（パズル）の続きから
+      pendingNodeRef.current = pendNode;
+      setEnemiesBoth([]); setPoison(0);
+      restoreBoard();
+      const pz = { ...sv.puzzle, relics: (sv.puzzle.relics || []).filter(k => RELICS[k]) };
+      setPuzzle(pz); puzzleRef.current = pz;
+      setUsed(new Set()); usedRef.current = new Set();
+      setAction(actOrderRef.current[0]); actionRef.current = actOrderRef.current[0];
+      setTurn(1); turnNumRef.current = 1;
+      turnRef.current = freshTurn(); syncTurn();
+      setRewards(null); setShop(null); setCampfire(null); setActClear(null);
+      setStatus("puzzle"); statusRef.current = "puzzle";
+      setLog(["― 冒険を再開した（宝箱の続きから）―"]);
+    } else if (phase === "reward" && (sv.rewards || sv.shop)) {
+      // 報酬選択 / ショップの続きから（閉じたあとの finishNode に pendingNode が必要）
+      pendingNodeRef.current = pendNode;
+      setEnemiesBoth((sv.enemies || []).map(e => ({ ...e })));
+      if (sv.board) restoreBoard(); else commitBoard(makePlainBoard());
+      setPoison(0);
+      setUsed(new Set()); usedRef.current = new Set();
+      setAction(actOrderRef.current[0]); actionRef.current = actOrderRef.current[0];
+      setTurn(1); turnNumRef.current = 1;
+      turnRef.current = freshTurn(); syncTurn();
+      setRewards(sv.rewards ? { ...sv.rewards } : null);
+      setShop(sv.shop ? { ...sv.shop, intro: false } : null);
+      setCampfire(null); setActClear(null);
+      setStatus("reward"); statusRef.current = "reward";
+      setLog(["― 冒険を再開した（報酬の続きから）―"]);
+    } else {
+      // 従来どおりマップから（焚き火の選択中なら焚き火を開いた状態で）
+      pendingNodeRef.current = sv.v === 2 && sv.campfire ? pendNode : null;
+      setEnemiesBoth([]); setPoison(0);
+      commitBoard(makePlainBoard()); // 袋から引かない（セーブされた袋をそのまま復元）
+      setUsed(new Set()); usedRef.current = new Set();
+      setAction(actOrderRef.current[0]); actionRef.current = actOrderRef.current[0];
+      setTurn(1); turnNumRef.current = 1;
+      turnRef.current = freshTurn(); syncTurn();
+      setRewards(null); setShop(null); setActClear(null);
+      setCampfire(sv.v === 2 && sv.campfire ? sv.campfire : null);
+      setStatus("map"); statusRef.current = "map";
+      setLog(["― 冒険を再開した ―"]);
+    }
   };
-  // マップ到達（ノード踏破）ごとに自動保存。決着したら中断データは消す
+  // 自動保存: マップ到達時に加えて、バトル/報酬/パズル/焚き火/ショップの状態が動くたびに保存する
+  // （saveRun側で演出中・チュートリアル中は弾く＝常に直前の安定時点が残る）。決着したら中断データは消す
   useEffect(() => {
-    if (status === "map") saveRun();
-    else if (status === "clear" || status === "lose") clearSave(curCharRef.current);
-  }, [status, visited]);
-  const suspendRun = () => { // 中断してタイトルへ（進行はマップ到達時点まで保存済み）
+    if (status === "clear" || status === "lose") { clearSave(curCharRef.current); return; }
+    const t = setTimeout(saveRun, 250); // カスケード中の連続更新はまとめて1回
+    return () => clearTimeout(t);
+  }, [status, visited, board, enemies, turn, used, pHP, poisonView, rewards, shop, campfire, actClear, puzzle, locked, coins, items, storeView, stockView]);
+  const suspendRun = () => { // 中断してタイトルへ（今の画面の状態まで保存済み）
     saveRun();
     setSoundOpen(false); setMenuOpen(false);
     setStatus("title"); statusRef.current = "title";
@@ -4157,7 +4252,13 @@ function DropBattle() {
               resumeAsk.save.mode === "ura" ? "裏・" : "", "第", resumeAsk.save.act + 1, "章"),
             h("span", { style:{ opacity:0.85 } }, "　HP ", resumeAsk.save.php, "/", resumeAsk.save.pmax, "　"),
             Ic("assets/icon_coin.png", 12), h("span", { style:{ color:"#e8c06a", fontWeight:800 } }, " ", resumeAsk.save.coins),
-            h("span", { className:"block text-[10px]", style:{ opacity:0.6 } }, "🏺", (resumeAsk.save.relics || []).length, "個のレリックを所持")),
+            h("span", { className:"block text-[10px]", style:{ opacity:0.6 } }, "🏺", (resumeAsk.save.relics || []).length, "個のレリックを所持"),
+            // v2セーブはノード内の途中からそのまま再開できる
+            resumeAsk.save.v === 2 && resumeAsk.save.phase !== "map" && h("span", { className:"block text-[11px] font-bold", style:{ color:"#8ce8b0" } },
+              resumeAsk.save.phase === "battle" ? "⚔ バトルの途中から再開できます"
+                : resumeAsk.save.phase === "puzzle" ? "🗝 不思議な宝箱の途中から再開できます"
+                : "🎁 報酬・ショップの選択から再開できます"),
+            resumeAsk.save.v === 2 && resumeAsk.save.phase === "map" && resumeAsk.save.campfire && h("span", { className:"block text-[11px] font-bold", style:{ color:"#8ce8b0" } }, "🔥 焚き火の選択から再開できます")),
           h("p", { className:"text-sm mb-3", style:{ opacity:0.9 } }, "続きから進めますか？"),
           h("button", { onClick: () => { const sv = resumeAsk.save; setResumeAsk(null); resumeRun(sv); SFX.pick(); },
             className:"w-full rounded-xl py-2.5 font-bold mb-2",
