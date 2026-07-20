@@ -3609,7 +3609,7 @@ function DropBattle() {
   const toggleBgm = () => {
     bgmOn = !bgmOn; setBgmOnView(bgmOn);
     if (!bgmOn) bgmStop();
-    else { const s = statusRef.current, pn = pendingNodeRef.current; bgmPlay(s === "map" ? "map" : s === "battle" ? (actClearRef.current ? "bossclear" : enemiesRef.current.some(e => e.boss) ? "boss" : "battle") : s === "reward" ? (pn && pn.type === "boss" ? "result" : pn && pn.type === "treasure" ? "map" : "battle") : s === "clear" ? "bossclear" : "title"); }
+    else { const s = statusRef.current, pn = pendingNodeRef.current; bgmPlay(s === "map" ? "map" : s === "battle" ? (actClearRef.current ? "bossclear" : enemiesRef.current.some(e => e.boss) ? "boss" : "battle") : s === "reward" ? (pn && pn.type === "boss" ? "bossclear" : pn && pn.type === "treasure" ? "map" : "battle") : s === "clear" ? "result" : "title"); }
   };
   const changeSfxVol = v => { sfxVol = v; setSfxVolView(v); try { localStorage.setItem("db_sfxvol", v); } catch (e) {} };
   const changeBgmVol = v => { bgmVol = v; setBgmVolView(v); bgmApplyVol(); try { localStorage.setItem("db_bgmvol", v); } catch (e) {} };
@@ -3620,9 +3620,8 @@ function DropBattle() {
     else if (status === "map") bgmPlay("map");
     // ボス戦はボスを倒して雑魚が残っていてもボスBGMを維持（e.boss は死亡後もリストに残る）
     else if (status === "battle") bgmPlay(actClear ? "bossclear" : enemies.some(e => e.boss) ? "boss" : "battle");
-    // 勝利ジングルはボス戦後のみ。通常/群れ/強敵/宝箱の報酬はBGMを変えない（据え置き）
-    else if (status === "reward") { if (pendingNodeRef.current && pendingNodeRef.current.type === "boss") bgmPlay("result"); }
-    else if (status === "clear") bgmPlay("bossclear"); // 全章制覇＝達成ファンファーレ
+    // 報酬画面はBGMを変えない（ボス報酬中も章クリアのbossclearを据え置き）
+    else if (status === "clear") bgmPlay("result"); // 全章制覇＝勝利ファンファーレ（bossclearを挟まない）
     else if (status === "lose") bgmStop();
     // reward中は直前の曲を継続
   }, [status, enemies, bgmOnView, actClear]);
