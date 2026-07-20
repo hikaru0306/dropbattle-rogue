@@ -86,6 +86,9 @@ button:active{filter:brightness(1.12)}
 @keyframes targetBob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,5px)}}
 @keyframes mistDrift{0%{transform:translateX(-12%)}50%{transform:translateX(12%)}100%{transform:translateX(-12%)}}
 @keyframes popIn{0%{transform:scale(.85);opacity:0}100%{transform:scale(1);opacity:1}}
+/* left:50%+translateX(-50%)センタリング要素用。popInだとアニメ中keyframeのtransformが
+   インラインのtranslateX(-50%)を上書きして右へ68pxズレたまま拡大縮小→終了時に中央へスナップして見える */
+@keyframes popInC{0%{transform:translateX(-50%) scale(.85);opacity:0}100%{transform:translateX(-50%) scale(1);opacity:1}}
 @keyframes merchPop{0%{transform:translateY(30px) scale(.35);opacity:0}45%{transform:translateY(-10px) scale(1.18);opacity:1}70%{transform:translateY(3px) scale(.96)}100%{transform:translateY(0) scale(1)}}
 @keyframes merchTxt{0%{opacity:0;transform:translateY(10px);letter-spacing:.5em}35%{opacity:0}100%{opacity:1;transform:translateY(0);letter-spacing:.14em}}
 @keyframes merchRing{0%{transform:scale(.3);opacity:.9}100%{transform:scale(2.1);opacity:0}}
@@ -176,6 +179,7 @@ button:active{filter:brightness(1.12)}
 @media (max-height:680px){.scene-h{height:112px}.scene-actor{transform:scale(.7)}.board-wrap{max-width:80%}}
 @media (max-height:600px){.scene-h{height:96px}.scene-actor{transform:scale(.58)}.board-wrap{max-width:70%}}
 .pop-in{animation:popIn .28s cubic-bezier(.3,1.4,.6,1)}
+.pop-in-c{animation:popInC .28s cubic-bezier(.3,1.4,.6,1)}
 .fade-in{animation:fadeIn .3s ease}
 /* レリック帯：段組みせず横スクロール（スクロールバーは隠す） */
 .relic-scroll{overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
@@ -1866,6 +1870,8 @@ function DropBattle() {
 
   // 演出キュー
   const fxTimer = useRef(null);
+  const fxKeyRef = useRef(0); // fx行の通し番号。seq内indexだと直前のfxと同じキーになることがあり、
+                              // 再マウントされず fxPop(forwards) 済みの opacity:0 のまま文言だけ差し替わって見えなくなる
   const playFx = (seq, after) => {
     if (fxTimer.current) { clearTimeout(fxTimer.current); fxTimer.current = null; }
     setFx([]);
@@ -1881,8 +1887,9 @@ function DropBattle() {
       //  - 前の行がフェード中に次の行が下へ積まれて2段に見える
       //  - 連続攻撃で同じ文言が2つ同時に見えて「2連続表示」に見える
       //  - 低い画面高(scene-h 96〜112px)では積んだ行が枠の上下から見切れる
-      // ため廃止。_k はアイテムごとに固定のキーで、同文言でも再マウントされてポップが再生される
-      if (item.text) setFx([{ ...item, _k: i }]);
+      // ため廃止。_k は全体で一意の通し番号で、同文言でも必ず再マウントされてポップが再生される
+      // （FxLine の縮小フォント fs も再マウントで毎回リセットされる）
+      if (item.text) setFx([{ ...item, _k: ++fxKeyRef.current }]);
       if (item.run) item.run();
       i++;
       fxTimer.current = setTimeout(step, FAST ? 40 : (item.wait || 680));
@@ -4338,7 +4345,7 @@ function DropBattle() {
   if (gtut === "def" || gtut === "clear") {
     const txt = gtut === "def" ? TX.gtut.defTitle : TX.gtut.clearTitle;
     const sub = gtut === "def" ? TX.gtut.defSub : TX.gtut.clearSub;
-    overlays.push(h("div", { key:"gbanner", className:"fixed pop-in", style:{ top:"8%", left:"50%", transform:"translateX(-50%)", zIndex:62,
+    overlays.push(h("div", { key:"gbanner", className:"fixed pop-in-c", style:{ top:"8%", left:"50%", transform:"translateX(-50%)", zIndex:62,
       background:"rgba(30,24,42,.97)", border:"2px solid #e8c06a", borderRadius:14, padding:"10px 18px", maxWidth:"90%", width:"max-content", textAlign:"center", pointerEvents:"none", boxShadow:"0 4px 18px rgba(0,0,0,.55)" } },
       h("span", { className:"font-bold block", style:{ color:"#ffe08a", fontSize:"0.98rem", lineHeight:1.5, textShadow:"0 1px 2px #000" } }, txt),
       h("span", { className:"block text-[10px] mt-1", style:{ color:"#8ce8b0", fontWeight:700 } }, sub)));
@@ -4355,7 +4362,7 @@ function DropBattle() {
   // ===== キャラスキルチュートリアル: 誘導バナー =====
   if (ctut && ctut.step !== "done" && ctut.step !== "info") {
     const m = (TX.ctutMsg[ctut.skill] || {})[ctut.step];
-    if (m) overlays.push(h("div", { key:"ctbanner", className:"fixed pop-in", style:{ top:"8%", left:"50%", transform:"translateX(-50%)", zIndex:62,
+    if (m) overlays.push(h("div", { key:"ctbanner", className:"fixed pop-in-c", style:{ top:"8%", left:"50%", transform:"translateX(-50%)", zIndex:62,
       background:"rgba(30,24,42,.97)", border:"2px solid #e8c06a", borderRadius:14, padding:"10px 18px", maxWidth:"90%", width:"max-content", textAlign:"center", pointerEvents:"none", boxShadow:"0 4px 18px rgba(0,0,0,.55)" } },
       h("span", { className:"font-bold block", style:{ color:"#ffe08a", fontSize:"0.98rem", lineHeight:1.5, textShadow:"0 1px 2px #000" } }, m[0]),
       h("span", { className:"block text-[10px] mt-1", style:{ color:"#8ce8b0", fontWeight:700 } }, m[1])));
@@ -4471,7 +4478,7 @@ function DropBattle() {
   }
   if (armed !== null && items[armed]) {
     const c = CONSUM[items[armed]];
-    overlays.push(h("div", { key:"armed", className:"fixed pop-in", style:{ top:12, left:"50%", transform:"translateX(-50%)", zIndex:75,
+    overlays.push(h("div", { key:"armed", className:"fixed pop-in-c", style:{ top:12, left:"50%", transform:"translateX(-50%)", zIndex:75,
       background:"rgba(30,24,42,.97)", border:"2px solid #8a6f3c", borderRadius:12, padding:"8px 16px", maxWidth:"88%", textAlign:"center", pointerEvents:"none" } },
       h("span", { className:"font-bold text-sm inline-flex items-center justify-center", style:{ color:"#e8c06a", gap:5 } }, c.img ? Ic(c.img, 20) : c.icon, c.name),
       h("span", { className:"block text-[11px]", style:{ opacity:0.85, marginTop:1 } }, c.desc),
@@ -4657,7 +4664,7 @@ function DropBattle() {
         h("button", { onClick: closePuzzle, className:"w-full rounded-xl py-2.5 font-bold mt-1",
           style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } }, "先へ進む ▶"))));
   }
-  if (restMsg) overlays.push(h("div", { key:"rest", className:"fixed pop-in", style:{ top:18, left:"50%", transform:"translateX(-50%)", zIndex:70, background:"rgba(30,24,42,.97)", border:"2px solid #3c5a48", color:"#c8ffdd", borderRadius:12, padding:"10px 18px", fontSize:"0.85rem", fontWeight:800, boxShadow:"0 3px 8px rgba(0,0,0,.5)" } }, restMsg));
+  if (restMsg) overlays.push(h("div", { key:"rest", className:"fixed pop-in-c", style:{ top:18, left:"50%", transform:"translateX(-50%)", zIndex:70, background:"rgba(30,24,42,.97)", border:"2px solid #3c5a48", color:"#c8ffdd", borderRadius:12, padding:"10px 18px", fontSize:"0.85rem", fontWeight:800, boxShadow:"0 3px 8px rgba(0,0,0,.5)" } }, restMsg));
   // ショップ購入ポップアップ（画面中央にしっかり出す。上部トーストは見逃しやすいというFBで変更。
   // pointer-events:none なので連続購入はそのまま可能・1.3秒で自動で消える）
   if (buyMsg) overlays.push(h("div", { key:"buymsg" + buyMsg.seq, className:"fixed inset-0 flex items-center justify-center pointer-events-none", style:{ zIndex:70 } },
