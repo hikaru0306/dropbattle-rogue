@@ -272,5 +272,30 @@ window.TEXTS = {
     title: "🌙 月の司祭セレネの力",
     body:  "ドロップが5色に増える代わりに、攻撃・防御・回復すべての効果が2倍！ 大きなグループは作りにくいが、一発の威力はけた違いだ。",
     btn:   "了解！ ▶"
+  },
+
+  // ===== クラウド・フッター関連 =====
+  cloud: {
+    copyright: "© 2026 HIKARU — DROPSIA",
+    contactUrl: ""   // お問い合わせGoogleフォームのURLをここに貼ると、タイトルにリンクが表示されます
+  },
+
+  // ===== クレジット画面 =====
+  credits: {
+    sections: [
+      { title: "企画・開発",
+        lines: ["HIKARU"] },
+      { title: "BGM（すべてCC0 / パブリックドメイン）",
+        lines: [
+          "\"Awake! (Megawall-10)\" — cynicmusic.com / pixelsphere.org",
+          "\"Crystal Cave (Song 18)\" — cynicmusic.com / pixelsphere.org",
+          "\"Battle Theme A\" — cynicmusic.com / pixelsphere.org",
+          "\"Boss Battle #2 (Symphonic Metal)\" — nene (OpenGameArt)",
+          "（CC0のためクレジット義務はありませんが感謝を込めて）" ] },
+      { title: "フォント",
+        lines: ["M PLUS Rounded 1c (SIL Open Font License 1.1)"] },
+      { title: "使用技術",
+        lines: ["React (MIT License)", "Firebase (Google LLC)", "キャラクターアート: ComfyUI + Anima により生成"] }
+    ]
   }
 };

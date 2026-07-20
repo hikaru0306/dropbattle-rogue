@@ -1,0 +1,20 @@
+// ドロプシア Firestore セキュリティルール
+// デプロイ方法: Firebaseコンソール → Firestore Database → ルール タブに全文貼り付け → 公開
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+    // 各ユーザーは自分のドキュメントのみ読み書き可（匿名ユーザーも request.auth を持つ）
+    match /users/{uid} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['v','updatedAt','svTime','clientVersion','linked','summary','progress','data'])
+        && request.resource.data.v is int
+        && request.resource.data.updatedAt is number
+        && request.resource.data.data is map
+        && request.resource.data.summary is string
+        && request.resource.data.summary.size() < 500;
+    }
+    // それ以外はすべて拒否
+    match /{document=**} { allow read, write: if false; }
+  }
+}

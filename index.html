@@ -19,6 +19,22 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
 <script src="texts.js"></script>
+<script>
+/* クラウド同期用: db_* への書き込みを検知して cloud.js へ通知するフック（cloud.js 不在時は無害なnoop） */
+(function(){
+var s=Storage.prototype.setItem,r=Storage.prototype.removeItem;
+window.__dbDirty=function(){};
+function hit(t,k){return t===window.localStorage&&typeof k==="string"&&k.indexOf("db_")===0&&k.indexOf("db_cloud")!==0&&k.indexOf("db_bak_")!==0&&!window.__dbRestoring;}
+Storage.prototype.setItem=function(k,v){s.apply(this,arguments);if(hit(this,k))window.__dbDirty(k);};
+Storage.prototype.removeItem=function(k){r.apply(this,arguments);if(hit(this,k))window.__dbDirty(k);};
+})();
+</script>
+<script>
+/* cloud.js は http(s) かつ非テスト時のみ読み込む（file:// 実行やスモークテストでのノイズ防止） */
+if (location.protocol !== "file:" && location.search.indexOf("test=1") < 0 && location.search.indexOf("nocloud=1") < 0) {
+  var __cs = document.createElement("script"); __cs.type = "module"; __cs.src = "cloud.js"; document.head.appendChild(__cs);
+}
+</script>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
 html,body{margin:0;padding:0;background:#131019;overscroll-behavior:none;overflow-x:hidden;-webkit-text-size-adjust:100%}
@@ -3425,6 +3441,30 @@ function DropBattle() {
     SFX.win();
   };
   const tryCode = v => { if (v === "1010") unlockAll(); else { setCodeVal(""); setCodeMsg("……なにも起こらなかった"); setTimeout(() => setCodeMsg(null), 1500); SFX.tap(); } };
+
+  // ===== クラウド同期（cloud.js / Firebase）: 状態購読とフッター用モーダル =====
+  const [cloudSt, setCloudSt] = useState(() => (window.Cloud ? window.Cloud.state : null));
+  const [acctOpen, setAcctOpen] = useState(false);
+  const [acctMsg, setAcctMsg] = useState(null);
+  const [credOpen, setCredOpen] = useState(false);
+  useEffect(() => {
+    const f = e => setCloudSt({ ...e.detail });
+    window.addEventListener("cloud-state", f);
+    if (window.Cloud) setCloudSt(window.Cloud.state);
+    return () => window.removeEventListener("cloud-state", f);
+  }, []);
+  const cloudLink = async () => {
+    if (!window.Cloud) return;
+    setAcctMsg("連携処理中…");
+    const r = await Cloud.linkGoogle();
+    setAcctMsg(r.ok ? (r.redirect ? "Googleのページに移動します…" : r.switched ? "既存のデータに切り替えました" : "✅ 連携しました！") : "⚠ " + (r.msg || "失敗しました"));
+  };
+  const fmtSync = t => t ? new Date(t).toLocaleString("ja-JP", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" }) : "—";
+  const TXC = TX.cloud || {};
+  const TXCR = TX.credits || { sections: [] };
+  const FOOT_LINK = { color:"#b0a7c8", textDecoration:"underline", textUnderlineOffset:3, fontFamily:"inherit", fontSize:"inherit", fontWeight:800, textShadow:"0 1px 2px #000" };
+  const BTN_GHOST = { background:"rgba(255,255,255,.07)", border:"2px solid #453b5c", color:"#c9bfe0", fontFamily:"inherit" };
+  const BTN_GOLD = { background:"linear-gradient(180deg,#e8c06a,#b8862e)", border:"1px solid #6e4e1a", color:"#2c2030", fontFamily:"inherit" };
   const logoTap = () => {
     const now = Date.now();
     const lt = logoTapRef.current;
@@ -3871,7 +3911,18 @@ function DropBattle() {
       h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
         h("button", {
           onClick: () => { if (!loadGate) goSelect(); },
-          style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", borderRadius:14, padding:"clamp(13px,3.2vw,16px) clamp(48px,12vw,66px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", boxShadow:"0 4px 0 #6e4e1a, 0 6px 12px rgba(0,0,0,.4)", border:"2px solid #6e4e1a", fontFamily:"inherit" } }, "冒険に出る")),
+          style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", borderRadius:14, padding:"clamp(13px,3.2vw,16px) clamp(48px,12vw,66px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", boxShadow:"0 4px 0 #6e4e1a, 0 6px 12px rgba(0,0,0,.4)", border:"2px solid #6e4e1a", fontFamily:"inherit" } }, "冒険に出る"),
+        // フッター: 同期バッジ＋各種リンク＋©表記
+        h("div", { style:{ marginTop:14, display:"flex", flexDirection:"column", alignItems:"center", gap:6 } },
+          cloudSt && h("p", { style:{ margin:0, fontSize:"0.62rem", color: cloudSt.status === "synced" ? "#9fd8a8" : cloudSt.status === "conflict" ? "#ffce78" : "#8f86a8", fontWeight:800, textShadow:"0 1px 2px #000" } },
+            cloudSt.status === "synced" ? "☁✓ 同期済み" : cloudSt.status === "syncing" || cloudSt.status === "init" ? "☁… 同期中" : cloudSt.status === "conflict" ? "☁! データの確認が必要です" : "☁× オフライン（この端末に保存中）"),
+          h("div", { style:{ display:"flex", flexWrap:"wrap", justifyContent:"center", gap:"4px 12px", fontSize:"0.66rem", fontWeight:800 } },
+            h("button", { onClick: () => { setAcctOpen(true); setAcctMsg(null); SFX.open(); }, style:FOOT_LINK }, "アカウント"),
+            TXC.contactUrl ? h("button", { onClick: () => window.open(TXC.contactUrl, "_blank", "noopener"), style:FOOT_LINK }, "お問い合わせ") : null,
+            h("button", { onClick: () => { setCredOpen(true); SFX.open(); }, style:FOOT_LINK }, "クレジット"),
+            h("a", { href:"terms.html", target:"_blank", rel:"noopener", style:FOOT_LINK }, "利用規約"),
+            h("a", { href:"privacy.html", target:"_blank", rel:"noopener", style:FOOT_LINK }, "プライバシー")),
+          h("p", { style:{ margin:0, fontSize:"0.6rem", color:"#7f7694", letterSpacing:"0.08em", textShadow:"0 1px 2px #000" } }, TXC.copyright || "© 2026 HIKARU"))),
       // ロードゲート：タイトルを薄暗くして中央に進捗（フェードは出さない＝チラつき防止）
       loadGate && h("div", { "data-loadgate":"1", style:{ position:"fixed", inset:0, zIndex:80, background:"rgba(8,10,16,.72)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:14, padding:"0 40px" } },
         h("div", { style:{ width:"100%", maxWidth:250, height:8, borderRadius:999, background:"rgba(20,17,32,.9)", border:"1px solid #3c3450", overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,.5)" } },
@@ -3886,7 +3937,46 @@ function DropBattle() {
             style:{ width:"100%", boxSizing:"border-box", background:"rgba(255,255,255,.08)", border:"2px solid #8a6f3c", borderRadius:10, color:"#f2e6c8", fontSize:"1.3rem", fontWeight:800, textAlign:"center", letterSpacing:"0.3em", padding:"8px 6px", fontFamily:"inherit", outline:"none" } }),
           h("div", { className:"flex gap-2 mt-3" },
             h("button", { onClick: () => { setCodeOpen(false); setCodeVal(""); SFX.tap(); }, className:"flex-1 rounded-xl py-2 font-bold text-sm", style:{ background:"rgba(255,255,255,.07)", border:"2px solid #453b5c", color:"#c9bfe0", fontFamily:"inherit" } }, "閉じる"),
-            h("button", { onClick: () => tryCode(codeVal), className:"flex-1 rounded-xl py-2 font-bold text-sm", style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", border:"1px solid #6e4e1a", color:"#2c2030", fontFamily:"inherit" } }, "決定")))));
+            h("button", { onClick: () => tryCode(codeVal), className:"flex-1 rounded-xl py-2 font-bold text-sm", style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", border:"1px solid #6e4e1a", color:"#2c2030", fontFamily:"inherit" } }, "決定")))),
+      // ===== アカウント連携モーダル =====
+      acctOpen && h("div", { className:"fade-in", style:{ position:"fixed", inset:0, zIndex:60, background:"rgba(8,4,14,.82)", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 24px" } },
+        h("div", { className:"pop-in rounded-2xl p-4 w-full", style:{ maxWidth:320, background:"rgba(30,24,42,.98)", border:"2px solid #3c3450", textAlign:"center" } },
+          h("p", { className:"font-bold mb-2", style:{ color:"#e8c06a" } }, "☁ アカウント連携"),
+          !cloudSt ? h("p", { style:{ fontSize:"0.76rem", color:"#c9bfe0", margin:"0 0 10px", lineHeight:1.6 } }, "クラウド保存は現在準備中です。データはこの端末の中に保存されています。") :
+          cloudSt.linked
+            ? h("div", null,
+                h("p", { style:{ fontSize:"0.8rem", color:"#9fd8a8", fontWeight:800, margin:"0 0 4px" } }, "✅ Google連携済み"),
+                h("p", { style:{ fontSize:"0.74rem", color:"#c9bfe0", margin:"0 0 8px", wordBreak:"break-all" } }, cloudSt.email || ""),
+                h("p", { style:{ fontSize:"0.7rem", color:"#8f86a8", margin:"0 0 10px", lineHeight:1.6 } }, "別の端末でも同じGoogleアカウントでログインすると続きから遊べます。最終同期: " + fmtSync(cloudSt.lastSync)))
+            : h("div", null,
+                h("p", { style:{ fontSize:"0.76rem", color:"#c9bfe0", margin:"0 0 8px", lineHeight:1.6 } }, "いまはこの端末の中だけに保存されています。Googleアカウントと連携すると、機種変更や別の端末でもデータを引き継げます。"),
+                h("p", { style:{ fontSize:"0.7rem", color:"#8f86a8", margin:"0 0 10px" } }, "最終同期: " + fmtSync(cloudSt.lastSync))),
+          acctMsg && h("p", { style:{ fontSize:"0.74rem", color:"#ffe9b0", fontWeight:800, margin:"0 0 8px" } }, acctMsg),
+          h("div", { className:"flex gap-2 mt-1" },
+            h("button", { onClick: () => { setAcctOpen(false); SFX.tap(); }, className:"flex-1 rounded-xl py-2 font-bold text-sm", style:BTN_GHOST }, "閉じる"),
+            cloudSt && !cloudSt.linked ? h("button", { onClick: cloudLink, className:"flex-1 rounded-xl py-2 font-bold text-sm", style:BTN_GOLD }, "Googleと連携") : null))),
+      // ===== クラウド競合モーダル（どちらのデータで続けるか） =====
+      cloudSt && cloudSt.conflict && h("div", { className:"fade-in", style:{ position:"fixed", inset:0, zIndex:65, background:"rgba(8,4,14,.88)", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 20px" } },
+        h("div", { className:"pop-in rounded-2xl p-4 w-full", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", textAlign:"center" } },
+          h("p", { className:"font-bold mb-2", style:{ color:"#e8c06a" } }, "⚠ セーブデータが2つ見つかりました"),
+          h("p", { style:{ fontSize:"0.72rem", color:"#c9bfe0", margin:"0 0 10px", lineHeight:1.6 } }, "どちらのデータで続けるか選んでください。選ばなかった方は上書きされます。"),
+          h("button", { onClick: () => { Cloud.resolveConflict("remote"); SFX.tap(); }, className:"w-full rounded-xl mb-2", style:{ ...BTN_GOLD, textAlign:"left", padding:"9px 12px", fontWeight:800 } },
+            h("span", { style:{ display:"block", fontSize:"0.82rem" } }, "☁ クラウドのデータ"),
+            h("span", { style:{ display:"block", fontSize:"0.64rem", fontWeight:700, marginTop:2, lineHeight:1.5 } }, cloudSt.conflict.remote.summary),
+            h("span", { style:{ display:"block", fontSize:"0.6rem", fontWeight:700, opacity:.75 } }, "最終保存: " + fmtSync(cloudSt.conflict.remote.time))),
+          h("button", { onClick: () => { Cloud.resolveConflict("local"); SFX.tap(); }, className:"w-full rounded-xl", style:{ ...BTN_GHOST, textAlign:"left", padding:"9px 12px", fontWeight:800 } },
+            h("span", { style:{ display:"block", fontSize:"0.82rem" } }, "📱 この端末のデータ"),
+            h("span", { style:{ display:"block", fontSize:"0.64rem", fontWeight:700, marginTop:2, lineHeight:1.5 } }, cloudSt.conflict.local.summary),
+            h("span", { style:{ display:"block", fontSize:"0.6rem", fontWeight:700, opacity:.75 } }, "最終同期: " + fmtSync(cloudSt.conflict.local.time))))),
+      // ===== クレジットモーダル =====
+      credOpen && h("div", { className:"fade-in", style:{ position:"fixed", inset:0, zIndex:60, background:"rgba(8,4,14,.82)", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 24px" } },
+        h("div", { className:"pop-in rounded-2xl p-4 w-full", style:{ maxWidth:340, maxHeight:"76vh", overflowY:"auto", background:"rgba(30,24,42,.98)", border:"2px solid #3c3450", textAlign:"center" } },
+          h("p", { className:"font-bold mb-2", style:{ color:"#e8c06a" } }, "🎬 クレジット"),
+          (TXCR.sections || []).map((s, i) => h("div", { key:i, style:{ marginBottom:10 } },
+            h("p", { style:{ fontSize:"0.72rem", color:"#e8d8a8", fontWeight:800, margin:"0 0 3px" } }, s.title),
+            s.lines.map((l, j) => h("p", { key:j, style:{ fontSize:"0.68rem", color:"#c9bfe0", margin:"0 0 2px", lineHeight:1.5 } }, l)))),
+          h("p", { style:{ fontSize:"0.62rem", color:"#7f7694", margin:"6px 0 10px" } }, TXC.copyright || "© 2026 HIKARU"),
+          h("button", { onClick: () => { setCredOpen(false); SFX.tap(); }, className:"w-full rounded-xl py-2 font-bold text-sm", style:BTN_GHOST }, "閉じる"))));
   }
 
   // ===== キャラクター選択画面 =====
