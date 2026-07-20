@@ -1395,6 +1395,29 @@ function Bar({ value, max, from, to, height }) {
     h("div", { style:{ height:"100%", width:pct+"%", borderRadius:999, background:`linear-gradient(180deg, ${to} 0%, ${from} 100%)`, transition:"width .4s ease", boxShadow:"inset 0 2px 0 rgba(255,255,255,.3)" } }));
 }
 
+// スレスパ風のHPバー: 深紅のバーに「現在/最大」を白文字で重ね、ダメージを受けると
+// オレンジの残像が少し遅れてじわっと減る（回復は本体が先に伸びて残像を隠すので残像は出ない）。
+// shield>0 の間はバーが青になり、盾バッジがバーの上辺に少し重なって出る（スレスパのブロック表現）。
+// broken=シールドがちょうど砕けた表示（赤い「0」バッジを震わせる。ヒーローの敵ターン用）
+function HpBar({ value, max, height, fontSize, flash, shield, broken }) {
+  const pct = Math.max(0, Math.min(100, value / max * 100));
+  const sh = (shield || 0) > 0;
+  return h("div", { style:{ position:"relative" } },
+    h("div", { style:{ position:"relative", height, borderRadius:999, background: sh ? "#0b1424" : "#26090d", overflow:"hidden", border:"2px solid rgba(12,9,18,.9)" } },
+      h("div", { style:{ position:"absolute", left:0, top:0, height:"100%", width:pct+"%", background:"#e8963c", transition:"width .45s ease .3s" } }),
+      h("div", { style:{ position:"absolute", left:0, top:0, height:"100%", width:pct+"%", background: sh ? "linear-gradient(180deg,#4a7cb4 0%,#2b4d88 100%)" : "linear-gradient(180deg,#c9463f 0%,#96201f 100%)", transition:"width .12s ease" } }),
+      // 撃破時(0)は数値を出さない（敵のフェードアウト中に「0/130」が残って見えるため）
+      value > 0 && h("span", { style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize, lineHeight:1, color: flash || "#fff", transition:"color .3s",
+        textShadow:"0 1px 1px rgba(0,0,0,.9), 0 0 2px rgba(0,0,0,.7)", fontVariantNumeric:"tabular-nums", letterSpacing:"0.02em" } }, value, "/", max)),
+    // バッジはバーの上辺に3pxだけ乗せる（深く重ねると幅の狭い敵バーでHP数値の先頭が隠れる）
+    (sh || broken) && h("span", { className:"flex items-center", style:{ position:"absolute", left:-3, top:-14, gap:2, padding:"1px 5px", borderRadius:8,
+      background: broken ? "rgba(150,26,40,.95)" : "rgba(34,64,116,.95)", border: broken ? "1px solid rgba(255,130,120,.8)" : "1px solid rgba(150,190,255,.8)",
+      fontSize:10, fontWeight:800, color:"#e4eeff", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", lineHeight:1.3,
+      animation: broken ? "hitShake .45s ease" : "none", zIndex:2 } },
+      h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:11, height:11, style:{ width:11, height:11, maxWidth:11, maxHeight:11, flexShrink:0, objectFit:"contain" } }),
+      broken ? 0 : shield));
+}
+
 // バトルシーン中央の演出テキスト1行。折り返し禁止のうえ、親（シーン内寸ぴったりの
 // inset-0 コンテナ）の実測幅からはみ出す場合だけフォントを縮小して1行に収める。
 // useLayoutEffect は描画前に同期実行されるので、基準サイズで一瞬見えてから縮むちらつきはない
@@ -1957,6 +1980,7 @@ function DropBattle() {
         }
         const capA = en.dcap ? Math.min(remA, en.dcap) : remA; // 上限ダメージ
         const dealtH = Math.min(en.hp, Math.max(0, capA));
+        const dispA = Math.max(0, capA); // 表示用: 残りHPで頭打ちしない（HP20の敵に100攻撃なら「100」と見せる）
         en.hp -= dealtH;
         if (en.hp <= 0) en.alive = false;
         const snap = ens.map(e => ({ ...e }));
@@ -1964,7 +1988,7 @@ function DropBattle() {
         const dead = !en.alive;
         seq.push({
           text: dealtH > 0
-            ? `${isFirst ? "乱れ斬り！" : ""}${en.name}に ${dealtH}！`
+            ? `${isFirst ? "乱れ斬り！" : ""}${en.name}に ${dispA}！`
             : `${en.name}のシールドが受け止めた！`,
           color: dealtH > 0 ? "#ff9a3c" : "#9db8e8", act: "atk",
           wait: 520,
@@ -1973,14 +1997,14 @@ function DropBattle() {
             SFX.don();
             setTimeout(() => {
               setAnim(en.id, dead ? "die" : "hit");
-              addPop(en.id, dealtH > 0 ? "-" + dealtH : "BLOCK", dealtH > 0 ? "#ffe2de" : "#9db8e8");
+              addPop(en.id, dealtH > 0 ? "-" + dispA : "BLOCK", dealtH > 0 ? "#ffe2de" : "#9db8e8");
               if (isFirst && dealtH > 0) setShakeSeq(q => q + 1); // 攻撃の着弾（実ダメージ）で画面を揺らす
               if (dead && en.boss) setFlashSeq(q => q + 1);
             }, 160);
             setTimeout(() => setEnemiesBoth(snap), 180);
           }
         });
-        logs.push(`⚔全 ${en.name}に ${dealtH}${dead ? "（撃破）" : ""}`);
+        logs.push(`⚔全 ${en.name}に ${dispA}${dead ? "（撃破）" : ""}`);
       }
     } else if (atk > 0) {
       const pierce = turnRef.current.pierce;
@@ -2000,6 +2024,8 @@ function DropBattle() {
         }
         const capR = en.dcap ? Math.min(rem, en.dcap) : rem; // 上限ダメージ
         const dealtH = Math.min(en.hp, capR);
+        // 表示用: 残りHPで頭打ちしない。ただし貫通時は余りが次の敵の表示に乗るので実ダメージのまま（二重計上を防ぐ）
+        const dispR = pierce ? dealtH : Math.max(0, capR);
         en.hp -= dealtH;
         rem = pierce ? rem - dealtH : 0;
         if (en.hp <= 0) en.alive = false;
@@ -2007,7 +2033,7 @@ function DropBattle() {
         const isFirst = first; first = false;
         const dead = !en.alive;
         const txt = dealtH > 0
-          ? `${isFirst ? "" : "貫通！"}${en.name}に ${dealtH}！`
+          ? `${isFirst ? "" : "貫通！"}${en.name}に ${dispR}！`
           : `${en.name}のシールドが受け止めた！`;
         seq.push({
           text: txt, color: dealtH > 0 ? "#ff6b6b" : "#9db8e8", act: "atk",
@@ -2016,7 +2042,7 @@ function DropBattle() {
             SFX.don();
             setTimeout(() => {
               setAnim(en.id, dead ? "die" : "hit");
-              addPop(en.id, dealtH > 0 ? "-" + dealtH : "BLOCK", dealtH > 0 ? "#ffe2de" : "#9db8e8");
+              addPop(en.id, dealtH > 0 ? "-" + dispR : "BLOCK", dealtH > 0 ? "#ffe2de" : "#9db8e8");
               if (dealtS > 0) SFX.crack();
               if (isFirst && dealtH > 0) setShakeSeq(q => q + 1); // 攻撃の着弾（実ダメージ）で画面を揺らす
               if (dead && en.boss) setFlashSeq(q => q + 1);
@@ -2024,7 +2050,7 @@ function DropBattle() {
             setTimeout(() => setEnemiesBoth(snap), 180);
           }
         });
-        logs.push(`${isFirst ? "⚔" : "⚔貫通"} ${en.name}に ${dealtH}${dealtS > 0 ? `（盾-${dealtS}）` : ""}${dead ? "（撃破）" : ""}`);
+        logs.push(`${isFirst ? "⚔" : "⚔貫通"} ${en.name}に ${dispR}${dealtS > 0 ? `（盾-${dealtS}）` : ""}${dead ? "（撃破）" : ""}`);
       }
     }
 
@@ -4765,8 +4791,7 @@ function DropBattle() {
         relicBarEl,
         h("div", { className:"flex items-center gap-2 rounded-xl px-3 py-1.5 mb-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c5a48" } },
           Ic(CHARS[curChar].img, 20),
-          h("div", { className:"flex-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:9 })),
-          h("span", { className:"text-xs font-bold", style:{ color:"#7CFFB0", fontVariantNumeric:"tabular-nums" } }, pHP, "/", pMax)),
+          h("div", { className:"flex-1" }, h(HpBar, { value:pHP, max:pMax, height:16, fontSize:10 }))),
         itemBarEl,
         routeTut
           ? h("div", { className:"text-center rounded-lg py-2 px-3 mb-1 font-bold pop-in", style:{ background:"rgba(30,24,42,.98)", border:"2px solid #e8c06a", color:"#ffe08a", boxShadow:"0 4px 16px rgba(0,0,0,.55)" } },
@@ -4837,20 +4862,14 @@ function DropBattle() {
           h("div", { style:{ position:"relative" } },
             pops.hero && h("span", { key:pops.hero.seq, className:"dmg-pop", style:{ color:pops.hero.color } }, pops.hero.text),
             h(SpriteBox, { kind:"hero", size:74, idle:"a", anim:heroAnim }),
-            (sv !== null || tv.def > 0) && h("span", { className:"absolute font-bold flex items-center", style:{ right:-22, top:-6, gap:3, padding:"2px 8px", borderRadius:10,
-              background: (sv !== null ? sv : tv.def) > 0 ? "rgba(34,64,116,.92)" : "rgba(150,26,40,.92)",
-              border: (sv !== null ? sv : tv.def) > 0 ? "1px solid rgba(150,190,255,.7)" : "1px solid rgba(255,130,120,.7)",
-              fontSize:13, color:"#e4eeff", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums",
-              animation: sv === 0 ? "hitShake .45s ease" : "none", zIndex:2 } },
-              h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:15, height:15, style:{ width:15, height:15, maxWidth:15, maxHeight:15, flexShrink:0, objectFit:"contain" } }),
-              sv !== null ? sv : tv.def),
             poisonView > 0 && h("span", { title:`毒（このバトル中、毎ターン${poisonView}ダメージ）`, className:"absolute font-bold flex items-center", style:{ left:-14, top:-6, gap:2, padding:"2px 6px", borderRadius:10,
               background:"rgba(46,92,40,.92)", border:"1px solid rgba(140,232,124,.7)",
               fontSize:12, color:"#c8f5b8", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", zIndex:2 } },
               h("img", { src:"assets/st_poison.png", alt:"毒", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), poisonView)),
           h("div", { style:{ width:40, height:7, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-5, filter:"blur(2px)" } }),
-          h("div", { className:"w-full mt-1" }, h(Bar, { value:pHP, max:pMax, from:"#22c55e", to:"#7CFFB0", height:8 })),
-          h("span", { className:"text-[10px] font-bold mt-1", style:{ color: hit === "player" ? "#ff9a9a" : hit === "heal" ? "#7cffb0" : "#cfe9d8", fontVariantNumeric:"tabular-nums", transition:"color .3s" } }, pHP, "/", pMax)),
+          h("div", { className:"w-full mt-1" }, h(HpBar, { value:pHP, max:pMax, height:16, fontSize:10,
+            flash: hit === "player" ? "#ffb4a8" : hit === "heal" ? "#a8ffcc" : null,
+            shield: sv !== null ? sv : tv.def, broken: sv === 0 }))),
         // 敵
         h("div", { className:"absolute flex items-end scene-actor", style:{ right:30, bottom:14, gap:4, zIndex: gtut === "warn" ? 3 : 1 } },
           enemies.map(en => {
@@ -4874,55 +4893,57 @@ function DropBattle() {
               : [IIco(pm.img), iv.dmg]
               ).concat(twice ? [h("span", { style:{ color:"#ff9a5a", fontWeight:900, marginLeft:1 } }, "×2")] : []);
             const isDmgIntent = iv.act === "attack" || iv.act === "double" || iv.act === "bigatk" || iv.act === "drain" || iv.act === "jamatk";
-            // 状態バッジ（激昂・怒気）の有無。予告バッジはこの行の分だけ上へ逃がして重なりを防ぐ
+            // 状態バッジ（激昂・怒気）の有無。HPバー右上に重ねて出す
+            // （以前はスプライト上に行として積んでいて、出た瞬間に攻撃予告が1段上へずれて見づらかった）
             const hasStat = (en.enr || 0) > 0 || !!(en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id));
             return h("button", { key:en.id,
               onClick: () => { if (en.alive && !locked && status === "battle") { setTargetId(en.id); targetRef.current = en.id; SFX.tap(); } },
               className:"relative flex flex-col items-center", style:{ width:Math.max(sz + 4, 58), cursor: en.alive ? "pointer" : "default",
                 filter: gtut === "warn" && en.alive ? "drop-shadow(0 0 12px rgba(255,190,90,.95)) drop-shadow(0 0 5px rgba(255,120,60,.85))" : "none",
                 transition:"filter .3s ease" } },
-              // 名前は表示しない。激昂の状態だけスプライトの上にバッジで出す（下に積むと表示量で足元が浮くため）
-              // 精鋭（どくろ）マークは廃止。バトル中に意味が伝わらず、予告バッジの裏に潜って表示も壊れていたため
-              // 条件は必ず真偽値にする: soloUp は 0 を持つため素で && すると 0 が返り、React が「0」を描画してしまう
-              hasStat && h("span", { className:"flex items-center justify-center", style:{ gap:3, marginTop:2, marginBottom:2, maxWidth:"none" } },
-                h("span", { className:"text-[9px] font-bold inline-flex items-center", style:{ gap:2, padding:"1px 6px", borderRadius:6, background:"rgba(10,8,16,.72)", border:"1px solid rgba(255,255,255,.12)", color: en.boss ? "#ff5c7a" : "#d8cbe8", opacity: en.alive ? 0.95 : 0.35, textShadow:"0 1px 2px #000", whiteSpace:"nowrap" } },
-                  (en.enr || 0) > 0 && h("img", { src:"assets/st_enrage.png", alt:"激昂", draggable:false, width:11, height:11, style:{ width:11, height:11, maxWidth:11, maxHeight:11, flexShrink:0, objectFit:"contain" } }),
-                  (en.enr || 0) > 0 && en.enr,
-                  // 取り巻き全滅で火力アップ中（裏5章ボス）
-                  !!(en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id)) && h("span", { style:{ marginLeft:(en.enr||0)>0?3:0, color:"#ff5c7a", fontWeight:900 } }, "怒気"))),
               h("span", { style:{ position:"relative", display:"block" } },
                 // 予告（攻撃など）はスプライトに重ねて表示。ボスは縦に高く、別の行として積むと低い画面高で見切れるため
                 // ボスはスプライトが高く予告が枠上端からはみ出しうるため少し下げる
-                en.alive && h("span", { className:"absolute text-[10px] font-bold inline-flex items-center", style:{ top: (en.boss ? -24 : -28) - (hasStat ? 18 : 0), left:"50%", gap:2,
-                  transform: gtut === "warn" && isDmgIntent ? "translateX(-50%) scale(1.15)" : "translateX(-50%)",
-                  height:18, lineHeight:"16px", padding:"0 6px", borderRadius:9, whiteSpace:"nowrap", zIndex:2,
-                  background: isDmgIntent ? (iv.act === "bigatk" ? "rgba(150,26,40,.9)" : "rgba(120,32,32,.8)") : "rgba(0,0,0,.55)",
+                // 激昂中は予告の右に「UP×数値」セグメントを足した1つのカプセルで出す（行として積むと予告が1段上へずれて見づらい）。
+                // 枠線・角丸・点滅は外枠が1つで持つ＝2つの箱を継ぐ方式だと継ぎ目に1pxの段差が出て気持ち悪い。
+                // ため攻撃の点滅(intentBlink)は外枠に付けてUP部分ごと一体で点滅させる（opacityのみなのでtranslateXと衝突しない）
+                // display は style で明示する（このファイルの自作CSSに .inline-flex は存在せず、className だけだと
+                // inline のままになって height 指定が効かず、予告とUPの高さがずれる）
+                en.alive && h("span", { className:"absolute font-bold", style:{ top: en.boss ? -24 : -28, left:"50%", whiteSpace:"nowrap", zIndex:2,
+                  display:"flex", alignItems:"stretch", borderRadius:9, overflow:"hidden",
                   border: isDmgIntent ? "1px solid rgba(255,130,120,.65)" : "1px solid rgba(255,255,255,.22)",
-                  color: isDmgIntent ? "#ffd9d4" : pm.color,
-                  fontSize: gtut === "warn" && isDmgIntent ? 14 : iv.act === "bigatk" ? 11 : 10,
                   boxShadow: gtut === "warn" && isDmgIntent ? "0 0 0 2px #ff6b6b, 0 0 14px rgba(255,107,107,.8)" : "none",
-                  animation: charging ? "intentBlink .9s ease-in-out infinite" : "none", textShadow:"0 1px 2px #000" } }, ...intentEls),
+                  transform: gtut === "warn" && isDmgIntent ? "translateX(-50%) scale(1.15)" : "translateX(-50%)",
+                  animation: charging ? "intentBlink .9s ease-in-out infinite" : "none" } },
+                  h("span", { style:{ display:"inline-flex", alignItems:"center", gap:2, height:16, lineHeight:"16px", padding:"0 6px",
+                    background: isDmgIntent ? (iv.act === "bigatk" ? "rgba(150,26,40,.9)" : "rgba(120,32,32,.8)") : "rgba(0,0,0,.55)",
+                    color: isDmgIntent ? "#ffd9d4" : pm.color,
+                    fontSize: gtut === "warn" && isDmgIntent ? 14 : iv.act === "bigatk" ? 11 : 10,
+                    textShadow:"0 1px 2px #000" } }, ...intentEls),
+                  // 条件は必ず真偽値にする: soloUp は 0 を持つため素で && すると 0 が返り、React が「0」を描画してしまう
+                  // 高さは予告側と同じ16を明示（未指定だと行送りで1〜2px高くなり継ぎ目に段差が出る）
+                  hasStat && h("span", { style:{ display:"inline-flex", alignItems:"center", gap:2, height:16, lineHeight:"16px", padding:"0 5px",
+                    background:"rgba(70,16,10,.92)", borderLeft:"1px solid rgba(255,150,90,.6)", color:"#ffb08a",
+                    fontSize:11, textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums" } },
+                    // 点滅は外枠のintentBlink（opacity）に任せて一体で明滅させる。アイコン単体のscaleパルスは違和感があるので入れない
+                    (en.enr || 0) > 0 && h("img", { src:"assets/st_enrage.png", alt:"激昂", draggable:false, width:11, height:11, style:{ width:11, height:11, maxWidth:11, maxHeight:11, flexShrink:0, objectFit:"contain" } }),
+                    (en.enr || 0) > 0 && en.enr,
+                    // 取り巻き全滅で火力アップ中（裏5章ボス）
+                    !!(en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id)) && h("span", { style:{ marginLeft:(en.enr||0)>0?3:0, color:"#ff5c7a" } }, "怒気"))),
                 // 激昂の警告は左上へ。右上だと真上の攻撃予告バッジの下に食い込んで重なる
                 en.alive && enrLeft(en, turn) === 0 && h("img", { src:"assets/st_enrage.png", alt:"激昂", draggable:false, width:18, height:18, className:"absolute pointer-events-none", style:{ top:6, left:-9, width:18, height:18, maxWidth:18, maxHeight:18, objectFit:"contain", zIndex:3, animation:"angerPulse .6s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)" } }),
                 isT && h("span", { className:"absolute pointer-events-none", style:{ top:-8, left:"50%", animation:"targetBob 1s ease-in-out infinite", color:"#e8c05a", fontSize:12, textShadow:"0 1px 2px #000", zIndex:2 } }, "▼"),
                 pops[en.id] && h("span", { key:pops[en.id].seq, className:"dmg-pop", style:{ color:pops[en.id].color } }, pops[en.id].text),
                 h(SpriteBox, { kind:en.kind, size:sz, idle:k.idle, anim:a, charge:charging, dead:!en.alive }),
-                (en.shd || 0) > 0 && en.alive && h("span", { className:"absolute flex items-center font-bold", style:{ right:-4, bottom:6, gap:2, padding:"1px 6px", borderRadius:9,
-                  background:"rgba(34,64,116,.95)", border:"1px solid rgba(150,190,255,.85)",
-                  fontSize:11, color:"#dce8ff", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", zIndex:2 } },
-                  h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:12, height:12, style:{ width:12, height:12, maxWidth:12, maxHeight:12, flexShrink:0, objectFit:"contain" } }),
-                  en.shd),
-                // 上限バッジは左・盾バッジは右下に分離。盾あり時はさらに一段上げて対角配置（狭いスプライトでも重ならない）
-                en.dcap > 0 && en.alive && h("span", { title:"被ダメ上限", className:"absolute flex items-center font-bold", style:{ left:-4, bottom: (en.shd || 0) > 0 ? 29 : 6, gap:2, padding:"1px 6px", borderRadius:9,
+                // 盾はHPバー側（HpBarのshield）で表示する。上限バッジだけスプライト左下に残す
+                en.dcap > 0 && en.alive && h("span", { title:"被ダメ上限", className:"absolute flex items-center font-bold", style:{ left:-4, bottom:6, gap:2, padding:"1px 6px", borderRadius:9,
                   background:"rgba(58,20,20,.9)", border:"1px solid rgba(255,150,120,.65)",
                   fontSize:11, color:"#ffb3a2", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap", zIndex:2 } },
                   h("img", { src:"assets/st_dcap.png", alt:"上限", draggable:false, width:12, height:12, style:{ width:12, height:12, maxWidth:12, maxHeight:12, flexShrink:0, objectFit:"contain" } }),
                   en.dcap)),
               h("span", { style:{ width:sz * 0.6, height:6, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-4, filter:"blur(2px)", opacity: en.alive ? 1 : 0, transition:"opacity .5s" } }),
               h("span", { className:"w-full mt-1", style:{ opacity: en.alive ? 1 : 0, transition:"opacity .5s", maxWidth:74 } },
-                h(Bar, { value:en.hp, max:en.max, from:"#7a1d1d", to:"#ef4444", height:6 }),
-                // 撃破後は数値を出さない（フェードアウトの0.5秒間「0/130」が見えて敵が残っているように見えるため）
-                en.alive && h("span", { className:"block text-[9px] font-bold text-center", style:{ color:"#f0b8b0", fontVariantNumeric:"tabular-nums", textShadow:"0 1px 2px #000", marginTop:1 } }, en.hp, "/", en.max)));
+                h(HpBar, { value:en.hp, max:en.max, height:14, fontSize:9, shield: en.alive ? en.shd : 0 })));
           })),
         // 演出ポップ
         fx.length > 0 && h("div", { className:"absolute inset-0 flex flex-col items-center justify-center pointer-events-none", style:{ gap:6, zIndex:3 } },
