@@ -1451,9 +1451,10 @@ function DropBattle() {
     const ns = { u:[...s.u, idx], c:s.c, cu:s.cu }; saveCharState(ns); return ns;
   });
   const recordClear = () => setCharState(s => {
-    if (modeRef.current === "ura") {                     // 裏5章クリア（キャラ解放には影響しない）
+    if (modeRef.current === "ura") {                     // 裏5章クリア
       const cu = (s.cu || []).includes(curCharRef.current) ? s.cu : [...(s.cu || []), curCharRef.current];
-      const ns = { u:s.u, c:s.c, cu }; saveCharState(ns); return ns;
+      const u = s.u.includes(6) ? s.u : [...s.u, 6];     // 裏5章クリア → 賭博師ジン解放
+      const ns = { u, c:s.c, cu }; saveCharState(ns); return ns;
     }
     const c = s.c.includes(curCharRef.current) ? s.c : [...s.c, curCharRef.current];
     const u = new Set(s.u);
@@ -2254,7 +2255,6 @@ function DropBattle() {
     if (node && node.type === "boss") {
       SFX.win();
       if (actRef.current === 1 && modeRef.current !== "ura") unlockChar(1); // 表2章ボス撃破 → 2体目解放
-      if (pRef.current <= 10) unlockChar(6);    // HP10以下でボス撃破 → 賭博師ジン解放
       // 章クリア（レリック選択）→ 強化済み特殊ドロップ選択 → 次章
       if (actRef.current < curActs() - 1) { setActClear({ picks: pickRelics(3, "boss") }); return; }
       recordClear();                            // 最終章ボス撃破 → クリア記録＆解放判定（裏は裏クリアとして記録）
@@ -3747,6 +3747,7 @@ function DropBattle() {
       showDcap: cap => setDcapTut(cap),
       showSpTut: () => setSpTut(0),
       unlockChar: i => unlockChar(i),
+      lockChar: i => setCharState(s => { const ns = { u:s.u.filter(x => x !== i), c:s.c, cu:s.cu }; saveCharState(ns); return ns; }), // 解放条件テスト用
       recordClear: () => recordClear(),
       // 賭博師テスト用: コインの出目固定 / 4択のモード選択 / 天使悪魔選択 / オーバーレイ状態
       rigCoin: face => { coinRigRef.current = face; }, // "angel"/"demon"/null

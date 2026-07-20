@@ -45,6 +45,10 @@ with sync_playwright() as p:
     print("1 ura hidden before clear OK")
 
     # 2. 表クリア済みにする → トグル出現 → 裏を選んで開始
+    # （賭博師6はTEST_MODE初期状態で解放済みなので、裏クリアでの解放検証用に一旦ロック）
+    page.evaluate("window.__test.lockChar(6)")
+    time.sleep(0.2)
+    assert 6 not in page.evaluate("window.__test.charState()")["u"], "lockChar(6) failed"
     page.evaluate("window.__test.setCleared(0)")
     time.sleep(0.4)
     body = page.evaluate("document.body.innerText")
@@ -124,10 +128,12 @@ with sync_playwright() as p:
             print("8 ura final boss defeated -> clear OK")
     page.screenshot(path=SHOT + r"\u5_clear_ura.png")
 
-    # 6. 裏クリアが cu に記録される
+    # 6. 裏クリアが cu に記録される＋賭博師ジン(6)が解放される
     cs = page.evaluate("window.__test.charState()")
     assert 0 in cs["cu"], f"ura clear not recorded: {cs}"
     print("9 ura clear recorded cu:", cs["cu"])
+    assert 6 in cs["u"], f"gambler not unlocked by ura clear: {cs}"
+    print("10 gambler unlocked by ura clear OK u:", cs["u"])
 
     b.close()
 
