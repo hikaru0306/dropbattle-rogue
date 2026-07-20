@@ -9,9 +9,10 @@
 
 // ▼▼ Firebaseコンソール「プロジェクトの設定 > マイアプリ」の firebaseConfig をここに貼る ▼▼
 const FIREBASE_CONFIG = {
-  apiKey: "PASTE_API_KEY",
-  authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
-  projectId: "PASTE_PROJECT_ID",
+  apiKey: "AIzaSyCzeHjUxC6uTZ_w-32pWsV94IWQM92oIVM",
+  authDomain: "dropsia.firebaseapp.com",
+  projectId: "dropsia",
+  appId: "1:315158854448:web:3c8f6fa31b7c332ce6a6f5",
 };
 // ▲▲ ここまで ▲▲
 

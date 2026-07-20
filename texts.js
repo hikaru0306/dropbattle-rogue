@@ -277,7 +277,7 @@ window.TEXTS = {
   // ===== クラウド・フッター関連 =====
   cloud: {
     copyright: "© 2026 HIKARU — DROPSIA",
-    contactUrl: ""   // お問い合わせGoogleフォームのURLをここに貼ると、タイトルにリンクが表示されます
+    contactUrl: "https://docs.google.com/forms/d/e/1FAIpQLSce4fN3AjL_VK_pd42aplABN8G9vgwxbGBQCowmNl5fXHJPJA/viewform"
   },
 
   // ===== クレジット画面 =====
