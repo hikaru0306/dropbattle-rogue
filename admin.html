@@ -65,15 +65,17 @@ let rows = [];
 
 function fmt(t){ return t ? new Date(t).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "—"; }
 
+// 表/裏それぞれ: クリア済み=✔回数、未クリア=最深到達（◯章◯F）、未プレイ=表示なし
 function charCell(pc, i, cleared, clearedU){
-  const s = pc && pc[i];
-  const o = (s && (s.clears||0)) || (cleared.includes(i) ? 1 : 0);
-  const u = (s && (s.uraClears||0)) || (clearedU.includes(i) ? 1 : 0);
-  if (!o && !u) return '<span class="dim">—</span>';
-  let h = "";
-  if (o) h += `<span class="omote">表${o}</span>`;
-  if (u) h += (h ? " " : "") + `<span class="ura">裏${u}</span>`;
-  return h;
+  const s = (pc && pc[i]) || {};
+  const o = (s.clears||0) || (cleared.includes(i) ? 1 : 0);
+  const u = (s.uraClears||0) || (clearedU.includes(i) ? 1 : 0);
+  const om = o ? `<span class="omote">表✔${o}</span>`
+    : s.reach ? `<span class="omote">表${s.reach[0]+1}章${s.reach[1]}F</span>` : "";
+  const ur = u ? `<span class="ura">裏✔${u}</span>`
+    : s.reachU ? `<span class="ura">裏${s.reachU[0]+1}章${s.reachU[1]}F</span>` : "";
+  if (!om && !ur) return '<span class="dim">—</span>';
+  return om + (om && ur ? "<br>" : "") + ur;
 }
 
 function deepest(pc){
@@ -124,12 +126,13 @@ $("login").onclick = async () => {
 };
 $("reload").onclick = load;
 $("csv").onclick = () => {
-  const head = ["uid","linked","unlocked",...CHAR_NAMES.flatMap(n=>[n+"_表",n+"_裏"]),"最深","最終プレイ","summary"];
+  const head = ["uid","linked","unlocked",...CHAR_NAMES.flatMap(n=>[n+"_表クリア",n+"_裏クリア",n+"_表到達",n+"_裏到達"]),"最深","最終プレイ","summary"];
   const lines = [head.join(",")];
+  const reachTxt = r => r ? `${r[0]+1}章${r[1]}F` : "";
   for (const r of rows) {
     const p = r.data.progress || {}, pc = p.perChar || {};
     const cells = [r.id, r.data.linked?1:0, p.unlocked ?? ""];
-    for (let i=0;i<7;i++){ const s=pc[i]||{}; cells.push(s.clears||0, s.uraClears||0); }
+    for (let i=0;i<7;i++){ const s=pc[i]||{}; cells.push(s.clears||0, s.uraClears||0, reachTxt(s.reach), reachTxt(s.reachU)); }
     cells.push(deepest(pc), r.data.updatedAt?new Date(r.data.updatedAt).toISOString():"", '"'+String(r.data.summary||"").replace(/"/g,'""')+'"');
     lines.push(cells.join(","));
   }
