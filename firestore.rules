@@ -3,8 +3,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{db}/documents {
+    // 管理者（開発者本人のGoogleアカウント）は全ユーザーの進捗を閲覧可能（admin.html用・書き込みは不可）
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == "flFrnAuMykhkLrpxH5eeQSt5HPI2";
+    }
     // 各ユーザーは自分のドキュメントのみ読み書き可（匿名ユーザーも request.auth を持つ）
     match /users/{uid} {
+      allow read: if isAdmin();
       allow read, delete: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['v','updatedAt','svTime','clientVersion','linked','summary','progress','data'])

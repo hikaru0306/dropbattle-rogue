@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DROPSIA 管理ダッシュボード</title>
+<meta name="robots" content="noindex,nofollow" />
+<style>
+body{margin:0;background:#131019;color:#ece7f2;font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif}
+main{max-width:1280px;margin:0 auto;padding:24px 16px 60px}
+h1{font-size:1.2rem;color:#e8c06a;margin:0 0 4px}
+.sub{font-size:.78rem;color:#8f86a8;margin:0 0 18px}
+button{font-family:inherit;cursor:pointer;border-radius:10px;border:2px solid #6e4e1a;background:linear-gradient(180deg,#e8c06a,#b8862e);color:#2c2030;font-weight:800;font-size:.88rem;padding:9px 22px}
+button.ghost{background:rgba(255,255,255,.07);border:2px solid #453b5c;color:#c9bfe0}
+#msg{font-size:.85rem;color:#ffce78;margin:14px 0;font-weight:700}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.stat{font-size:.8rem;color:#9fd8a8;font-weight:700}
+.tablewrap{overflow-x:auto;border:1px solid #3c3450;border-radius:12px}
+table{border-collapse:collapse;width:100%;font-size:.76rem;white-space:nowrap}
+th,td{padding:7px 10px;border-bottom:1px solid #2c2740;text-align:center}
+th{background:#1e182a;color:#e8d8a8;position:sticky;top:0;cursor:pointer;user-select:none}
+td:first-child,th:first-child{text-align:left;max-width:210px;overflow:hidden;text-overflow:ellipsis}
+tr:hover td{background:rgba(232,192,106,.06)}
+.linked{color:#9fd8a8;font-weight:700}
+.anon{color:#8f86a8}
+.omote{color:#e8c06a;font-weight:700}
+.ura{color:#c9a2e8;font-weight:700}
+.dim{color:#5f5878}
+.deep{color:#9fc8e8;font-weight:700}
+</style>
+</head>
+<body>
+<main>
+<h1>🎮 DROPSIA 管理ダッシュボード</h1>
+<p class="sub">Firestore の users コレクションをリアルタイム表示（管理者のGoogleアカウントのみ閲覧可能）</p>
+<div class="bar">
+  <button id="login">Googleでログイン</button>
+  <button id="reload" class="ghost" style="display:none">🔄 再読み込み</button>
+  <button id="csv" class="ghost" style="display:none">⬇ CSVダウンロード</button>
+  <span id="stat" class="stat"></span>
+</div>
+<div id="msg"></div>
+<div class="tablewrap" id="wrap" style="display:none">
+  <table id="tbl"></table>
+</div>
+</main>
+<script type="module">
+const FB = "https://www.gstatic.com/firebasejs/11.10.0/";
+const [{ initializeApp }, A, F] = await Promise.all([
+  import(FB + "firebase-app.js"),
+  import(FB + "firebase-auth.js"),
+  import(FB + "firebase-firestore-lite.js"),
+]);
+const app = initializeApp({
+  apiKey: "AIzaSyCzeHjUxC6uTZ_w-32pWsV94IWQM92oIVM",
+  authDomain: "dropsia.firebaseapp.com",
+  projectId: "dropsia",
+});
+const auth = A.getAuth(app);
+const db = F.getFirestore(app);
+const CHAR_NAMES = ["アルド", "イリス", "ガレス", "ノア", "セレネ", "ブロム", "ジン"];
+const $ = id => document.getElementById(id);
+const msg = t => $("msg").textContent = t || "";
+let rows = [];
+
+function fmt(t){ return t ? new Date(t).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "—"; }
+
+function charCell(pc, i, cleared, clearedU){
+  const s = pc && pc[i];
+  const o = (s && (s.clears||0)) || (cleared.includes(i) ? 1 : 0);
+  const u = (s && (s.uraClears||0)) || (clearedU.includes(i) ? 1 : 0);
+  if (!o && !u) return '<span class="dim">—</span>';
+  let h = "";
+  if (o) h += `<span class="omote">表${o}</span>`;
+  if (u) h += (h ? " " : "") + `<span class="ura">裏${u}</span>`;
+  return h;
+}
+
+function deepest(pc){
+  let best=null, bestU=null;
+  for (const k in (pc||{})) {
+    const r=pc[k].reach, ru=pc[k].reachU;
+    if (r && (!best || r[0]>best[0] || (r[0]===best[0]&&r[1]>best[1]))) best=r;
+    if (ru && (!bestU || ru[0]>bestU[0] || (ru[0]===bestU[0]&&ru[1]>bestU[1]))) bestU=ru;
+  }
+  return bestU ? `裏${bestU[0]+1}章${bestU[1]}F` : best ? `${best[0]+1}章${best[1]}F` : "—";
+}
+
+function render(){
+  const tbl = $("tbl");
+  const head = ["プレイヤー","解放",...CHAR_NAMES,"最深","最終プレイ"];
+  let h = "<tr>" + head.map((t,i)=>`<th data-i="${i}">${t}</th>`).join("") + "</tr>";
+  for (const r of rows) {
+    const d = r.data;
+    const p = d.progress || {};
+    const pc = p.perChar || {};
+    const co = p.clearedOmote || [], cu = p.clearedUra || [];
+    const name = d.linked ? `<span class="linked">🔗 ${r.id.slice(0,10)}…</span>` : `<span class="anon">匿名 ${r.id.slice(0,8)}…</span>`;
+    h += `<tr><td title="${r.id}">${name}</td><td>${p.unlocked ?? "?"} /7</td>`
+      + CHAR_NAMES.map((_,i)=>`<td>${charCell(pc,i,co,cu)}</td>`).join("")
+      + `<td class="deep">${deepest(pc)}</td><td>${fmt(d.updatedAt)}</td></tr>`;
+  }
+  tbl.innerHTML = h;
+  $("wrap").style.display = "";
+  $("csv").style.display = $("reload").style.display = "";
+  $("stat").textContent = `${rows.length}人 ｜ Google連携 ${rows.filter(r=>r.data.linked).length}人`;
+}
+
+async function load(){
+  msg("読み込み中…");
+  try {
+    const snap = await F.getDocs(F.query(F.collection(db,"users"), F.orderBy("updatedAt","desc")));
+    rows = snap.docs.map(dc => ({ id: dc.id, data: dc.data() }));
+    msg("");
+    render();
+  } catch (e) {
+    msg("読み込み失敗: " + (e.code || e.message) + "（管理者アカウントでログインしていますか？）");
+  }
+}
+
+$("login").onclick = async () => {
+  try { await A.signInWithPopup(auth, new A.GoogleAuthProvider()); }
+  catch (e) { msg("ログイン失敗: " + (e.code || e)); }
+};
+$("reload").onclick = load;
+$("csv").onclick = () => {
+  const head = ["uid","linked","unlocked",...CHAR_NAMES.flatMap(n=>[n+"_表",n+"_裏"]),"最深","最終プレイ","summary"];
+  const lines = [head.join(",")];
+  for (const r of rows) {
+    const p = r.data.progress || {}, pc = p.perChar || {};
+    const cells = [r.id, r.data.linked?1:0, p.unlocked ?? ""];
+    for (let i=0;i<7;i++){ const s=pc[i]||{}; cells.push(s.clears||0, s.uraClears||0); }
+    cells.push(deepest(pc), r.data.updatedAt?new Date(r.data.updatedAt).toISOString():"", '"'+String(r.data.summary||"").replace(/"/g,'""')+'"');
+    lines.push(cells.join(","));
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿"+lines.join("\n")], {type:"text/csv"}));
+  a.download = "dropsia_users.csv";
+  a.click();
+};
+
+A.onAuthStateChanged(auth, user => {
+  if (user && !user.isAnonymous) { $("login").style.display = "none"; load(); }
+});
+</script>
+</body>
+</html>
