@@ -89,6 +89,7 @@ button:active{filter:brightness(1.12)}
 @keyframes merchPop{0%{transform:translateY(30px) scale(.35);opacity:0}45%{transform:translateY(-10px) scale(1.18);opacity:1}70%{transform:translateY(3px) scale(.96)}100%{transform:translateY(0) scale(1)}}
 @keyframes merchTxt{0%{opacity:0;transform:translateY(10px);letter-spacing:.5em}35%{opacity:0}100%{opacity:1;transform:translateY(0);letter-spacing:.14em}}
 @keyframes merchRing{0%{transform:scale(.3);opacity:.9}100%{transform:scale(2.1);opacity:0}}
+@keyframes buyPop{0%{opacity:0;transform:scale(.55)}14%{opacity:1;transform:scale(1.1)}26%{transform:scale(1)}78%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.97)}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes intentBlink{0%,100%{opacity:1}50%{opacity:.55}}
 .sp-idle-a{animation:breathA 2.6s ease-in-out infinite;transform-origin:50% 100%}
@@ -4631,10 +4632,13 @@ function DropBattle() {
           style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a" } }, "先へ進む ▶"))));
   }
   if (restMsg) overlays.push(h("div", { key:"rest", className:"fixed pop-in", style:{ top:18, left:"50%", transform:"translateX(-50%)", zIndex:70, background:"rgba(30,24,42,.97)", border:"2px solid #3c5a48", color:"#c8ffdd", borderRadius:12, padding:"10px 18px", fontSize:"0.85rem", fontWeight:800, boxShadow:"0 3px 8px rgba(0,0,0,.5)" } }, restMsg));
-  // ショップ購入トースト（ショップウィンドウより手前・1.3秒で自動で消える）
-  if (buyMsg) overlays.push(h("div", { key:"buymsg" + buyMsg.seq, id:"buy-toast", className:"fixed pop-in flex items-center gap-2", style:{ top:18, left:"50%", transform:"translateX(-50%)", zIndex:70, background:"rgba(30,24,42,.97)", border:"2px solid #8a6f3c", color:"#f0d89a", borderRadius:12, padding:"10px 18px", fontSize:"0.85rem", fontWeight:800, boxShadow:"0 3px 8px rgba(0,0,0,.5)", whiteSpace:"nowrap" } },
-    buyMsg.img ? Ic(buyMsg.img, 20) : buyMsg.icon ? h("span", { style:{ fontSize:"1.1rem" } }, buyMsg.icon) : null,
-    h("span", null, "「", buyMsg.name, "」を購入した！")));
+  // ショップ購入ポップアップ（画面中央にしっかり出す。上部トーストは見逃しやすいというFBで変更。
+  // pointer-events:none なので連続購入はそのまま可能・1.3秒で自動で消える）
+  if (buyMsg) overlays.push(h("div", { key:"buymsg" + buyMsg.seq, className:"fixed inset-0 flex items-center justify-center pointer-events-none", style:{ zIndex:70 } },
+    h("div", { id:"buy-toast", className:"flex flex-col items-center", style:{ background:"rgba(30,24,42,.97)", border:"2px solid #ffd75e", color:"#f0d89a", borderRadius:16, padding:"18px 26px", fontSize:"0.95rem", fontWeight:800, maxWidth:"86%",
+      boxShadow:"0 8px 26px rgba(0,0,0,.6), 0 0 18px rgba(255,215,94,.35)", animation:"buyPop 1.3s ease both" } },
+      buyMsg.img ? Ic(buyMsg.img, 44) : buyMsg.icon ? h("span", { style:{ fontSize:"2rem" } }, buyMsg.icon) : null,
+      h("span", { style:{ marginTop:8, whiteSpace:"nowrap" } }, "「", buyMsg.name, "」を購入した！"))));
 
   if (actClear) {
     overlays.push(h("div", { key:"actclear", className:"fixed inset-0 flex items-center justify-center px-6 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:56 } },
