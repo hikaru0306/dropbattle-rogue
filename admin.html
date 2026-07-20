@@ -27,6 +27,7 @@ tr:hover td{background:rgba(232,192,106,.06)}
 .ura{color:#c9a2e8;font-weight:700}
 .dim{color:#5f5878}
 .deep{color:#9fc8e8;font-weight:700}
+.stats{color:#8f86a8;font-size:.66rem}
 </style>
 </head>
 <body>
@@ -75,7 +76,9 @@ function charCell(pc, i, cleared, clearedU){
   const ur = u ? `<span class="ura">裏✔${u}</span>`
     : s.reachU ? `<span class="ura">裏${s.reachU[0]+1}章${s.reachU[1]}F</span>` : "";
   if (!om && !ur) return '<span class="dim">—</span>';
-  return om + (om && ur ? "<br>" : "") + ur;
+  const st = (s.maxAtk || s.maxDef)
+    ? `<span class="stats">⚔${s.maxAtk||0} 🛡${s.maxDef||0}</span>` : "";
+  return [om, ur, st].filter(Boolean).join("<br>");
 }
 
 function deepest(pc){
@@ -126,13 +129,13 @@ $("login").onclick = async () => {
 };
 $("reload").onclick = load;
 $("csv").onclick = () => {
-  const head = ["uid","linked","unlocked",...CHAR_NAMES.flatMap(n=>[n+"_表クリア",n+"_裏クリア",n+"_表到達",n+"_裏到達"]),"最深","最終プレイ","summary"];
+  const head = ["uid","linked","unlocked",...CHAR_NAMES.flatMap(n=>[n+"_表クリア",n+"_裏クリア",n+"_表到達",n+"_裏到達",n+"_最大攻撃",n+"_最大防御"]),"最深","最終プレイ","summary"];
   const lines = [head.join(",")];
   const reachTxt = r => r ? `${r[0]+1}章${r[1]}F` : "";
   for (const r of rows) {
     const p = r.data.progress || {}, pc = p.perChar || {};
     const cells = [r.id, r.data.linked?1:0, p.unlocked ?? ""];
-    for (let i=0;i<7;i++){ const s=pc[i]||{}; cells.push(s.clears||0, s.uraClears||0, reachTxt(s.reach), reachTxt(s.reachU)); }
+    for (let i=0;i<7;i++){ const s=pc[i]||{}; cells.push(s.clears||0, s.uraClears||0, reachTxt(s.reach), reachTxt(s.reachU), s.maxAtk||0, s.maxDef||0); }
     cells.push(deepest(pc), r.data.updatedAt?new Date(r.data.updatedAt).toISOString():"", '"'+String(r.data.summary||"").replace(/"/g,'""')+'"');
     lines.push(cells.join(","));
   }
