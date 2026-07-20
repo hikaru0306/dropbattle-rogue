@@ -4568,7 +4568,7 @@ function DropBattle() {
                 border: can ? "1px solid #6e4e1a" : "1px solid #3c3450" } }, priceTag(c.price, rate)));
         })),
         items.length >= itemCap() && h("p", { className:"text-[10px] mb-2 text-center", style:{ color:"#f0a8a0" } }, "持ち物がいっぱい（", itemCap(), "個まで）"),
-        h("button", { onClick: closeShop, className:"w-full rounded-xl py-2.5 font-bold", style:{ background:"rgba(255,255,255,.1)", border:"2px solid #453b5c", color:"#d8cfe8" } }, "先へ進む ▶"))));
+        h("button", { onClick: closeShop, className:"block rounded-xl py-2.5 font-bold", style:{ width:"50%", margin:"0 auto", background:"rgba(255,255,255,.1)", border:"2px solid #453b5c", color:"#d8cfe8" } }, "先へ進む ▶"))));
   }
   if (rewards) {
     const rIcon = rewards.kind === "treasure" ? "assets/node_treasure.png" : rewards.kind === "elite" ? "assets/node_elite.png" : rewards.kind === "boss" ? "assets/node_boss.png" : "assets/node_battle.png";
