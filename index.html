@@ -1394,6 +1394,23 @@ function Bar({ value, max, from, to, height }) {
     h("div", { style:{ height:"100%", width:pct+"%", borderRadius:999, background:`linear-gradient(180deg, ${to} 0%, ${from} 100%)`, transition:"width .4s ease", boxShadow:"inset 0 2px 0 rgba(255,255,255,.3)" } }));
 }
 
+// バトルシーン中央の演出テキスト1行。折り返し禁止のうえ、親（シーン内寸ぴったりの
+// inset-0 コンテナ）の実測幅からはみ出す場合だけフォントを縮小して1行に収める。
+// useLayoutEffect は描画前に同期実行されるので、基準サイズで一瞬見えてから縮むちらつきはない
+function FxLine({ text, color }) {
+  const ref = useRef(null);
+  const [fs, setFs] = useState(null); // null=基準サイズ 1.35rem
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !el.parentElement) return;
+    // fxPop アニメは22%地点で scale(1.12) まで膨らむので、その瞬間も枠内に収まる幅を確保する
+    const avail = el.parentElement.clientWidth * 0.97 / 1.12;
+    const w = el.scrollWidth;
+    if (w > avail && avail > 0) setFs(Math.max(11, parseFloat(getComputedStyle(el).fontSize) * avail / w));
+  }, [text]);
+  return h("div", { ref, style:{ fontSize: fs !== null ? fs + "px" : "1.35rem", fontWeight:900, color, textShadow:"0 2px 0 #000", whiteSpace:"nowrap", animation:"fxPop .7s ease forwards" } }, text);
+}
+
 // ===== 本体 =====
 function DropBattle() {
   const ownedRef = useRef(initOwned());
@@ -1836,9 +1853,12 @@ function DropBattle() {
         return;
       }
       const item = items[i];
-      // _k は行ごとに固定のキー。index をキーにすると 3 行目以降で DOM が使い回されて
-      // 既に再生済みの fxPop が当たったまま文字だけ差し替わり、点滅して見える
-      if (item.text) setFx(prev => [...prev.slice(-2), { ...item, _k: i }]);
+      // 表示は常に1行だけ（差し替え式）。以前は直近3行を積んでいたが、
+      //  - 前の行がフェード中に次の行が下へ積まれて2段に見える
+      //  - 連続攻撃で同じ文言が2つ同時に見えて「2連続表示」に見える
+      //  - 低い画面高(scene-h 96〜112px)では積んだ行が枠の上下から見切れる
+      // ため廃止。_k はアイテムごとに固定のキーで、同文言でも再マウントされてポップが再生される
+      if (item.text) setFx([{ ...item, _k: i }]);
       if (item.run) item.run();
       i++;
       fxTimer.current = setTimeout(step, FAST ? 40 : (item.wait || 680));
@@ -4902,7 +4922,7 @@ function DropBattle() {
           })),
         // 演出ポップ
         fx.length > 0 && h("div", { className:"absolute inset-0 flex flex-col items-center justify-center pointer-events-none", style:{ gap:6, zIndex:3 } },
-          fx.filter(Boolean).map((f,i) => h("div", { key: f._k != null ? f._k : i, style:{ fontSize:"1.35rem", fontWeight:900, color:f.color, textShadow:"0 2px 0 #000", animation:"fxPop .7s ease forwards" } }, f.text)))),
+          fx.filter(Boolean).map((f,i) => h(FxLine, { key: f._k != null ? f._k : i, text:f.text, color:f.color })))),
       // ターン情報
       h("div", { className:"flex items-center justify-between rounded-lg px-3 py-1 mb-1 text-xs", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450", opacity: gActive ? 0.34 : 1, transition:"opacity .3s ease" } },
         h("span", { className:"font-bold", style:{ color:"#e8c06a" } }, "ターン ", turn),
