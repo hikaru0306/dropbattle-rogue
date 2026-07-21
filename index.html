@@ -991,7 +991,7 @@ const perOf = act =>
   + (act === "heal" ? (hasR("healbook") ? 2 : 0) + (hasR("saintprayer") ? 3 : 0) + (hasR("holywater") ? 1 : 0) : 0);
 // タップ起点の消去範囲を確定する。パターン系レリックの追加爆破と、
 // 爆破に巻き込まれた特殊ドロップ（爆弾連鎖・雷）の再帰発動まで含む
-const expandClear = (b, idx, blastOk, crossOk) => {
+const expandClear = (b, idx, blastOk, crossOk, coreOk) => {
   const seedJunk = b[idx].type === JUNK;
   const ids0 = findGroup(b, idx);
   if (seedJunk) return { ids: ids0, seedJunk, blast: false, cross: false, red: [] };
@@ -1008,8 +1008,15 @@ const expandClear = (b, idx, blastOk, crossOk) => {
     }
   }
   if (hasR("crossgem") && crossOk !== false && ids0.size === 4) {
-    cross = true;
-    for (let i = 0; i < SIZE; i++) { addIdx(r0 * SIZE + i); addIdx(i * SIZE + c0); }
+    // 十字晶は「縦か横の1直線に4個」のときだけ発動（L字・正方形など他の形は不発）
+    const gi = [];
+    b.forEach((c, i) => { if (seedIds.has(c.id)) gi.push(i); });
+    const sameRow = gi.every(i => ((i / SIZE) | 0) === ((gi[0] / SIZE) | 0));
+    const sameCol = gi.every(i => i % SIZE === gi[0] % SIZE);
+    if (sameRow || sameCol) {
+      cross = true;
+      for (let i = 0; i < SIZE; i++) { addIdx(r0 * SIZE + i); addIdx(i * SIZE + c0); }
+    }
   }
   if (hasR("xgem") && ids0.size === 5) {
     for (let d = 1; d < SIZE; d++) {
@@ -1018,10 +1025,10 @@ const expandClear = (b, idx, blastOk, crossOk) => {
       });
     }
   }
-  // 核レリック: タップした色の核を持っていれば、タップした素の同色グループの各ドロップの上下も爆破（赤/黄/紫/翠の4色）。
+  // 核レリック: タップした色の核を持っていれば、タップした素の同色グループの各ドロップの上下も爆破（赤/黄/紫/翠の4色・1ターン1回）。
   // 爆破核/十字晶/X字晶・爆弾・雷などに「巻き込まれて」消える同色は起点にしない＝連鎖しない
   const coreK = CORE_BY_COLOR[b[idx].type];
-  if (coreK && hasR(coreK)) {
+  if (coreK && hasR(coreK) && coreOk !== false) {
     const coreIdx = b.map((c, i) => (seedIds.has(c.id) && c.type === b[idx].type) ? i : -1).filter(i => i >= 0);
     coreIdx.forEach(i => { addIdx(i - SIZE); addIdx(i + SIZE); });
     red = coreIdx;
@@ -2859,9 +2866,10 @@ function DropBattle() {
     if (act === "heal" && skill === "gamble") {
       const cell = boardRef.current[idx];
       if (cell.type === JUNK) { SFX.tap(); return; } // お邪魔だけのグループには賭けられない（アクション消費なし）
-      const gx = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed);
+      const gx = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed);
       if (gx.blast) turnRef.current.blastUsed = true;
       if (gx.cross) turnRef.current.crossUsed = true;
+      if (gx.red.length) turnRef.current.coreUsed = true;
       const ginfo = groupInfo(boardRef.current, gx.ids);
       if (ginfo.junk) { SFX.tap(); return; }
       const count = ginfo.count;
@@ -2871,7 +2879,8 @@ function DropBattle() {
       const retries = ((ginfo.sp.chip || 0) - (ginfo.spu.chip || 0)) + (ginfo.spu.chip || 0) * 2;
       const { next, newPositions } = refill(boardRef.current, gx.ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
       // 賭けを持ち回る（消去演出の後にオーバーレイを開く）。newPositions は虹の賭けの落下先
-      gamblePendRef.current = { mode, cost, count, retries, newPositions };
+      // mult=スター/トリプル倍率。効果にだけ乗る（コストは素のcountのまま）
+      gamblePendRef.current = { mode, cost, count, retries, newPositions, mult: ginfo.mult };
       const nu = new Set(usedRef.current); nu.add("heal");
       gambleUsedRef.current = nu; // 結果確定後にこの used でターン進行を判定
       setUsed(nu); usedRef.current = nu;
@@ -2888,9 +2897,10 @@ function DropBattle() {
       }, FAST ? 40 : 240);
       return;
     }
-    const { ids, seedJunk, blast, cross, red } = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed);
+    const { ids, seedJunk, blast, cross, red } = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed);
     if (blast) turnRef.current.blastUsed = true;
     if (cross) turnRef.current.crossUsed = true; // 十字晶は1ターン1回
+    if (red.length) turnRef.current.coreUsed = true; // 核レリックも1ターン1回
     const info = groupInfo(boardRef.current, ids);
     const eff = computeEffect(act, info);
     const pureCount = findGroup(boardRef.current, idx).size; // 「同じ色を◯個」の判定は素の同色グループ数で
@@ -2928,9 +2938,10 @@ function DropBattle() {
       const inc = hasR("warforge2") ? 0.3 : hasR("warforge") ? 0.2 : 0.1;
       // 闘魂（ガレス専用ドロップ）: 強化で消すと1個につき倍率+0.2（＋化ドロップは+0.4）
       const wcBonus = ((info.sp.warcry || 0) - (info.spu.warcry || 0)) * 0.2 + (info.spu.warcry || 0) * 0.4;
-      const factor = 1 + inc * info.count + wcBonus; // 1ドロップにつき+inc の加算式（1個・+0.1 → 1.1倍、5個 → 1.5倍）
+      // スター/トリプル(info.mult)は増加分に乗る（1 + 増加分×mult）
+      const factor = 1 + (inc * info.count + wcBonus) * info.mult; // 1ドロップにつき+inc の加算式（1個・+0.1 → 1.1倍、5個 → 1.5倍）
       // 軍神の号令（ガレス専用）: 選んでいない側にも半分の強化
-      const horn = hasR("warhorn") ? 1 + (inc * info.count + wcBonus) / 2 : 0;
+      const horn = hasR("warhorn") ? 1 + ((inc * info.count + wcBonus) * info.mult) / 2 : 0;
       turnRef.current.buffPend = { st, mult: factor, horn };
       ctutFinish(); // 強化チュートリアルの対象を消したら締めへ
       addLog([`✨ ${st === "atk" ? "攻撃" : "防御"}強化 ×${factor.toFixed(1)} を準備！（攻撃の直前に計算）`]);
@@ -2940,7 +2951,8 @@ function DropBattle() {
       const sinc = hasR("storegem") ? 2 : 1; // ノア専用レリックで1ドロップ＝蓄積+2
       // 蓄積石はドロップ1個分(count)に加えて効果分+2（強化+4）も貯まる
       const spAdd = (info.sp.store + info.spu.store) * 2;
-      storeRef.current += info.count * sinc + spAdd;
+      // スター/トリプル(info.mult)は消した数ぶんの蓄積に乗る（蓄積石の効果分は剣/盾と同じ固定値扱い）
+      storeRef.current += info.count * sinc * info.mult + spAdd;
       setStoreView(storeRef.current);
       // 攻防への加算は「予約」だけ。実際に足すのはガレスの強化と同じくターン解決の攻撃直前
       // （＝蓄積を先に消しても、後から積んだ攻撃/防御にちゃんと乗る）
@@ -2949,8 +2961,8 @@ function DropBattle() {
       addLog([`📚 蓄積 ${storeRef.current} を準備！（攻撃の直前に加算）`]);
       ctutFinish(); // 蓄積チュートリアルの対象を消したら締めへ
     } else if (act === "heal" && skill === "smith") {
-      // 鍛冶キャラ・補充：消した数だけ素材を貯める（回復はしない）。名工の金床で2倍
-      const sAdd = info.count * (hasR("anvil") ? 2 : 1);
+      // 鍛冶キャラ・補充：消した数だけ素材を貯める（回復はしない）。名工の金床で2倍・スター/トリプル(info.mult)も乗る
+      const sAdd = info.count * (hasR("anvil") ? 2 : 1) * info.mult;
       stockRef.current += sAdd;
       setStockView(stockRef.current);
       addLog([`📦 素材 +${sAdd}（計 ${stockRef.current}）`]);
@@ -3116,6 +3128,7 @@ function DropBattle() {
     const pend = gamblePendRef.current;
     if (!pend) { setGambleAsk(null); return; }
     const { mode, count, cost } = pend;
+    const starMul = pend.mult || 1; // スター/トリプル: 効果にだけ乗る（コストは素のcount基準のまま）
     const pactWin = win && pick === "demon" && hasR("devilpact"); // 悪魔の契約: 悪魔を当てたときだけ倍率アップ
     const boost = pactWin ? GAMBLE_PACT_MUL : 1;
     const scale = win ? 1 : (hasR("luckcoin") ? GAMBLE_LUCK_RATE : 0); // 幸運の銀貨: 外れても効果の50%
@@ -3124,12 +3137,12 @@ function DropBattle() {
     if (scale > 0) {
       if (mode === "heal2") {
         // 回復はここでは発動しない。他キャラと同じくターン解決の回復フェーズで反映される（予約のみ）
-        const amt = Math.max(1, Math.round(count * GAMBLE_HEAL_PER * scale * boost));
+        const amt = Math.max(1, Math.round(count * GAMBLE_HEAL_PER * scale * boost * starMul));
         turnRef.current.heal += amt; syncTurn();
         shownAmt = amt;
         logs.push(`🪙 治癒の賭け${win ? "的中" : "（幸運）"}！回復+${amt}を準備`);
       } else if (mode === "rain") {
-        const n = Math.max(1, Math.floor(count * scale * boost));
+        const n = Math.max(1, Math.floor(count * scale * boost * starMul));
         // 盤面全体からランダムに選んで虹化（消した跡に固まらないように）。特殊なしを優先
         const pos = boardRef.current.map((c, i) => (!c.wild && c.type !== JUNK) ? i : -1).filter(i => i >= 0);
         const cand = shuffle(pos.filter(i => !boardRef.current[i].special)).concat(shuffle(pos.filter(i => boardRef.current[i].special)));
@@ -3148,7 +3161,7 @@ function DropBattle() {
       } else {
         // 剛運/鉄運：消した数がそのまま倍率。ガレスの強化と同じ「予約」で攻撃直前に計算する
         const st = mode === "atkx" ? "atk" : "def";
-        const mult = (win ? count : (1 + (count - 1) * GAMBLE_LUCK_RATE)) * boost;
+        const mult = (win ? count : (1 + (count - 1) * GAMBLE_LUCK_RATE)) * boost * starMul;
         turnRef.current.buffPend = { st, mult, horn: 0 };
         shownAmt = mult;
         syncTurn();
@@ -3355,7 +3368,7 @@ function DropBattle() {
         charSkillRef.current === "smith" && smithModeRef.current !== "stock") {
       const grp = findGroup(b, idx); return { ids:grp, over:true, info: groupInfo(b, grp) };
     }
-    const { ids } = expandClear(b, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed);
+    const { ids } = expandClear(b, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed);
     return { ids, over:true, info: groupInfo(b, ids) };
   };
   useEffect(() => {
@@ -5119,7 +5132,7 @@ function DropBattle() {
             let stPrev = null;
             if (info && !isUsed) {
               const oreN = (info.sp.ore || 0) - (info.spu.ore || 0) + (info.spu.ore || 0) * 2;
-              if (isSel && smithMode === "stock") stPrev = stockView + info.count * (hasR("anvil") ? 2 : 1) + oreN;
+              if (isSel && smithMode === "stock") stPrev = stockView + info.count * (hasR("anvil") ? 2 : 1) * info.mult + oreN;
               else if (isSel && preview && preview.ids) {
                 const cells = board.filter(c => preview.ids.has(c.id));
                 let n = 0;
@@ -5150,7 +5163,7 @@ function DropBattle() {
             valEl = isUsed && shownMult != null
               ? h("span", { style:{ fontSize:"1rem", fontWeight:900, color:"#ffd75e" } }, "×" + shownMult.toFixed(1))
               : selN > 0
-              ? h("span", { style:{ fontSize:"1rem", fontWeight:900, color:"#ffd75e" } }, "×" + (1 + incN * selN + wcB).toFixed(1))
+              ? h("span", { style:{ fontSize:"1rem", fontWeight:900, color:"#ffd75e" } }, "×" + (1 + (incN * selN + wcB) * info.mult).toFixed(1))
               : h("span", { style:{ fontSize:"0.9rem", fontWeight:900 } }, "+" + incN + "/個");
           } else if (curSkill === "gamble") {
             // ガレス/ブロムと同じ事前トグル。ボタンタップで 治癒→虹→剛運→鉄運 と循環する
@@ -5171,10 +5184,11 @@ function DropBattle() {
             // 攻撃/防御ボタンと同じ構造に合わせる: タイトル行(11px)=「HP{基礎}×数」(代償)、数値行=「{効果}×数」
             title = "HP" + GAMBLE_COST[gambleMode] + "×" + (gs ? gs.count : selN);
             // 治癒は実回復量「+N(×2)」、それ以外は「{効果}×数」。(×2)だけタイトル行と同じ11pxで小さく添える
+            const gMul = isSel && info ? info.mult : 1; // スター/トリプルは効果にだけ乗る（HPコストは素のcount）
             const effTxt = gambleMode === "heal2"
-              ? [gm.lbl + "+" + selN * GAMBLE_HEAL_PER,
+              ? [gm.lbl + "+" + selN * GAMBLE_HEAL_PER * gMul,
                  h("span", { key:"x", style:{ fontSize:11, fontWeight:800, marginLeft:1, opacity:0.85 } }, "(×" + GAMBLE_HEAL_PER + ")")]
-              : gm.lbl + "×" + selN;
+              : gm.lbl + "×" + selN * gMul;
             const fmtN = v => (v % 1 ? v.toFixed(1) : v);
             valEl = gs
               // 結果表示: 的中/幸運=金色で効果値、丸外れ=赤「はずれ」
@@ -5190,7 +5204,7 @@ function DropBattle() {
             // ドロップ選択中は消した後の蓄積値を金色でプレビュー
             // 蓄積アクション=count+蓄積石の効果分／攻・防アクション選択中でも蓄積石の効果分(+2/強化+4)を反映
             const spN = info ? ((info.sp.store || 0) + (info.spu.store || 0)) * 2 : 0;
-            const sN = isSel && info ? info.count * (hasR("storegem") ? 2 : 1) + spN : spN;
+            const sN = isSel && info ? info.count * (hasR("storegem") ? 2 : 1) * info.mult + spN : spN;
             valEl = sN > 0
               ? h("span", { style:{ fontSize:"1rem", fontWeight:900, color:"#ffd75e" } }, "+" + (storeView + sN))
               : h("span", { style:{ fontSize:"1rem", fontWeight:900 } }, "+" + storeView);
