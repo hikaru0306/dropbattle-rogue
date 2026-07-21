@@ -1418,7 +1418,8 @@ function HpBar({ value, max, height, fontSize, flash, shield, broken }) {
       h("div", { style:{ position:"absolute", left:0, top:0, height:"100%", width:pct+"%", background:"#e8963c", transition:"width .45s ease .3s" } }),
       h("div", { style:{ position:"absolute", left:0, top:0, height:"100%", width:pct+"%", background: sh ? "linear-gradient(180deg,#4a7cb4 0%,#2b4d88 100%)" : "linear-gradient(180deg,#c9463f 0%,#96201f 100%)", transition:"width .12s ease" } }),
       // 撃破時(0)は数値を出さない（敵のフェードアウト中に「0/130」が残って見えるため）
-      value > 0 && h("span", { style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize, lineHeight:1, color: flash || "#fff", transition:"color .3s",
+      // translateY(-0.5px) はフォントメトリクス由来の見た目下ズレの補正（padding方式はバー高さごとに丸めが変わり効かないバーが出る。実測でバー中心に合わせた）
+      value > 0 && h("span", { style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", transform:"translateY(-0.75px)", fontWeight:700, fontSize, lineHeight:1, color: flash || "#fff", transition:"color .3s",
         textShadow:"0 1px 1px rgba(0,0,0,.9), 0 0 2px rgba(0,0,0,.7)", fontVariantNumeric:"tabular-nums", letterSpacing:"0.02em" } }, value, "/", max)),
     // バッジはバーの上辺に3pxだけ乗せる（深く重ねると幅の狭い敵バーでHP数値の先頭が隠れる）
     (sh || broken) && h("span", { className:"flex items-center", style:{ position:"absolute", left:-3, top:-14, gap:2, padding:"1px 5px", borderRadius:8,
