@@ -1913,10 +1913,10 @@ function DropBattle() {
   const [gambleDmg, setGambleDmg] = useState(null);     // 賭博師: ウィンドウが閉じた後に画面中央へ出す大ダメージ {cost,key}
   const [pops, setPops] = useState({}); // ダメージポップ {key:{text,color,seq}}
   const popSeq = useRef(0);
-  const addPop = (key, text, color) => {
+  const addPop = (key, text, color, icon) => {
     popSeq.current++;
     const seq = popSeq.current;
-    setPops(p => ({ ...p, [key]: { text, color, seq } }));
+    setPops(p => ({ ...p, [key]: { text, color, icon: icon || null, seq } }));
   };
   const [hit, setHit] = useState(null);
   const hitTimer = useRef(null);
@@ -2139,7 +2139,7 @@ function DropBattle() {
         seq.push({ text: stacked ? `${en.name}の毒霧！毒が強まった！` : `${en.name}の毒霧！`, color: "#8ce87c",
           run: () => {
             setAnim(en.id, "attack");
-            setTimeout(() => { SFX.jam(); addPop("hero", stacked ? `🐍毒+${POISON_DMG}` : "🐍毒", "#8ce87c"); setPoisonView(pTotal); }, 220);
+            setTimeout(() => { SFX.jam(); addPop("hero", stacked ? `毒+${POISON_DMG}` : "毒", "#8ce87c", "assets/st_poison.png"); setPoisonView(pTotal); }, 220);
           } });
         logs.push(stacked
           ? `🐍 ${en.name}の毒霧！毒が重なって毎ターン${pTotal}ダメージに（+${POISON_DMG}）`
@@ -2359,8 +2359,8 @@ function DropBattle() {
     const ups = picks.map(() => isHorde && (upRewardForceRef.current != null ? !!upRewardForceRef.current : Math.random() < 0.4));
     // 群れ勝利時の+30回復も廃止（バトル終了時に回復しない）
     playFx([
-      { text: "🏆 敵を撃破！", color:"#ffd54a", wait:850, run: () => {} },
-      { text: `💰 コイン +${gain} 獲得`, color:"#e8c06a", wait:850, run: () => SFX.coin() }
+      { text: "敵を撃破！", color:"#ffd54a", wait:850, run: () => {} },
+      { text: `コイン +${gain} 獲得`, color:"#e8c06a", wait:850, run: () => SFX.coin() }
     ], () => {
       setRewards({ picks, kind: node ? node.type : "battle", healed, coins: gain, relic: relicDrop, step: relicDrop ? "relic" : "drop", ups });
       setStatus("reward"); statusRef.current = "reward";
@@ -2485,7 +2485,7 @@ function DropBattle() {
     const healAmt = Math.min(pMaxRef.current - pRef.current, Math.round(pMaxRef.current * (hasR("blanket") ? 0.7 : 0.5)));
     setPHP(pRef.current + healAmt);
     addLog([`🔥 焚き火で休んだ（+${healAmt}）`]);
-    setRestMsg(`🔥 焚き火で休んだ　HP +${healAmt}`);
+    setRestMsg(`焚き火で休んだ　HP +${healAmt}`);
     setTimeout(() => { setRestMsg(null); }, 1500);
     setCampfire(null);
     finishNode();
@@ -3002,7 +3002,7 @@ function DropBattle() {
     if (info.junk) SFX.tap();
     else SFX.clear();
     const ll = [];
-    if (info.sp.bombx || info.sp.bombd) ll.push(`💥 爆発！計${info.count}個を消した`);
+    if (info.sp.bombx || info.sp.bombd) ll.push(`爆発！計${info.count}個を消した`);
     if (info.starOn) ll.push(`★ ${info.base}個消し ${info.mult}倍`);
     else if (info.threeOn) ll.push("3 ちょうど3個 3倍");
     if (eff.splitAtk) ll.push(`剣 攻撃+${eff.splitAtk}`);
@@ -4610,21 +4610,21 @@ function DropBattle() {
         campfire === "menu" ? h("div", null,
           h("p", { className:"text-center text-[11px] mb-3", style:{ opacity:0.75 } }, "どれか1つを選ぼう"),
           h("button", { onClick: restHeal, className:"w-full rounded-xl px-4 py-3 flex items-center gap-3 text-left mb-2", style:{ background:"rgba(124,255,176,.08)", border:"2px solid #3c5a48" } },
-            h("span", { style:{ fontSize:"1.5rem" } }, "🔥"),
+            Ic("assets/node_rest.png", 26),
             h("span", null,
               h("span", { className:"font-bold", style:{ color:"#7cffb0" } }, "休む"),
               h("span", { className:"block text-[11px]", style:{ opacity:0.8 } }, "HPを40%回復する"))),
           h("button", { onClick: () => { if (coins >= forgeCost() && ITEM_KEYS.some(k => ownedView[k] - ownedUpView[k] > 0)) setCampfire("forge"); },
             disabled: coins < forgeCost() || !ITEM_KEYS.some(k => ownedView[k] - ownedUpView[k] > 0),
             className:"w-full rounded-xl px-4 py-3 flex items-center gap-3 text-left mb-2", style:{ background:"rgba(232,192,106,.08)", border:"2px solid #6e5a3c", opacity: (coins >= forgeCost() && ITEM_KEYS.some(k => ownedView[k] - ownedUpView[k] > 0)) ? 1 : 0.45 } },
-            h("span", { style:{ fontSize:"1.5rem" } }, "🔨"),
+            Ic("assets/sk_forge.png", 26),
             h("span", { className:"flex-1" },
               h("span", { className:"font-bold", style:{ color:"#e8c06a" } }, "鍛える"),
               h("span", { className:"block text-[11px]", style:{ opacity:0.8 } }, "特殊ドロップを1つ選んで＋に強化する")),
             h("span", { className:"text-sm font-bold flex items-center gap-1", style:{ color: coins >= forgeCost() ? "#e8c06a" : "#f0a8a0" } }, Ic("assets/icon_coin.png", 13), forgeCost())),
           h("button", { onClick: () => { if (ownedTotalCamp > 1) setCampfire("remove"); }, disabled: ownedTotalCamp <= 1,
             className:"w-full rounded-xl px-4 py-3 flex items-center gap-3 text-left", style:{ background:"rgba(240,168,160,.08)", border:"2px solid #5a3c48", opacity: ownedTotalCamp <= 1 ? 0.45 : 1 } },
-            h("span", { style:{ fontSize:"1.5rem" } }, "🗑"),
+            Ic("assets/sk_trash.png", 26),
             h("span", null,
               h("span", { className:"font-bold", style:{ color:"#f0a8a0" } }, "整理する"),
               h("span", { className:"block text-[11px]", style:{ opacity:0.8 } }, "特殊ドロップを1つ選んで袋から削除する"))))
@@ -4690,7 +4690,7 @@ function DropBattle() {
         h("p", { className:"text-[10px] mb-2", style:{ opacity:0.7 } }, "コインでアイテムと交換できる（所持 ", items.length, "/", itemCap(), "）"),
         shop.sale < 1 && h("div", { className:"rounded-lg px-3 py-1.5 mb-2 text-center text-xs font-bold",
           style:{ background:"linear-gradient(180deg,#c8443c,#8e2a24)", border:"2px solid #e8968e", color:"#fff2ec" } },
-          "🎉 開店記念セール　全品 半額！"),
+          "開店記念セール　全品 半額！"),
         shop.relic && (() => {
           const rk = shop.relic, rRate = shopRate("__relic"), rc = priceOf(RELIC_PRICE[RELICS[rk].rar], rRate);
           const can = coins >= rc;
@@ -4749,7 +4749,7 @@ function DropBattle() {
             rewards.kind === "boss" ? "強化済みの特殊ドロップを1つ選ぼう（不要ならスキップ可）"
               : rewards.kind === "treasure" ? "好きなアイテムを1つ持っていこう（不要ならスキップ可）" : "戦利品を1つ選ぼう（不要ならスキップ可）"),
           rAnyUp && h("p", { key:"upbadge", className:"text-center text-[11px] font-bold mb-1", style:{ color:"#ffd95c" } },
-            rUps.every(Boolean) ? "🔨 強化済み（＋化）で手に入る！" : "🔨 「＋」付きは強化済み（＋化）で手に入る！"),
+            rUps.every(Boolean) ? "強化済み（＋化）で手に入る！" : "「＋」付きは強化済み（＋化）で手に入る！"),
           rewards.healed > 0 && h("p", { key:"heal", className:"text-center text-xs mb-1", style:{ color:"#7cffb0" } }, "群れを一掃した勢いで HP +", rewards.healed),
           h("div", { key:"picks", className:"grid grid-cols-1 gap-2 mt-2" }, rewards.picks.map((k, ki) => {
             const it = ITEMS[k];
@@ -4796,7 +4796,7 @@ function DropBattle() {
   if (actClear) {
     overlays.push(h("div", { key:"actclear", className:"fixed inset-0 flex items-center justify-center px-6 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:56 } },
       h("div", { className:"text-center pop-in rounded-2xl p-5 w-full", style:{ maxWidth:360, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
-        h("div", { className:"font-bold", style:{ fontSize:"1.6rem", color:"#f2e6c8", textShadow:"0 3px 0 rgba(0,0,0,.55)" } }, "🎉 ", mode === "ura" ? "裏・" : "", "第", act + 1, "章 クリア！"),
+        h("div", { className:"font-bold", style:{ fontSize:"1.6rem", color:"#f2e6c8", textShadow:"0 3px 0 rgba(0,0,0,.55)" } }, mode === "ura" ? "裏・" : "", "第", act + 1, "章 クリア！"),
         h("p", { className:"my-2 text-sm", style:{ opacity:0.85 } }, "「", actNameOf(mode, act), "」を制覇した！"),
         h("div", { className:"rounded-xl py-2 px-3 mb-2 text-xs", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.4)", color:"#e8d8a8", lineHeight:1.9 } },
           "章クリアボーナス", h("br"), hasR("crown") ? "最大HP +50 ／ " : "", "HP全回復 ／ ", Ic("assets/icon_coin.png", 12), " +100"),
@@ -4987,7 +4987,7 @@ function DropBattle() {
         // ヒーロー
         h("div", { className:"absolute flex flex-col items-center scene-actor", style:{ left:10, bottom:8, width:88, zIndex:1 } },
           h("div", { style:{ position:"relative" } },
-            pops.hero && h("span", { key:pops.hero.seq, className:"dmg-pop", style:{ color:pops.hero.color } }, pops.hero.text),
+            pops.hero && h("span", { key:pops.hero.seq, className:"dmg-pop", style:{ color:pops.hero.color } }, pops.hero.icon && Ic(pops.hero.icon, 15, { marginRight:3 }), pops.hero.text),
             h(SpriteBox, { kind:"hero", size:74, idle:"a", anim:heroAnim }),
             poisonView > 0 && h("span", { title:`毒（このバトル中、毎ターン${poisonView}ダメージ）`, className:"absolute font-bold flex items-center", style:{ left:-14, top:-6, gap:2, padding:"2px 6px", borderRadius:10,
               background:"rgba(46,92,40,.92)", border:"1px solid rgba(140,232,124,.7)",
@@ -5060,7 +5060,7 @@ function DropBattle() {
                 // 激昂の警告は左上へ。右上だと真上の攻撃予告バッジの下に食い込んで重なる
                 en.alive && enrLeft(en, turn) === 0 && h("img", { src:"assets/st_enrage.png", alt:"激昂", draggable:false, width:18, height:18, className:"absolute pointer-events-none", style:{ top:6, left:-9, width:18, height:18, maxWidth:18, maxHeight:18, objectFit:"contain", zIndex:3, animation:"angerPulse .6s ease-in-out infinite", filter:"drop-shadow(0 1px 2px #000)" } }),
                 isT && h("span", { className:"absolute pointer-events-none", style:{ top:-8, left:"50%", animation:"targetBob 1s ease-in-out infinite", color:"#e8c05a", fontSize:12, textShadow:"0 1px 2px #000", zIndex:2 } }, "▼"),
-                pops[en.id] && h("span", { key:pops[en.id].seq, className:"dmg-pop", style:{ color:pops[en.id].color } }, pops[en.id].text),
+                pops[en.id] && h("span", { key:pops[en.id].seq, className:"dmg-pop", style:{ color:pops[en.id].color } }, pops[en.id].icon && Ic(pops[en.id].icon, 15, { marginRight:3 }), pops[en.id].text),
                 h(SpriteBox, { kind:en.kind, size:sz, idle:k.idle, anim:a, charge:charging, dead:!en.alive }),
                 // 盾はHPバー側（HpBarのshield）で表示する。上限バッジだけスプライト左下に残す
                 en.dcap > 0 && en.alive && h("span", { title:"被ダメ上限", className:"absolute flex items-center font-bold", style:{ left:-4, bottom:6, gap:2, padding:"1px 6px", borderRadius:9,
