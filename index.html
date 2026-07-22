@@ -932,23 +932,20 @@ const findGroupStopAtWild = (cells, idx) => {
   }
   return ids;
 };
-// プリズム: 盤面の最少色を他の色へ変換して3色にする（ターン開始時のみ）
-// 大賢者は5色（青=5を含む）なので、使用中のパレット全体で数える
+// プリズム: バトル開始時、数がいちばん少ない色のドロップをいちばん多い色に変換する
+// （通常キャラは4色→3色、大賢者の5色盤面は5色→4色になる）
 const boardPalette = () => CUR_SKILL === "healx" ? HEALX_COLORS : [0, 1, 2, 3];
 const prismBoard = cells => {
   const pal = boardPalette();
-  let out = cells;
-  for (;;) { // 3色になるまで最少色の変換を繰り返す（大賢者の5色盤面は2回かかる）
-    const counts = {};
-    for (const t of pal) counts[t] = 0;
-    for (const c of out) if (counts[c.type] !== undefined) counts[c.type]++;
-    const present = pal.filter(t => counts[t] > 0);
-    if (present.length <= 3) return out;
-    let minT = present[0];
-    for (const t of present) if (counts[t] < counts[minT]) minT = t;
-    const others = present.filter(t => t !== minT);
-    out = out.map(c => c.type === minT ? { ...c, id: UID++, type: pick(others) } : c);
-  }
+  const counts = {};
+  for (const t of pal) counts[t] = 0;
+  for (const c of cells) if (counts[c.type] !== undefined) counts[c.type]++;
+  const present = pal.filter(t => counts[t] > 0);
+  if (present.length < 2) return cells;
+  let minT = present[0], maxT = present[0];
+  for (const t of present) { if (counts[t] < counts[minT]) minT = t; if (counts[t] > counts[maxT]) maxT = t; }
+  if (minT === maxT) return cells;
+  return cells.map(c => c.type === minT ? { ...c, id: UID++, type: maxT } : c);
 };
 
 // 爆弾特殊: グループ内の爆弾が周囲を巻き込む（連鎖爆発はしない）
@@ -2325,7 +2322,6 @@ function DropBattle() {
       if (hasR("ironwill") && shield > 0) turnRef.current.def += Math.floor(shield / 2);
       if (overheal > 0) { turnRef.current.def += overheal; addLog([`📿 祈祷書: あふれた回復${overheal}が防御に`]); }
       if (hasR("regen")) setPHP(Math.min(pMaxRef.current, pRef.current + 2));
-      if (hasR("prism")) { commitBoard(prismBoard(boardRef.current)); addLog(["🔮 プリズム: 盤面が3色になった"]); }
       // 星辰の錫杖（ルクス専用）: 盤面に虹が無ければランダム1個が虹になる
       if (hasR("starstaff") && !boardRef.current.some(c => c.wild)) {
         const cand = boardRef.current.map((c, i) => (!c.special && !c.wild && c.type !== JUNK) ? i : -1).filter(i => i >= 0);
@@ -2772,6 +2768,7 @@ function DropBattle() {
     setTurn(1); turnNumRef.current = 1;
     setAnims({});
     addLog([`― ${node.row + 1}層 ${NODE_META[node.type].label}戦 開始 ―`]);
+    if (!guided && hasR("prism")) addLog(["🔮 プリズム: いちばん少ない色をいちばん多い色に変換した"]);
     setStatus("battle"); statusRef.current = "battle";
     setLocked(false); lockedRef.current = false;
     if (guided) { gtutSeedRef.current = TUT_SEED; setGuide("warn"); }
