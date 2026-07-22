@@ -2921,7 +2921,7 @@ function DropBattle() {
       if (ginfo.junk) { SFX.tap(); return; }
       const count = ginfo.count;
       const mode = gambleModeRef.current;
-      const cost = gambleCost(mode, count); // 外したときに失うHP（成功時は0）
+      const cost = gambleCost(mode, count) * ginfo.mult; // 外したときに失うHP（成功時は0）。スター/トリプル倍率は効果と揃える
       // 賭けチップ（ジン専用）: グループ内の枚数だけ、外れたときに自動でコイントスをやり直す（＋化は2回分）
       const retries = ((ginfo.sp.chip || 0) - (ginfo.spu.chip || 0)) + (ginfo.spu.chip || 0) * 2;
       // 特殊ドロップのアクション非依存効果（剣/盾/ハート/金貨/貫通）は賭けでも発動する。
@@ -2946,7 +2946,7 @@ function DropBattle() {
       if (gll.length) addLog([gll.join(" / ")]);
       const { next, newPositions } = refill(boardRef.current, gx.ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
       // 賭けを持ち回る（消去演出の後にオーバーレイを開く）。newPositions は虹の賭けの落下先
-      // mult=スター/トリプル倍率。効果にだけ乗る（コストは素のcountのまま）
+      // mult=スター/トリプル倍率。効果とHPコストの両方に乗る（cost は上で mult 済み）
       gamblePendRef.current = { mode, cost, count, retries, newPositions, mult: ginfo.mult };
       const nu = new Set(usedRef.current); nu.add("heal");
       gambleUsedRef.current = nu; // 結果確定後にこの used でターン進行を判定
@@ -3197,7 +3197,7 @@ function DropBattle() {
     const pend = gamblePendRef.current;
     if (!pend) { setGambleAsk(null); return; }
     const { mode, count, cost } = pend;
-    const starMul = pend.mult || 1; // スター/トリプル: 効果にだけ乗る（コストは素のcount基準のまま）
+    const starMul = pend.mult || 1; // スター/トリプル: 効果に乗る（HPコストは cost 側で mult 済み）
     const pactWin = win && pick === "demon" && hasR("devilpact"); // 悪魔の契約: 悪魔を当てたときだけ倍率アップ
     const boost = pactWin ? GAMBLE_PACT_MUL : 1;
     const scale = win ? 1 : (hasR("luckcoin") ? GAMBLE_LUCK_RATE : 0); // 幸運の銀貨: 外れても効果の50%
