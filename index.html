@@ -4092,15 +4092,17 @@ function DropBattle() {
 
   // レリックが増えても段組みにせず、アイコン列だけ横スクロール（「効果一覧」は右端に固定）
   // paddingRight: 「効果一覧」ボタンが画面右端にぴったり付くと窮屈なので少し余白を空ける
-  const relicBarEl = relicsView.length > 0 && h("div", { className:"flex items-center gap-1 mb-1", style:{ paddingRight:6 } },
-    h("div", { className:"relic-scroll flex items-center gap-1", ref: relicScrollRef, onScroll: updRelicMore,
+  // レリック0個のときも同じ高さ(26px)の空間を確保しておく。1個目獲得でバーが
+  // 出現して以降のレイアウトが下へずれる「ガタッ」を防ぐ（高さ常に一定）
+  const relicBarEl = h("div", { className:"flex items-center gap-1 mb-1", style:{ paddingRight:6, minHeight:26 } },
+    relicsView.length > 0 && h("div", { className:"relic-scroll flex items-center gap-1", ref: relicScrollRef, onScroll: updRelicMore,
       style:{ flex:"1 1 auto", minWidth:0,
         maskImage: relicMore ? "linear-gradient(90deg,#000 calc(100% - 16px),transparent)" : "none",
         WebkitMaskImage: relicMore ? "linear-gradient(90deg,#000 calc(100% - 16px),transparent)" : "none" } },
       relicsView.map(k => h("button", { key:k, title:`${RELICS[k].name}: ${RELICS[k].desc}`,
         onClick: () => { setRelicOpen(true); SFX.open(); },
         className:"rounded-lg flex items-center justify-center", style:{ width:26, height:26, flex:"0 0 auto", background:"rgba(30,24,42,.92)", border:"1px solid #6e5a3c" } }, Ic(RELICS[k].img, 20)))),
-    h("button", { onClick: () => { setRelicOpen(true); SFX.open(); },
+    relicsView.length > 0 && h("button", { onClick: () => { setRelicOpen(true); SFX.open(); },
       className:"rounded-lg text-[9px] font-bold", style:{ height:26, padding:"0 12px", flex:"0 0 auto", background:"rgba(30,24,42,.92)", border:"1px solid #3c3450", color:"#c9bfe0" } },
       "効果一覧", h("span", { style:{ opacity:0.7, marginLeft:3 } }, relicsView.length)));
 
