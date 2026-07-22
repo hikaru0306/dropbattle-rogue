@@ -3164,17 +3164,20 @@ function DropBattle() {
   // ===== 賭博師のコイントス =====
   // コインの出目（テストでは coinRigRef で固定できる）
   const gambleFlip = () => coinRigRef.current || (Math.random() < 0.5 ? "angel" : "demon");
-  // 天使/悪魔を選択 → 回転演出 → 出目判定
+  // 天使/悪魔を選択 → 回転演出（自動では確定せず、タップで出目を出す）
   const gambleChoose = pick => {
     const ask = gambleAskRef.current;
     if (!ask || ask.phase !== "pick") return;
     SFX.pick();
     setGambleAsk({ ...ask, pick, phase: "spin", face: null, win: null });
-    setTimeout(() => gambleSpinDone(pick, ask.retries), FAST ? 120 : 1000);
   };
-  // 回転が終わって出目が出た瞬間。外れ＆チップ残ありなら自動でやり直す
+  // 回転中のタップで出目を確定させる。外れ＆チップ残ありなら結果を見せてから投げ直し（次のタップで再判定）
   // 初回チュートリアル中はどちらを選んでも必ず的中させる（rigCoinより優先）
-  const gambleSpinDone = (pick, retriesLeft) => {
+  const gambleReveal = () => {
+    const ask = gambleAskRef.current;
+    if (!ask || ask.phase !== "spin") return;
+    const pick = ask.pick;
+    const retriesLeft = ask.retries;
     const face = (ctutRef.current && ctutRef.current.skill === "gamble") ? pick : gambleFlip();
     const win = face === pick;
     SFX.coin();
@@ -3182,7 +3185,6 @@ function DropBattle() {
       setGambleAsk(a => a ? { ...a, phase: "retry", face, win: false } : a);
       setTimeout(() => {
         setGambleAsk(a => a ? { ...a, phase: "spin", face: null, retries: retriesLeft - 1 } : a);
-        setTimeout(() => gambleSpinDone(pick, retriesLeft - 1), FAST ? 120 : 800);
       }, FAST ? 140 : 900);
       return;
     }
@@ -4050,6 +4052,7 @@ function DropBattle() {
       rigCoin: face => { coinRigRef.current = face; }, // "angel"/"demon"/null
       setGambleMode: m => setGambleMode(m),
       gambleChoose: f => gambleChoose(f),
+      gambleReveal: () => gambleReveal(), // 回転中のタップ相当（出目を確定）
       gambleAsk: () => gambleAskRef.current ? { ...gambleAskRef.current } : null
     };
   }, []);
@@ -4672,8 +4675,8 @@ function DropBattle() {
           h("div", { style:{ marginBottom:10 } }, Ic(f === "angel" ? "assets/coin_angel.png" : "assets/coin_demon.png", 64)),
           h("div", { style:{ fontWeight:800, fontSize:"0.92rem" } }, f === "angel" ? gt.angel : gt.demon)))));
     } else if (spinning) {
-      // 回転中は表(天使)/裏(悪魔)の2枚を交互に見せる
-      inner.push(h("div", { key:"spin", style:{ minHeight:128, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"6px 0" } },
+      // 回転中は表(天使)/裏(悪魔)の2枚を交互に見せる。タップで出目を確定
+      inner.push(h("div", { key:"spin", style:{ minHeight:128, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"6px 0", cursor:"pointer" } },
         h("div", { className:"coin-flip3d", style:{ width:76, height:76, marginBottom:14 } },
           h("img", { src:"assets/coin_angel.png", alt:"", draggable:false }),
           h("img", { src:"assets/coin_demon.png", alt:"", draggable:false })),
@@ -4686,7 +4689,7 @@ function DropBattle() {
           g.phase === "retry" ? gt.lose : g.win ? gt.win : gt.lose),
         g.phase === "retry" && h("div", { style:{ color:"#ffcf5d", fontSize:"0.8rem", fontWeight:800, marginTop:8 } }, gt.retry)));
     }
-    overlays.push(h("div", { key:"gamble", className:"fixed inset-0 flex items-center justify-center fade-in", style:{ background:"rgba(6,3,12,.82)", zIndex:85 } },
+    overlays.push(h("div", { key:"gamble", className:"fixed inset-0 flex items-center justify-center fade-in", onClick: spinning ? gambleReveal : undefined, style:{ background:"rgba(6,3,12,.82)", zIndex:85, cursor: spinning ? "pointer" : "default" } },
       // 賭けオーバーレイの枠は最初から最後まで金色（死の警告は中の文字で見せる）
       h("div", { className:"rounded-2xl pop-in", style:{ maxWidth:360, width:"92%", padding:"26px 22px 28px", background:"rgba(28,20,34,.98)",
         border:"2px solid #ffd75e", textAlign:"center",
