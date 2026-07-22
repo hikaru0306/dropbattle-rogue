@@ -287,6 +287,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
+const APP_VERSION = "0.0.1"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -4199,6 +4200,7 @@ function DropBattle() {
       h("div", { style:{ position:"absolute", inset:0, background:"linear-gradient(180deg, rgba(10,14,20,.42) 0%, rgba(10,14,20,0) 30%, rgba(10,14,20,0) 62%, rgba(10,14,20,.7) 100%)" } }),
       h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
         h("div", { "aria-hidden":"true", className:"title-glow", style:{ position:"absolute", top:"46%", left:"50%", width:"128%", height:150, transform:"translate(-50%,-50%)", background:"radial-gradient(ellipse at center, rgba(232,192,106,.32) 0%, rgba(232,192,106,0) 68%)", pointerEvents:"none", zIndex:0 } }),
+        h("p", { style:{ position:"relative", zIndex:1, fontSize:"clamp(0.58rem,1.9vw,0.72rem)", color:"#e8d8a8", letterSpacing:"0.18em", fontWeight:800, marginBottom:6, opacity:0.85, textShadow:"0 1px 2px #000" } }, "v" + APP_VERSION),
         h("p", { style:{ position:"relative", zIndex:1, fontSize:"clamp(0.62rem,2vw,0.78rem)", color:"#c4d2d8", letterSpacing:"0.32em", marginBottom:8, textShadow:"0 1px 2px #000" } }, "PUZZLE × ROGUELIKE"),
         h("h1", { className:"title-logo", onClick: logoTap, style:{ position:"relative", zIndex:1, fontSize:"clamp(2.7rem,12.5vw,4.2rem)", margin:"0 0 2px", cursor:"default" } }, "ドロプシア",
           h("span", { className:"title-sheen", "aria-hidden":"true", style:{ fontSize:"inherit" } }, "ドロプシア")),
