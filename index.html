@@ -2739,6 +2739,7 @@ function DropBattle() {
     setPreview(null); setClearing(new Set());
     storeRef.current = 0; setStoreView(0); // 蓄積はバトルごとにリセット
     stockRef.current = 0; setStockView(0); // 鍛冶素材もバトルごとにリセット
+    setSmithMode("stock"); // 鍛冶モードはバトル開始時に素材へ戻す（切替は戦闘中に可能）
     setGambleAsk(null); gamblePendRef.current = null; // 賭けのコイントスもバトルごとに掃除
     // フラッシュ/シェイクの連番をリセット。残したままだとシーンDOMの再マウントで
     // CSSアニメが頭から再生され、バトル開始時に赤フラッシュ等が一瞬出てしまう
