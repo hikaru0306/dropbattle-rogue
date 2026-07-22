@@ -3164,18 +3164,19 @@ function DropBattle() {
   // ===== 賭博師のコイントス =====
   // コインの出目（テストでは coinRigRef で固定できる）
   const gambleFlip = () => coinRigRef.current || (Math.random() < 0.5 ? "angel" : "demon");
-  // 天使/悪魔を選択 → 回転演出（自動では確定せず、タップで出目を出す）
+  // 天使/悪魔を選択 → 回転演出（一定時間で自動確定。回転中のタップで即確定も可）
   const gambleChoose = pick => {
     const ask = gambleAskRef.current;
     if (!ask || ask.phase !== "pick") return;
     SFX.pick();
     setGambleAsk({ ...ask, pick, phase: "spin", face: null, win: null });
+    setTimeout(() => gambleReveal(), FAST ? 120 : 1000); // 自動でも止まる（gambleReveal はspin時のみ動くのでタップと二重確定しない）
   };
-  // 回転中のタップで出目を確定させる。外れ＆チップ残ありなら結果を見せてから投げ直し（次のタップで再判定）
+  // 出目を確定させる（回転の自動終了 or 回転中のタップ）。外れ＆チップ残ありなら結果を見せてから投げ直し
   // 初回チュートリアル中はどちらを選んでも必ず的中させる（rigCoinより優先）
   const gambleReveal = () => {
     const ask = gambleAskRef.current;
-    if (!ask || ask.phase !== "spin") return;
+    if (!ask || ask.phase !== "spin") return; // 既に確定済み（タップ/自動のどちらか先勝ち）なら何もしない
     const pick = ask.pick;
     const retriesLeft = ask.retries;
     const face = (ctutRef.current && ctutRef.current.skill === "gamble") ? pick : gambleFlip();
@@ -3185,6 +3186,7 @@ function DropBattle() {
       setGambleAsk(a => a ? { ...a, phase: "retry", face, win: false } : a);
       setTimeout(() => {
         setGambleAsk(a => a ? { ...a, phase: "spin", face: null, retries: retriesLeft - 1 } : a);
+        setTimeout(() => gambleReveal(), FAST ? 120 : 800); // 投げ直しも自動で止まる（タップで即確定も可）
       }, FAST ? 140 : 900);
       return;
     }
