@@ -3593,6 +3593,33 @@ function DropBattle() {
   const [codeVal, setCodeVal] = useState("");
   const [codeMsg, setCodeMsg] = useState(null);
   const codeBufRef = useRef("");
+  // ===== バージョン更新チェック =====
+  // 起動時にサーバーの version.json を（キャッシュ無効で）取得し、ゲーム内 APP_VERSION より新しければ更新案内を出す
+  const [updateVer, setUpdateVer] = useState(null); // 新バージョン番号（あれば表示）
+  useEffect(() => {
+    let alive = true;
+    const isNewer = (a, b) => { // a が b より新しいか（数値セマンティック比較）
+      const pa = String(a).split("."), pb = String(b).split(".");
+      for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const x = parseInt(pa[i] || "0", 10) || 0, y = parseInt(pb[i] || "0", 10) || 0;
+        if (x !== y) return x > y;
+      }
+      return false;
+    };
+    fetch("version.json?t=" + Date.now(), { cache: "no-store" })
+      .then(r => (r && r.ok) ? r.json() : null)
+      .then(d => { if (alive && d && d.version && isNewer(d.version, APP_VERSION)) setUpdateVer(String(d.version)); })
+      .catch(() => {}); // オフラインや file:// では黙って無視（更新案内は出さない）
+    return () => { alive = false; };
+  }, []);
+  // 「今すぐ更新」: 可能ならキャッシュを破棄し、サーバーと再検証するリロードで最新版を取り込む
+  const doUpdate = () => {
+    const reload = () => { try { location.reload(); } catch (e) { location.href = location.href; } };
+    try {
+      if (window.caches && caches.keys) caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).then(reload, reload);
+      else reload();
+    } catch (e) { reload(); }
+  };
   const logoTapRef = useRef({ n: 0, t: 0 });
   const unlockAll = () => {
     const all = [0, 1, 2, 3, 4, 5, 6];
@@ -4077,6 +4104,8 @@ function DropBattle() {
       setGambleMode: m => setGambleMode(m),
       gambleChoose: f => gambleChoose(f),
       gambleReveal: () => gambleReveal(), // 回転中のタップ相当（出目を確定）
+      showUpdate: v => setUpdateVer(v ? String(v) : null), // 更新案内ウィンドウの表示テスト用
+      appVersion: () => APP_VERSION,
       gambleAsk: () => gambleAskRef.current ? { ...gambleAskRef.current } : null
     };
   }, []);
@@ -4218,6 +4247,15 @@ function DropBattle() {
             h("a", { href:"terms.html", target:"_blank", rel:"noopener", style:FOOT_LINK }, "利用規約"),
             h("a", { href:"privacy.html", target:"_blank", rel:"noopener", style:FOOT_LINK }, "プライバシー")),
           h("p", { style:{ margin:0, fontSize:"0.6rem", color:"#7f7694", letterSpacing:"0.08em", textShadow:"0 1px 2px #000" } }, TXC.copyright || "© 2026 HIKARU"))),
+      // ===== 更新案内ウィンドウ：サーバーに新バージョンがあるとき =====
+      updateVer && h("div", { className:"fade-in", style:{ position:"fixed", inset:0, zIndex:90, background:"rgba(8,4,14,.86)", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 24px" } },
+        h("div", { className:"pop-in rounded-2xl", style:{ maxWidth:320, width:"100%", background:"rgba(30,24,42,.98)", border:"2px solid #e8c06a", textAlign:"center", padding:"24px 22px", boxShadow:"0 10px 34px rgba(0,0,0,.6), 0 0 22px rgba(255,215,94,.4)" } },
+          h("p", { style:{ fontSize:"1.7rem", margin:"0 0 6px" } }, "✨"),
+          h("p", { style:{ color:"#ffe9b0", fontWeight:900, fontSize:"1.05rem", margin:"0 0 8px" } }, "新しいバージョンがあります"),
+          h("p", { style:{ color:"#c9bfe0", fontSize:"0.82rem", fontWeight:700, margin:"0 0 18px", lineHeight:1.7 } },
+            "v" + APP_VERSION + " → v" + updateVer, h("br"), "最新版に更新してください"),
+          h("button", { onClick: doUpdate, style:{ width:"100%", background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", borderRadius:12, padding:"13px", fontSize:"1.02rem", fontWeight:900, letterSpacing:"0.08em", border:"2px solid #6e4e1a", boxShadow:"0 3px 0 #6e4e1a", fontFamily:"inherit", cursor:"pointer" } }, "今すぐ更新"),
+          h("button", { onClick: () => setUpdateVer(null), style:{ marginTop:12, background:"none", border:"none", color:"#8f86a4", fontSize:"0.76rem", fontWeight:800, fontFamily:"inherit", cursor:"pointer" } }, "あとで"))),
       // ロードゲート：タイトルを薄暗くして中央に進捗（フェードは出さない＝チラつき防止）
       loadGate && h("div", { "data-loadgate":"1", style:{ position:"fixed", inset:0, zIndex:80, background:"rgba(8,10,16,.72)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:14, padding:"0 40px" } },
         h("div", { style:{ width:"100%", maxWidth:250, height:8, borderRadius:999, background:"rgba(20,17,32,.9)", border:"1px solid #3c3450", overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,.5)" } },
