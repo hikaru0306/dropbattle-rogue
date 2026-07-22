@@ -1950,6 +1950,7 @@ function DropBattle() {
   const [hurtSeq, setHurtSeq] = useState(0);            // 賭博師: 賭け失敗の赤い被弾フラッシュ
   const [wildFx, setWildFx] = useState(new Set());      // 賭博師: 虹変換バースト中のセル番号
   const [gambleDmg, setGambleDmg] = useState(null);     // 賭博師: ウィンドウが閉じた後に画面中央へ出す大ダメージ {cost,key}
+  const [gambleVoid, setGambleVoid] = useState(null);   // 賭博師: お邪魔のみに賭けたとき「無効」を出す {key}
   const [pops, setPops] = useState({}); // ダメージポップ {key:{text,color,seq}}
   const popSeq = useRef(0);
   const addPop = (key, text, color, icon) => {
@@ -2785,7 +2786,7 @@ function DropBattle() {
     setGambleAsk(null); gamblePendRef.current = null; // 賭けのコイントスもバトルごとに掃除
     // フラッシュ/シェイクの連番をリセット。残したままだとシーンDOMの再マウントで
     // CSSアニメが頭から再生され、バトル開始時に赤フラッシュ等が一瞬出てしまう
-    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null);
+    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null); setGambleVoid(null);
     setPoison(0); // 毒はバトルごとにリセット
     soloShownRef.current = false;
     turnRef.current = freshTurn(); syncTurn();
@@ -2912,14 +2913,16 @@ function DropBattle() {
     // 効果とHP消費はコイントスの後（成功=効果のみ・ノーコスト／失敗=HPだけ払う）
     if (act === "heal" && skill === "gamble") {
       const cell = boardRef.current[idx];
-      if (cell.type === JUNK) { SFX.tap(); return; } // お邪魔だけのグループには賭けられない（アクション消費なし）
+      // お邪魔だけのグループには賭けられない（コスト0で無効）。「無効」を出してコイントスも起こさない（アクション消費なし）
+      const showVoid = () => { SFX.tap(); setGambleVoid({ key: UID++ }); setTimeout(() => setGambleVoid(null), 1000); };
+      if (cell.type === JUNK) { showVoid(); return; }
       const gCoreK = CORE_BY_COLOR[cell.type];
       const gx = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed[gCoreK]);
       if (gx.blast) turnRef.current.blastUsed = true;
       if (gx.cross) turnRef.current.crossUsed = true;
       if (gx.red.length) turnRef.current.coreUsed[gCoreK] = true; // 核レリックは色ごとに1ターン1回
       const ginfo = groupInfo(boardRef.current, gx.ids);
-      if (ginfo.junk) { SFX.tap(); return; }
+      if (ginfo.junk) { showVoid(); return; }
       const count = ginfo.count;
       const mode = gambleModeRef.current;
       const cost = gambleCost(mode, count) * ginfo.mult; // 外したときに失うHP（成功時は0）。スター/トリプル倍率は効果と揃える
@@ -3771,7 +3774,7 @@ function DropBattle() {
     setRestMsg(null); setAnims({}); setGuide(null);
     setBuffAnim(null); setStoreAnim(null); setDcapTut(null);
     // 連番を残すとシーン再マウントでCSSアニメが頭から再生される（v99の教訓）
-    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null);
+    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null); setGambleVoid(null);
     soloShownRef.current = false;
     setLocked(false); lockedRef.current = false;
     setFx([]);
@@ -4704,6 +4707,12 @@ function DropBattle() {
       h("div", { className:"gdmg-pop", style:{ fontSize:"2.6rem", fontWeight:900, color:"#ff4646",
         // 白縁取り（8方向シャドウ）＋下に黒の落ち影で、どの背景でも読めるように
         textShadow:"-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, -2px 0 0 #fff, 2px 0 0 #fff, 0 -2px 0 #fff, 0 2px 0 #fff, 0 4px 10px rgba(0,0,0,.75)" } }, "HP-" + gambleDmg.cost)));
+  }
+  if (gambleVoid) {
+    // お邪魔のみに賭けたとき: 画面中央へ「無効」（コスト0・コイントスなし）
+    overlays.push(h("div", { key:"gvoid" + gambleVoid.key, className:"fixed inset-0 pointer-events-none flex items-center justify-center", style:{ zIndex:84 } },
+      h("div", { className:"gdmg-pop", style:{ fontSize:"2.2rem", fontWeight:900, color:"#b8b0c0",
+        textShadow:"-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, -2px 0 0 #fff, 2px 0 0 #fff, 0 -2px 0 #fff, 0 2px 0 #fff, 0 4px 10px rgba(0,0,0,.7)" } }, "無効")));
   }
   if (armed !== null && items[armed]) {
     const c = CONSUM[items[armed]];
