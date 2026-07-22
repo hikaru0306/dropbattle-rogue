@@ -64,29 +64,35 @@ const $ = id => document.getElementById(id);
 const msg = t => $("msg").textContent = t || "";
 let rows = [];
 
-function fmt(t){ return t ? new Date(t).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "—"; }
+// progress はプレイヤーが（改造クライアントで）任意の値を書き込めるフィールド。
+// innerHTML に混ぜる前に必ず数値化(num)またはエスケープ(esc)する（格納型XSS対策）
+const num = v => (typeof v === "number" && isFinite(v)) ? v : 0;
+const esc = v => String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const reachCell = r => Array.isArray(r) ? `${num(r[0])+1}章${num(r[1])}F` : null;
+
+function fmt(t){ return typeof t === "number" && isFinite(t) ? new Date(t).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}) : "—"; }
 
 // 表/裏それぞれ: クリア済み=✔回数、未クリア=最深到達（◯章◯F）、未プレイ=表示なし
 function charCell(pc, i, cleared, clearedU){
   const s = (pc && pc[i]) || {};
-  const o = (s.clears||0) || (cleared.includes(i) ? 1 : 0);
-  const u = (s.uraClears||0) || (clearedU.includes(i) ? 1 : 0);
+  const o = num(s.clears) || (Array.isArray(cleared) && cleared.includes(i) ? 1 : 0);
+  const u = num(s.uraClears) || (Array.isArray(clearedU) && clearedU.includes(i) ? 1 : 0);
   const om = o ? `<span class="omote">表✔${o}</span>`
-    : s.reach ? `<span class="omote">表${s.reach[0]+1}章${s.reach[1]}F</span>` : "";
+    : reachCell(s.reach) ? `<span class="omote">表${reachCell(s.reach)}</span>` : "";
   const ur = u ? `<span class="ura">裏✔${u}</span>`
-    : s.reachU ? `<span class="ura">裏${s.reachU[0]+1}章${s.reachU[1]}F</span>` : "";
+    : reachCell(s.reachU) ? `<span class="ura">裏${reachCell(s.reachU)}</span>` : "";
   if (!om && !ur) return '<span class="dim">—</span>';
-  const st = (s.maxAtk || s.maxDef)
-    ? `<span class="stats">⚔${s.maxAtk||0} 🛡${s.maxDef||0}</span>` : "";
+  const st = (num(s.maxAtk) || num(s.maxDef))
+    ? `<span class="stats">⚔${num(s.maxAtk)} 🛡${num(s.maxDef)}</span>` : "";
   return [om, ur, st].filter(Boolean).join("<br>");
 }
 
 function deepest(pc){
   let best=null, bestU=null;
   for (const k in (pc||{})) {
-    const r=pc[k].reach, ru=pc[k].reachU;
-    if (r && (!best || r[0]>best[0] || (r[0]===best[0]&&r[1]>best[1]))) best=r;
-    if (ru && (!bestU || ru[0]>bestU[0] || (ru[0]===bestU[0]&&ru[1]>bestU[1]))) bestU=ru;
+    const r=(pc[k]||{}).reach, ru=(pc[k]||{}).reachU;
+    if (Array.isArray(r) && (!best || num(r[0])>best[0] || (num(r[0])===best[0]&&num(r[1])>best[1]))) best=[num(r[0]),num(r[1])];
+    if (Array.isArray(ru) && (!bestU || num(ru[0])>bestU[0] || (num(ru[0])===bestU[0]&&num(ru[1])>bestU[1]))) bestU=[num(ru[0]),num(ru[1])];
   }
   return bestU ? `裏${bestU[0]+1}章${bestU[1]}F` : best ? `${best[0]+1}章${best[1]}F` : "—";
 }
@@ -100,8 +106,8 @@ function render(){
     const p = d.progress || {};
     const pc = p.perChar || {};
     const co = p.clearedOmote || [], cu = p.clearedUra || [];
-    const name = d.linked ? `<span class="linked">🔗 ${r.id.slice(0,10)}…</span>` : `<span class="anon">匿名 ${r.id.slice(0,8)}…</span>`;
-    h += `<tr><td title="${r.id}">${name}</td><td>${p.unlocked ?? "?"} /7</td>`
+    const name = d.linked ? `<span class="linked">🔗 ${esc(r.id.slice(0,10))}…</span>` : `<span class="anon">匿名 ${esc(r.id.slice(0,8))}…</span>`;
+    h += `<tr><td title="${esc(r.id)}">${name}</td><td>${Number.isFinite(p.unlocked) ? p.unlocked : "?"} /7</td>`
       + CHAR_NAMES.map((_,i)=>`<td>${charCell(pc,i,co,cu)}</td>`).join("")
       + `<td class="deep">${deepest(pc)}</td><td>${fmt(d.updatedAt)}</td></tr>`;
   }
@@ -131,12 +137,14 @@ $("reload").onclick = load;
 $("csv").onclick = () => {
   const head = ["uid","linked","unlocked",...CHAR_NAMES.flatMap(n=>[n+"_表クリア",n+"_裏クリア",n+"_表到達",n+"_裏到達",n+"_最大攻撃",n+"_最大防御"]),"最深","最終プレイ","summary"];
   const lines = [head.join(",")];
-  const reachTxt = r => r ? `${r[0]+1}章${r[1]}F` : "";
+  const reachTxt = r => Array.isArray(r) ? `${num(r[0])+1}章${num(r[1])}F` : "";
   for (const r of rows) {
     const p = r.data.progress || {}, pc = p.perChar || {};
-    const cells = [r.id, r.data.linked?1:0, p.unlocked ?? ""];
-    for (let i=0;i<7;i++){ const s=pc[i]||{}; cells.push(s.clears||0, s.uraClears||0, reachTxt(s.reach), reachTxt(s.reachU), s.maxAtk||0, s.maxDef||0); }
-    cells.push(deepest(pc), r.data.updatedAt?new Date(r.data.updatedAt).toISOString():"", '"'+String(r.data.summary||"").replace(/"/g,'""')+'"');
+    const cells = [r.id, r.data.linked?1:0, Number.isFinite(p.unlocked) ? p.unlocked : ""];
+    for (let i=0;i<7;i++){ const s=pc[i]||{}; cells.push(num(s.clears), num(s.uraClears), reachTxt(s.reach), reachTxt(s.reachU), num(s.maxAtk), num(s.maxDef)); }
+    // summary はプレイヤー由来の自由文字列。先頭が =+-@ だと表計算ソフトが数式として実行するため ' を前置
+    const sm = String(r.data.summary||"");
+    cells.push(deepest(pc), num(r.data.updatedAt)?new Date(num(r.data.updatedAt)).toISOString():"", '"'+(/^[=+\-@]/.test(sm)?"'":"")+sm.replace(/"/g,'""')+'"');
     lines.push(cells.join(","));
   }
   const a = document.createElement("a");
