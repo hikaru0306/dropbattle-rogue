@@ -3229,6 +3229,7 @@ function DropBattle() {
     const scale = win ? 1 : (hasR("luckcoin") ? GAMBLE_LUCK_RATE : 0); // 幸運の銀貨: 外れても効果の50%
     const logs = [];
     let shownAmt = 0; // ボタン表示用の結果値（回復量/虹の数/倍率）
+    let animMs = 0;   // 虹変換など「消えるまで待つ」演出の所要ms（この間は盤面ロックを維持）
     if (scale > 0) {
       if (mode === "heal2") {
         // 回復はここでは発動しない。他キャラと同じくターン解決の回復フェーズで反映される（予約のみ）
@@ -3251,6 +3252,8 @@ function DropBattle() {
           setWildFx(s => { const ns = new Set(s); ns.add(ti); return ns; });
           setTimeout(() => setWildFx(s => { const ns = new Set(s); ns.delete(ti); return ns; }), 520);
         }, FAST ? 0 : 160 * k));
+        // 変換が全部終わるまで（最後の1個の変換＋演出ぶん）盤面を触れないようにする
+        animMs = FAST ? 0 : 160 * Math.max(0, targets.length - 1) + 320;
         shownAmt = targets.length;
         if (targets.length) logs.push(`🌈 虹の賭け${win ? "的中" : "（幸運）"}！虹ドロップ${targets.length}個`);
       } else {
@@ -3282,10 +3285,11 @@ function DropBattle() {
     }
     if (dead) return; // 敗北処理済み（盤面ロックのまま）
     if (ctutRef.current && ctutRef.current.skill === "gamble") ctutFinish(); // 賭けチュートリアルの締めへ
-    // コイントスは消した直後に解決する。3アクション目ならターン解決へ、まだなら次のアクションへ
+    // コイントスは消した直後に解決する。3アクション目ならターン解決へ、まだなら次のアクションへ。
+    // 虹変換など演出中(animMs>0)は、その間ずっと盤面ロックを維持し、完了後に解除して進める（変換中のタップを防ぐ）
     const nu = gambleUsedRef.current || usedRef.current;
-    if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
-    else { const na = nextInOrder(nu); setAction(na); actionRef.current = na; setLocked(false); lockedRef.current = false; }
+    if (nu.size >= 3) setTimeout(() => resolveTurn(), (FAST ? 60 : 350) + animMs);
+    else setTimeout(() => { const na = nextInOrder(nu); setAction(na); actionRef.current = na; setLocked(false); lockedRef.current = false; }, animMs);
   };
   // 賭け金の支払い。HPが0以下になったら敗北処理（不死鳥の羽で復活）を通す。敗北したら true
   const payGambleCost = cost => {
