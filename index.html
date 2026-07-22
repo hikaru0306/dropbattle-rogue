@@ -2973,17 +2973,62 @@ function DropBattle() {
       const nu = new Set(usedRef.current); nu.add("heal");
       gambleUsedRef.current = nu; // 結果確定後にこの used でターン進行を判定
       setUsed(nu); usedRef.current = nu;
-      const clearedIdxs = [];
-      boardRef.current.forEach((c, i) => { if (gx.ids.has(c.id)) clearedIdxs.push(i); });
+      // 消去演出（爆破/十字晶/核/雷/ライン等）を通常消去と同じ段階演出で再生し、演出が終わってからコイントスへ入る
+      const clearedIdxs = [], bombIdxs = [];
+      boardRef.current.forEach((c, i) => { if (gx.ids.has(c.id)) { clearedIdxs.push(i); if (c.special === "bombx" || c.special === "bombd") bombIdxs.push(i); } });
+      const baseIds = findGroup(boardRef.current, idx);
+      const hasExtra = gx.ids.size > baseIds.size;
+      const linevCols = [...new Set(boardRef.current.map((c, i) => (gx.ids.has(c.id) && c.special === "linev") ? (i % SIZE) : -1).filter(x => x >= 0))];
+      const linehRows = [...new Set(boardRef.current.map((c, i) => (gx.ids.has(c.id) && c.special === "lineh") ? ((i / SIZE) | 0) : -1).filter(x => x >= 0))];
+      const boltExtra = boardRef.current.map((c, i) => (gx.ids.has(c.id) && !baseIds.has(c.id) && ginfo.sp.bolt > 0) ? i : -1).filter(i => i >= 0);
+      const r0 = Math.floor(idx / SIZE), c0 = idx % SIZE;
+      const xgTrig = hasR("xgem") && baseIds.size === 5 && hasExtra;
+      const playEffects = () => {
+        const explode = bombIdxs.slice();
+        if (gx.blast) explode.push(idx);
+        if (xgTrig) {
+          for (let d = 1; d < SIZE; d++) {
+            [[r0 + d, c0 + d], [r0 + d, c0 - d], [r0 - d, c0 + d], [r0 - d, c0 - d]].forEach(rc => {
+              if (rc[0] >= 0 && rc[0] < SIZE && rc[1] >= 0 && rc[1] < SIZE) explode.push(rc[0] * SIZE + rc[1]);
+            });
+          }
+          explode.push(idx);
+        }
+        if (explode.length) boomAt(explode);
+        let sweptLine = false;
+        linevCols.forEach(c => { barBlast("v", colCells(c)); sweptLine = true; });
+        linehRows.forEach(r => { barBlast("h", rowCells(r)); sweptLine = true; });
+        if (gx.cross) { barBlast("v", colCells(c0)); barBlast("h", rowCells(r0)); boomAt([idx]); sweptLine = true; }
+        if (gx.red && gx.red.length) {
+          const N2 = SIZE * SIZE;
+          gx.red.forEach(i => barBlast("v", [i - SIZE, i, i + SIZE].filter(k => k >= 0 && k < N2 && (k % SIZE) === (i % SIZE))));
+          SFX.crack();
+        }
+        if (sweptLine) SFX.swish();
+        if (boltExtra.length) lightningAt(boltExtra);
+      };
+      // 消去演出が終わってから天使/悪魔のコイントスを開く（この時点では効果もHP消費も未発動）
+      const openCoin = () => setGambleAsk({ mode, cost, count, retries, mult: ginfo.mult, phase: "pick", pick: null, face: null, win: null });
+      const finishBetClear = () => { commitBoard(next); setClearing(new Set()); syncBag(); openCoin(); };
       setLocked(true); lockedRef.current = true;
-      flyParticles(clearedIdxs, "heal");
-      setClearing(new Set(gx.ids));
       SFX.clear();
-      setTimeout(() => {
-        commitBoard(next); setClearing(new Set()); syncBag();
-        // 消した直後に天使/悪魔のコイントスへ（この時点では効果もHP消費も未発動）
-        setGambleAsk({ mode, cost, count, retries, mult: ginfo.mult, phase: "pick", pick: null, face: null, win: null });
-      }, FAST ? 40 : 240);
+      if (!hasExtra) {
+        if (bombIdxs.length) boomAt(bombIdxs);
+        flyParticles(clearedIdxs, "heal");
+        setClearing(new Set(gx.ids));
+        setTimeout(finishBetClear, FAST ? 40 : 240);
+      } else {
+        // 段階演出: 通常範囲を消す → 爆破等エフェクト → 追加分を消す → コイントス
+        setClearing(new Set(baseIds));
+        setTimeout(() => {
+          playEffects();
+          setTimeout(() => {
+            setClearing(new Set(gx.ids));
+            flyParticles(clearedIdxs, "heal");
+            setTimeout(finishBetClear, FAST ? 30 : 220);
+          }, FAST ? 20 : 300);
+        }, FAST ? 20 : 190);
+      }
       return;
     }
     const coreK = CORE_BY_COLOR[boardRef.current[idx].type];
