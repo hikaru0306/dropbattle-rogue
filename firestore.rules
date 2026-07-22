@@ -15,9 +15,22 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['v','updatedAt','svTime','clientVersion','linked','summary','progress','data'])
         && request.resource.data.v is int
         && request.resource.data.updatedAt is number
+        && request.resource.data.clientVersion is string
+        && request.resource.data.linked is bool
+        // data: localStorageミラー。キー数を制限（実際のゲームは30個未満。肥大化・コスト攻撃対策）
         && request.resource.data.data is map
+        && request.resource.data.data.size() < 100
         && request.resource.data.summary is string
-        && request.resource.data.summary.size() < 500;
+        && request.resource.data.summary.size() < 500
+        // progress: admin.html が表示に使うため形を固定（数値期待の場所に文字列/HTMLを入れさせない）
+        && request.resource.data.progress is map
+        && request.resource.data.progress.keys().hasOnly(['unlocked','clearedOmote','clearedUra','totalClears','totalUraClears','perChar'])
+        && request.resource.data.progress.unlocked is int
+        && request.resource.data.progress.clearedOmote is list
+        && request.resource.data.progress.clearedUra is list
+        && request.resource.data.progress.totalClears is int
+        && request.resource.data.progress.totalUraClears is int
+        && request.resource.data.progress.perChar is map;
     }
     // それ以外はすべて拒否
     match /{document=**} { allow read, write: if false; }

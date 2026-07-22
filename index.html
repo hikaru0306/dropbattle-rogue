@@ -16,8 +16,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@700;800;900&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<!-- React はローカル同梱（アプリのWebView・オフラインでもCDN不達で起動不能にならない。CDN改ざんリスクも排除） -->
+<script src="lib/react.production.min.js"></script>
+<script src="lib/react-dom.production.min.js"></script>
 <script src="texts.js"></script>
 <script>
 /* クラウド同期用: db_* への書き込みを検知して cloud.js へ通知するフック（cloud.js 不在時は無害なnoop） */
@@ -560,10 +561,11 @@ const PATTERNS = {
 // なかま回復→攻撃への切り替え判定用: ターン開始時点の「味方が生きていたか」スナップショット（敵id→bool）。
 // 敵オブジェクトに持たせると演出のsetTimeout内のsetEnemiesBoth(旧snap)で巻き戻るため、モジュール変数で持つ
 let HAD_ALLIES = {};
-const intentOf = (en, allies) => {
+const intentOf = (en, allies, step = 0) => {
+  // step: パターンの何手先を見るか（0=今の行動。激昂の2回行動の予測はstep=1で2手目を見る）
   const k = KINDS[en.kind];
   const pat = en.pat || k.pats[0];
-  let act = pat[en.pi % pat.length];
+  let act = pat[(en.pi + step) % pat.length];
   const aliveAllies = (allies || []).some(a => a.alive && a.id !== en.id);
   // ターン中に味方が倒れても予告した行動は変わらない（回復対象がいなければ様子見になる）
   const healAllies = HAD_ALLIES[en.id] !== undefined ? HAD_ALLIES[en.id] : aliveAllies;
@@ -931,15 +933,22 @@ const findGroupStopAtWild = (cells, idx) => {
   return ids;
 };
 // プリズム: 盤面の最少色を他の色へ変換して3色にする（ターン開始時のみ）
+// 大賢者は5色（青=5を含む）なので、使用中のパレット全体で数える
+const boardPalette = () => CUR_SKILL === "healx" ? HEALX_COLORS : [0, 1, 2, 3];
 const prismBoard = cells => {
-  const counts = [0, 0, 0, 0];
-  for (const c of cells) if (c.type < 4) counts[c.type]++;
-  const present = [0, 1, 2, 3].filter(t => counts[t] > 0);
-  if (present.length <= 3) return cells;
-  let minT = present[0];
-  for (const t of present) if (counts[t] < counts[minT]) minT = t;
-  const others = present.filter(t => t !== minT);
-  return cells.map(c => c.type === minT ? { ...c, id: UID++, type: pick(others) } : c);
+  const pal = boardPalette();
+  let out = cells;
+  for (;;) { // 3色になるまで最少色の変換を繰り返す（大賢者の5色盤面は2回かかる）
+    const counts = {};
+    for (const t of pal) counts[t] = 0;
+    for (const c of out) if (counts[c.type] !== undefined) counts[c.type]++;
+    const present = pal.filter(t => counts[t] > 0);
+    if (present.length <= 3) return out;
+    let minT = present[0];
+    for (const t of present) if (counts[t] < counts[minT]) minT = t;
+    const others = present.filter(t => t !== minT);
+    out = out.map(c => c.type === minT ? { ...c, id: UID++, type: pick(others) } : c);
+  }
 };
 
 // 爆弾特殊: グループ内の爆弾が周囲を巻き込む（連鎖爆発はしない）
@@ -1270,26 +1279,34 @@ const bgmStop = () => {
   bgmTrack = null;
   if (bgmAudio) { try { bgmAudio.pause(); } catch (e) {} }
 };
-const bgmPlay = name => {
-  if (!name || !bgmOn) { bgmStop(); return; }
-  if (bgmTrack === name && bgmAudio && !bgmAudio.paused) return;
-  bgmTrack = name;
+let bgmLoaded = null; // bgmAudio に読み込み済みの曲名（同曲の再開でsrcを再代入して頭から鳴らさないため）
+// bgmTrack の曲を実際に鳴らす。非表示中は鳴らさない（バトル演出の残り更新などでbgmPlayが
+// 呼ばれてもバックグラウンド再生しない。復帰時に bgmOnShow が鳴らす）
+const bgmStart = () => {
+  if (!bgmTrack || !bgmOn || document.hidden) return;
   try {
     if (!bgmAudio) { bgmAudio = new Audio(); bgmAudio.preload = "auto"; }
     bgmWire();
-    bgmAudio.loop = !BGM_NOLOOP[name];
-    bgmAudio.src = BGM_FILES[name];
+    bgmAudio.loop = !BGM_NOLOOP[bgmTrack];
+    if (bgmLoaded !== bgmTrack) { bgmAudio.src = BGM_FILES[bgmTrack]; bgmLoaded = bgmTrack; }
+    else if (bgmAudio.ended) return; // ジングル（非ループ）の自然終了は鳴らし直さない
     bgmApplyVol();
     const p = bgmAudio.play();
     if (p && p.catch) p.catch(() => {});
   } catch (e) {}
 };
+const bgmPlay = name => {
+  if (!name || !bgmOn) { bgmStop(); return; }
+  if (bgmTrack === name && bgmAudio && !bgmAudio.paused) return;
+  bgmTrack = name;
+  bgmStart();
+};
 // バックグラウンド（タブ非表示・ホーム画面）でBGMを止め、復帰で再開
 const bgmOnHide = () => { if (bgmAudio) { try { bgmAudio.pause(); } catch (e) {} } };
 const bgmOnShow = () => {
-  if (bgmTrack && bgmOn && bgmAudio) {
+  if (bgmTrack && bgmOn) {
     ac(); // 復帰時にAudioContextを再開（GainNode経由の再生に必要）
-    try { const p = bgmAudio.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
+    bgmStart();
   }
 };
 document.addEventListener("visibilitychange", () => { document.hidden ? bgmOnHide() : bgmOnShow(); });
@@ -1932,6 +1949,7 @@ function DropBattle() {
 
   // ===== ターン解決：自攻撃 → 敵攻撃(全員) → 回復 =====
   const resolveTurn = useCallback(() => {
+    if (statusRef.current !== "battle") return; // 中断・リスタート後に残った遅延呼び出しを無効化
     // ガレスの強化: 予約された倍率を「攻撃を開始する直前」のここで計算する
     const pend = turnRef.current.buffPend;
     let buffStep = null;
@@ -2173,7 +2191,8 @@ function DropBattle() {
         const broke = blocked > 0 && shield - blocked <= 0 && one > blocked;
         shield -= blocked;
         const shAfter = shield;
-        const through = one - blocked;
+        let through = one - blocked;
+        if (through > 0 && hasR("mist") && tn === 1) through = Math.ceil(through / 2); // 霧のマント（攻撃系と同様に吸血にも適用）
         php = Math.max(0, php - through);
         const np = php;
         const healed = Math.min(en.max - en.hp, through);
@@ -2553,11 +2572,14 @@ function DropBattle() {
       }
     } else if (k === "colorize") {
       const b = boardRef.current;
-      const counts = [0,0,0,0];
-      for (const c of b) if (c.type < 4) counts[c.type]++;
-      const majT = counts.indexOf(Math.max(...counts));
+      const pal = boardPalette(); // 大賢者の5色目（青）も対象にする
+      const counts = {};
+      for (const t of pal) counts[t] = 0;
+      for (const c of b) if (counts[c.type] !== undefined) counts[c.type]++;
+      let majT = pal[0];
+      for (const t of pal) if (counts[t] > counts[majT]) majT = t;
       let minT = -1, minV = Infinity;
-      for (let t = 0; t < 4; t++) if (t !== majT && counts[t] > 0 && counts[t] < minV) { minV = counts[t]; minT = t; }
+      for (const t of pal) if (t !== majT && counts[t] > 0 && counts[t] < minV) { minV = counts[t]; minT = t; }
       if (minT >= 0) {
         commitBoard(b.map(c => c.type === minT ? { ...c, id:UID++, type:majT } : c));
         addLog(["🎨 変換の書：盤面の色を寄せた"]); SFX.clear();
@@ -2816,7 +2838,8 @@ function DropBattle() {
       ctutFinish(1000); // 色変えチュートリアル: 塗り替わりを1秒見せてから締めへ
       const nu = new Set(usedRef.current); nu.add("heal");
       setUsed(nu); usedRef.current = nu;
-      if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
+      // 通常の消去パスと同様、ターン解決前にロックする（演出中のアイテム使用・中途半端な自動保存を防ぐ）
+      if (nu.size >= 3) { setLocked(true); lockedRef.current = true; setTimeout(() => resolveTurn(), FAST ? 60 : 350); }
       else { const na = nextInOrder(nu); setAction(na); actionRef.current = na; }
       return;
     }
@@ -2859,7 +2882,8 @@ function DropBattle() {
       if (mode === "gen") ctutFinish(1000); // 鍛冶チュートリアル: 生成された特殊を1秒見せてから締めへ
       const nu = new Set(usedRef.current); nu.add("heal");
       setUsed(nu); usedRef.current = nu;
-      if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
+      // 通常の消去パスと同様、ターン解決前にロックする（演出中のアイテム使用・中途半端な自動保存を防ぐ）
+      if (nu.size >= 3) { setLocked(true); lockedRef.current = true; setTimeout(() => resolveTurn(), FAST ? 60 : 350); }
       else { const na = nextInOrder(nu); setAction(na); actionRef.current = na; }
       return;
     }
@@ -2879,6 +2903,26 @@ function DropBattle() {
       const cost = gambleCost(mode, count); // 外したときに失うHP（成功時は0）
       // 賭けチップ（ジン専用）: グループ内の枚数だけ、外れたときに自動でコイントスをやり直す（＋化は2回分）
       const retries = ((ginfo.sp.chip || 0) - (ginfo.spu.chip || 0)) + (ginfo.spu.chip || 0) * 2;
+      // 特殊ドロップのアクション非依存効果（剣/盾/ハート/金貨/貫通）は賭けでも発動する。
+      // 効果は消した時点で確定＝コイントスの成否に依らない（賭けの対象はモード効果とHPコストだけ）
+      const geff = computeEffect(act, ginfo);
+      if (geff.splitAtk) turnRef.current.atk += geff.splitAtk;
+      if (geff.splitDef) turnRef.current.def += geff.splitDef;
+      if (geff.healBonus) turnRef.current.heal += geff.healBonus;
+      if (ginfo.sp.pierce > 0) turnRef.current.pierce = true;
+      if (ginfo.sp.gold > 0) {
+        const g = (ginfo.sp.gold - ginfo.spu.gold) * 5 + ginfo.spu.gold * 12;
+        setCoinsBoth(coinsRef.current + g);
+        SFX.coin();
+        addLog([`金 コイン+${g}`]);
+      }
+      syncTurn();
+      const gll = [];
+      if (geff.splitAtk) gll.push(`剣 攻撃+${geff.splitAtk}`);
+      if (geff.splitDef) gll.push(`盾 防御+${geff.splitDef}`);
+      if (geff.healBonus) gll.push(`♥ 回復+${geff.healBonus}`);
+      if (ginfo.sp.pierce > 0) gll.push("貫 攻撃が貫通化！");
+      if (gll.length) addLog([gll.join(" / ")]);
       const { next, newPositions } = refill(boardRef.current, gx.ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
       // 賭けを持ち回る（消去演出の後にオーバーレイを開く）。newPositions は虹の賭けの落下先
       // mult=スター/トリプル倍率。効果にだけ乗る（コストは素のcountのまま）
@@ -2895,7 +2939,7 @@ function DropBattle() {
       setTimeout(() => {
         commitBoard(next); setClearing(new Set()); syncBag();
         // 消した直後に天使/悪魔のコイントスへ（この時点では効果もHP消費も未発動）
-        setGambleAsk({ mode, cost, count, retries, phase: "pick", pick: null, face: null, win: null });
+        setGambleAsk({ mode, cost, count, retries, mult: ginfo.mult, phase: "pick", pick: null, face: null, win: null });
       }, FAST ? 40 : 240);
       return;
     }
@@ -3127,6 +3171,7 @@ function DropBattle() {
   };
   // 結果確定：効果を発動（当たり=全部 / 外れ＋幸運の銀貨=50% / 外れ=なし）→ HPコストを支払う → ターン進行
   const gambleFinish = (pick, win) => {
+    if (statusRef.current !== "battle") { gamblePendRef.current = null; setGambleAsk(null); return; } // 中断後の残タイマーを無効化
     const pend = gamblePendRef.current;
     if (!pend) { setGambleAsk(null); return; }
     const { mode, count, cost } = pend;
@@ -3553,6 +3598,7 @@ function DropBattle() {
   }, [status]);
 
   const restart = (toTitle = false) => {
+    if (fxTimer.current) { clearTimeout(fxTimer.current); fxTimer.current = null; } // 前バトルの演出キューを停止
     UID = 1;
     storeRef.current = 0; setStoreView(0);          // 蓄積リセット（冒険をやり直す）
     stockRef.current = 0; setStockView(0);          // 鍛冶素材もリセット
@@ -3561,7 +3607,6 @@ function DropBattle() {
     CUR_HERO = CHARS[curCharRef.current].img.replace("assets/", "").replace(".png", "");
     ownedRef.current = initOwned(curCharRef.current);
     bagRef.current = refillBag(ownedRef.current);
-    syncOwned();
     const m = genMap(onboarding());
     setMap(m); mapRef.current = m;
     setCurNodeId(null); curNodeRef.current = null;
@@ -3583,6 +3628,7 @@ function DropBattle() {
     setRewards(null); setRestMsg(null); setAnims({});
     setCoinsBoth(0); setItemsBoth([]); setShop(null); setCampfire(null);
     ownedUpRef.current = initZero(); bagUpRef.current = initZero();
+    syncOwned(); // ＋強化(ownedUp)のリセット後に表示を同期（前回冒険の＋×N表示を残さない）
     setAct(0); setPMax(P_MAX); setActClear(null);
     relicsRef.current = []; RELICSET = new Set(); setRelicsView([]);
     battleNumRef.current = 0; shopNumRef.current = 0; setGuide(null);
@@ -3604,8 +3650,9 @@ function DropBattle() {
       const stt = statusRef.current;
       if (stt !== "map" && stt !== "battle" && stt !== "reward" && stt !== "puzzle") return;
       if (stt === "map" && !visitedRef.current.size && actRef.current === 0 && !campfireRef.current) return; // 進行ゼロは保存しない
-      // lockedはバトル演出中の保存だけを弾く（勝利演出後の報酬画面などはlockedのままなので対象外）
-      if (stt === "battle" && lockedRef.current) return;
+      // lockedはバトル演出中の保存だけを弾く（勝利演出後の報酬画面などはlockedのままなので対象外）。
+      // 章クリアのレリック選択(actClear)はlockedのまま開く安定状態なので保存する（ボス撃破を失わない）
+      if (stt === "battle" && lockedRef.current && !actClearRef.current) return;
       if (stt === "battle" && (tut !== null || gtut || (ctut && ctut.step !== "done") || gambleAsk)) return;
       const m = mapRef.current;
       const sv = {
@@ -3764,6 +3811,9 @@ function DropBattle() {
   }, [status, visited, board, enemies, turn, used, pHP, poisonView, rewards, shop, campfire, actClear, puzzle, locked, coins, items, storeView, stockView]);
   const suspendRun = () => { // 中断してタイトルへ（今の画面の状態まで保存済み）
     saveRun();
+    // 進行中のバトル演出キューを停止（残タイマーがタイトル画面で勝敗遷移を起こさないように）
+    if (fxTimer.current) { clearTimeout(fxTimer.current); fxTimer.current = null; }
+    setFx([]);
     setSoundOpen(false); setMenuOpen(false);
     setStatus("title"); statusRef.current = "title";
     SFX.tap();
@@ -3993,7 +4043,13 @@ function DropBattle() {
   const pendDef = tv.def + (tv.storePend ? tv.storePend.add : 0);
   const effDef = tv.buffPend && tv.buffPend.st === "def" ? Math.round(pendDef * tv.buffPend.mult)
     : tv.buffPend && tv.buffPend.horn > 0 ? Math.round(pendDef * tv.buffPend.horn) : pendDef;
-  const incomingPreview = Math.max(0, enemies.filter(e => e.alive).reduce((s,e) => s + intentOf(e, enemies).dmg * ((e.enr || 0) >= 3 ? 2 : 1), 0) - effDef) + poisonPreview; // 毒は防御無視で確定発生するため別枠で加算
+  // 激昂3以上の2回行動は「1手目×2」ではなくパターンの2手を実際に見る（2手目がため/呪いなら過大予測しない）
+  const incomingPreview = Math.max(0, enemies.filter(e => e.alive).reduce((s,e) => {
+    const actsN = (e.enr || 0) >= 3 ? 2 : 1;
+    let d = 0;
+    for (let ai = 0; ai < actsN; ai++) d += intentOf(e, enemies, ai).dmg;
+    return s + d;
+  }, 0) - effDef) + poisonPreview; // 毒は防御無視で確定発生するため別枠で加算
   const rootStyle = {
     fontFamily: FONT,
     minHeight: "calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
@@ -4341,7 +4397,7 @@ function DropBattle() {
       menuBtn("assets/icon_speaker.png", "サウンド設定", () => { setMenuOpen(false); setSoundOpen(true); SFX.open(); }),
       menuBtn(null, "冒険を中断してタイトルへ", suspendRun, null, true),
       h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } },
-        "進行はマップ到達時点まで自動保存。キャラ選択で「続きから」再開できます（バトル中の進行は保存されません）。"),
+        "進行は自動保存されます（バトルや報酬選択の途中も含む）。キャラ選択で「続きから」再開できます。"),
       h("button", { onClick: () => { setMenuOpen(false); SFX.tap(); },
         className:"w-full rounded-xl py-2.5 font-bold text-sm mt-3",
         style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a", fontFamily:"inherit" } }, "▶ 冒険にもどる"))));
@@ -4549,9 +4605,10 @@ function DropBattle() {
     // 見出し：賭けの種類（今のモード）。白文字（ユーザー指定）
     inner.push(h("div", { key:"h", style:{ color:"#fff", fontWeight:900, fontSize:"1.05rem", marginBottom:12 } }, gm.name));
     // 当たったときに起きること（金色）。回転中も見えるよう見出し直下に常時表示
-    const gEff = g.mode === "heal2" ? "回復+" + g.count * GAMBLE_HEAL_PER
-      : g.mode === "rain" ? "虹ドロップ" + g.count + "個"
-      : (g.mode === "atkx" ? "攻撃" : "防御") + "×" + g.count;
+    const gMul = g.mult || 1; // スター/トリプル倍率（実効果と同じ値を見せる）
+    const gEff = g.mode === "heal2" ? "回復+" + Math.round(g.count * GAMBLE_HEAL_PER * gMul)
+      : g.mode === "rain" ? "虹ドロップ" + Math.floor(g.count * gMul) + "個"
+      : (g.mode === "atkx" ? "攻撃" : "防御") + "×" + g.count * gMul;
     inner.push(h("div", { key:"eff", style:{ marginBottom:8, fontSize:"0.82rem", fontWeight:800, color:"#cfc0dc" } },
       gt.winLabel + " ",
       h("span", { style:{ fontSize:"1.3rem", fontWeight:900, color:"#ffd75e", textShadow:"0 0 8px rgba(255,210,90,.5)", marginLeft:6 } }, gEff)));
