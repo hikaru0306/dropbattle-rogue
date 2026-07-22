@@ -1146,6 +1146,18 @@ const refillPlain = (cells, removeIds) => {
 };
 
 // ===== SFX（WebAudio 簡易シンセ）=====
+// iOSは既定でページの音声再生が他アプリの音楽を停止させる（audio session が playback 扱い）。
+// "ambient" にするとミュージック等と同時再生になる（サイレントスイッチでは消音）。iOS 16.4+ のみ対応。
+// 割り込み（着信・Siri等）後に元へ戻ることがあるため、復帰系の処理からも呼び直す。
+// アプリ版(Capacitor)ではネイティブ側(AppDelegate)が AVAudioSession を ambient+mixWithOthers に
+// 設定するため、JS側は何もしない（手順は docs/アプリ化オーディオ設定.md）。iOS 16.4未満もこれで共存可。
+const setAmbient = () => {
+  try {
+    if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return;
+    if (navigator.audioSession) navigator.audioSession.type = "ambient";
+  } catch (e) {}
+};
+setAmbient();
 let AC = null, sfxEnabled = true, sfxVol = 0.6;
 try { const v = parseFloat(localStorage.getItem("db_sfxvol")); if (v >= 0 && v <= 1) sfxVol = v; } catch (e) {}
 const ac = () => {
@@ -1301,6 +1313,7 @@ const bgmPlay = name => {
 // バックグラウンド（タブ非表示・ホーム画面）でBGMを止め、復帰で再開
 const bgmOnHide = () => { if (bgmAudio) { try { bgmAudio.pause(); } catch (e) {} } };
 const bgmOnShow = () => {
+  setAmbient(); // 割り込みで playback に戻っていたら他アプリ音楽と共存モードへ再設定
   if (bgmTrack && bgmOn) {
     ac(); // 復帰時にAudioContextを再開（GainNode経由の再生に必要）
     bgmStart();
@@ -1315,6 +1328,7 @@ window.addEventListener("pageshow", bgmOnShow);
 // ジングル系(BGM_NOLOOP)は自然終了後のpausedを再生し直さないよう除外
 const bgmKick = () => {
   if (document.hidden) return;
+  setAmbient();
   ac(); // suspended/interrupted の AudioContext を再開（GainNode経由の出音に必須）
   if (bgmOn && bgmTrack && bgmAudio && bgmAudio.paused && !BGM_NOLOOP[bgmTrack]) {
     try { const p = bgmAudio.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {}
