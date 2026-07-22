@@ -176,7 +176,7 @@ window.TEXTS = {
     winLabel:  "当たると",
     angel:     "天使",
     demon:     "悪魔",
-    spin:      "タップで止める！",
+    spin:      "タップで演出スキップ",
     win:       "的中！",
     lose:      "はずれ…",
     retry:     "賭 チップでもう一度！",
