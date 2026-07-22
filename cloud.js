@@ -139,6 +139,13 @@ async function main() {
   }
 
   // ---- Pull & 突き合わせ（起動時・ログイン/連携直後）----
+  // ミラー同士の完全一致（キー集合と全値が同じ）。pushはreadLocal()をそのまま送るので
+  // 値はどちらも文字列
+  const sameData = (a, b) => {
+    a = a || {}; b = b || {};
+    const ka = Object.keys(a);
+    return ka.length === Object.keys(b).length && ka.every(k => a[k] === b[k]);
+  };
   let conflictDoc = null;
   async function reconcile() {
     const user = auth.currentUser;
@@ -157,6 +164,13 @@ async function main() {
     if (!hasLocal) { restore(remote, false); return; }                    // 新端末 → 無言リストア
     if ((remote.updatedAt || 0) <= last) {                                // ローカルが同等以上
       if (dirty) await push(); else { state.status = "synced"; emit(); }
+      return;
+    }
+    // 中身が完全に同じなら分岐ではない（pagehide中のpushでクラウド保存は届いたが
+    // db_cloud_last更新前にページが落ちた等）→ クラウドの時刻を取り込んで同期済みに
+    if (sameData(remote.data, local)) {
+      try { LS.setItem("db_cloud_last", String(remote.updatedAt || Date.now())); LS.removeItem("db_cloud_dirty"); } catch (e) {}
+      state.lastSync = remote.updatedAt || null; state.status = "synced"; emit();
       return;
     }
     if (!dirty && last > 0) { restore(remote, false); return; }           // クラウドだけ進んでいる
