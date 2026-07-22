@@ -1571,6 +1571,7 @@ function DropBattle() {
     if (changed) saveCharStats(merged);
     return merged;
   });
+  const charStatsRef = useRef(charStats); charStatsRef.current = charStats; // キー入力等の古いクロージャから最新実績を見るため
   const bumpCharClear = idx => setCharStats(s => {
     const prev = s[idx] || { clears:0, maxAtk:0, maxDef:0 };
     const key = modeRef.current === "ura" ? "uraClears" : "clears";
@@ -3551,7 +3552,7 @@ function DropBattle() {
     return sh ? { transform:`translateX(${sh}px)`, transition:"transform .15s ease" } : null;
   };
 
-  // ===== 隠しコード「1010」: キャラと裏の冒険を全解放（タイトル画面で入力） =====
+  // ===== 隠しコード「1010」: キャラを全解放（クリア状況は変えない。タイトル画面で入力） =====
   const [codeOpen, setCodeOpen] = useState(false);
   const [codeVal, setCodeVal] = useState("");
   const [codeMsg, setCodeMsg] = useState(null);
@@ -3559,13 +3560,30 @@ function DropBattle() {
   const logoTapRef = useRef({ n: 0, t: 0 });
   const unlockAll = () => {
     const all = [0, 1, 2, 3, 4, 5, 6];
-    setCharState(s => { const ns = { u: all, c: all, cu: s.cu || [] }; saveCharState(ns); return ns; });
+    setCharState(s => { const ns = { u: all, c: s.c || [], cu: s.cu || [] }; saveCharState(ns); return ns; });
     setCodeOpen(false); setCodeVal("");
-    setCodeMsg("🔓 隠しコード発動！ キャラクターと裏の冒険がすべて解放された");
+    setCodeMsg("🔓 隠しコード発動！ キャラクターがすべて解放された");
     setTimeout(() => setCodeMsg(null), 3000);
     SFX.win();
   };
-  const tryCode = v => { if (v === "1010") unlockAll(); else { setCodeVal(""); setCodeMsg("……なにも起こらなかった"); setTimeout(() => setCodeMsg(null), 1500); SFX.tap(); } };
+  // 「0101」: 旧1010がクリア済み(c)まで埋めていた頃の保存データ救済用。
+  // 戦闘実績（最大ダメージ・到達記録）が残っているクリアは本物なので維持し、実績ゼロのチート印だけ外す。
+  // 解放u・裏cu（裏は本当にクリアしないと付かない）はそのまま
+  const resetClears = () => {
+    const isReal = i => { const st = charStatsRef.current[i]; return !!(st && (st.maxAtk > 0 || st.maxDef > 0 || st.reach)); };
+    setCharState(s => { const ns = { u: s.u, c: (s.c || []).filter(isReal), cu: s.cu || [] }; saveCharState(ns); return ns; });
+    // 旧1010のクリア印に起動時補完で付いた空実績({clears:1}のみ)も削除して整合を取る
+    setCharStats(s => {
+      const ns = { ...s };
+      for (const k of Object.keys(ns)) { if (!isReal(+k) && !ns[k].uraClears && !ns[k].reachU) delete ns[k]; }
+      saveCharStats(ns); return ns;
+    });
+    setCodeOpen(false); setCodeVal("");
+    setCodeMsg("🧹 実績のないクリア印を掃除した（本当のクリアと解放はそのまま）");
+    setTimeout(() => setCodeMsg(null), 3000);
+    SFX.win();
+  };
+  const tryCode = v => { if (v === "1010") unlockAll(); else if (v === "0101") resetClears(); else { setCodeVal(""); setCodeMsg("……なにも起こらなかった"); setTimeout(() => setCodeMsg(null), 1500); SFX.tap(); } };
 
   // ===== クラウド同期（cloud.js / Firebase）: 状態購読とフッター用モーダル =====
   const [cloudSt, setCloudSt] = useState(() => (window.Cloud ? window.Cloud.state : null));
@@ -3602,6 +3620,7 @@ function DropBattle() {
       if (e.key >= "0" && e.key <= "9") {
         codeBufRef.current = (codeBufRef.current + e.key).slice(-8);
         if (codeBufRef.current.endsWith("1010")) { codeBufRef.current = ""; unlockAll(); }
+        else if (codeBufRef.current.endsWith("0101")) { codeBufRef.current = ""; resetClears(); }
       }
     };
     window.addEventListener("keydown", onKey);
@@ -4004,6 +4023,7 @@ function DropBattle() {
         ACT_NAMES, URA_ACT_NAMES, ACT_POOLS, URA_POOLS, BOSS_BY_ACT, URA_BOSS_BY_ACT,
         URA_HP_ACT, URA_ATK_ACT, URA_BOSSHP_ACT, URA_BOSSATK_ACT, CHARS }),
       setCleared: i => setCharState(s => { const c = s.c.includes(i) ? s.c : [...s.c, i]; const ns = { u:s.u, c, cu:s.cu }; saveCharState(ns); return ns; }),
+      recordStats: (i, a, d) => recordCharStats(i, a, d), // 0101救済テスト用: 実績を付けて本物クリア扱いにする
       charInfo: () => ({ cur:curCharRef.current, skill:charSkillRef.current, paint:paintColorRef.current, target:skillTargetRef.current, store:storeRef.current, smithMode:smithModeRef.current, stock:stockRef.current, gambleMode:gambleModeRef.current }),
       setPaint: c => setPaintColor(c),
       setSkillTarget: t => setSkillTarget(t),
