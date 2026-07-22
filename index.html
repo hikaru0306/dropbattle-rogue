@@ -984,19 +984,20 @@ const expandIds = (cells, ids) => {
 const groupInfo = (cells, ids) => {
   const sp = initZero();
   const spu = initZero();
-  let junkCnt = 0;
+  let junkCnt = 0, realCnt = 0;
   for (const cell of cells) if (ids.has(cell.id)) {
     if (cell.special && sp[cell.special] !== undefined) { sp[cell.special]++; if (cell.up) spu[cell.special]++; }
-    if (cell.type === JUNK) junkCnt++;
+    if (cell.type === JUNK) junkCnt++; else realCnt++;
   }
-  const junk = junkCnt > 0 && junkCnt === ids.size; // 全部お邪魔のときだけ効果ゼロ
-  const base = ids.size + sp.plus + spu.plus + spu.pierce + spu.bolt * 3; // ＋/貫＋/雷＋のボーナス込み
+  const junk = junkCnt > 0 && realCnt === 0; // 全部お邪魔のときだけ効果ゼロ
+  // お邪魔（敵が生成）は数に含めない＝爆破等で巻き込んで消えても効果ゼロ（賭博師のコスト/効果もお邪魔ぶんは増えない）
+  const base = realCnt + sp.plus + spu.plus + spu.pierce + spu.bolt * 3; // ＋/貫＋/雷＋のボーナス込み
   let mult = 1;
   const starOn = sp.star > 0 && base >= Math.max(4, STAR_THRESHOLD - (hasR("starbook") ? 1 : 0));
   if (starOn) mult *= 1 + sp.star + spu.star; // 強化★は1つで3倍（★の数×2+1倍）。発動個数は強化で変わらない
-  const threeOn = ids.size === 3;
+  const threeOn = realCnt === 3;
   if (sp.three > 0 && threeOn) mult *= spu.three > 0 ? 4 : 3;
-  return { count:ids.size, base, sp, spu, mult, starOn, threeOn: threeOn && sp.three > 0, junk };
+  return { count:realCnt, base, sp, spu, mult, starOn, threeOn: threeOn && sp.three > 0, junk };
 };
 const perOf = act =>
   (CUR_SKILL === "recolor" && act !== "heal" ? 8 : ACTIONS[act].per) // イリスは攻/防の基礎値8（色変えで大グループを作れる代償）
