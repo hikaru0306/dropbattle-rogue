@@ -10,6 +10,11 @@
 <meta property="og:type" content="website" />
 <meta property="og:image" content="https://hikaru0306.github.io/dropbattle-rogue/assets/bg_title2.jpg" />
 <meta name="theme-color" content="#131019" />
+<!-- iOSでホーム画面に追加したとき、Safariのツールバー無しの全画面(standalone)で起動する。これにより100vhと実表示領域の差で生じる微スクロールが起きない -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="ドロプシア" />
 <link rel="icon" type="image/png" href="assets/favicon.png" />
 <link rel="apple-touch-icon" href="assets/touch-icon.png" />
 <link rel="manifest" href="manifest.json" />
@@ -39,8 +44,11 @@ if (location.protocol !== "file:" && location.search.indexOf("test=1") < 0 && lo
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
 html,body{margin:0;padding:0;background:#131019;overscroll-behavior:none;overflow-x:hidden;-webkit-text-size-adjust:100%}
+/* 100dvh は iOS Safari のツールバー表示分を差し引いた「実際に見えている高さ」に追従する。
+   従来の 100vh（＝ツールバーを隠した最大高さ）だと表示領域より数px高くなり、その差だけ
+   ページ全体が微スクロールしてズレていた。未対応ブラウザ向けに 100vh を先に書いて上書きする */
 body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-#root{min-height:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+#root{min-height:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;padding:0;margin:0}
 button:active{filter:brightness(1.12)}
 .relative{position:relative}.absolute{position:absolute}.fixed{position:fixed}
@@ -4083,7 +4091,7 @@ function DropBattle() {
   }, 0) - effDef) + poisonPreview; // 毒は防御無視で確定発生するため別枠で加算
   const rootStyle = {
     fontFamily: FONT,
-    minHeight: "calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
+    minHeight: "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
     background: '#141019 url("assets/bg_texture.jpg") repeat', backgroundSize:"512px",
     color: "#f4eef9",
     WebkitUserSelect: "none",
@@ -4155,7 +4163,7 @@ function DropBattle() {
 
   // ===== タイトル =====
   if (status === "title") {
-    return h("div", { style: { fontFamily:FONT, minHeight:"calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))", background:'#0d131a url("assets/bg_texture.jpg") repeat', backgroundSize:"512px", color:"#ece7f2", position:"relative", overflow:"hidden", WebkitUserSelect:"none", userSelect:"none", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"space-between", padding:"clamp(28px,6vh,56px) 20px clamp(24px,5vh,44px)", textAlign:"center" } },
+    return h("div", { style: { fontFamily:FONT, minHeight:"calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))", background:'#0d131a url("assets/bg_texture.jpg") repeat', backgroundSize:"512px", color:"#ece7f2", position:"relative", overflow:"hidden", WebkitUserSelect:"none", userSelect:"none", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"space-between", padding:"clamp(28px,6vh,56px) 20px clamp(24px,5vh,44px)", textAlign:"center" } },
       h("img", { src:"assets/bg_title2.jpg", alt:"", draggable:false, className:"title-bg", style:{ position:"absolute", inset:0, width:"100%", height:"100%" } }),
       h("div", { style:{ position:"absolute", inset:0, background:"linear-gradient(180deg, rgba(10,14,20,.42) 0%, rgba(10,14,20,0) 30%, rgba(10,14,20,0) 62%, rgba(10,14,20,.7) 100%)" } }),
       h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
@@ -4256,7 +4264,7 @@ function DropBattle() {
     const uraOpen = selOpen && charState.c.includes(selView);            // このキャラで裏に挑めるか
     const effMode = uraOpen && selMode === "ura" ? "ura" : "omote";      // 実際に開始するモード
     const URA_C = "#b06af0";                                             // 裏のテーマ色
-    return h("div", { style:{ fontFamily:FONT, minHeight:"calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))", background:'#0d131a url("assets/bg_texture.jpg") repeat', backgroundSize:"512px", color:"#ece7f2", WebkitUserSelect:"none", userSelect:"none", padding:"clamp(12px,2.5vh,24px) 16px clamp(16px,3.5vh,30px)", display:"flex", flexDirection:"column" } },
+    return h("div", { style:{ fontFamily:FONT, minHeight:"calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))", background:'#0d131a url("assets/bg_texture.jpg") repeat', backgroundSize:"512px", color:"#ece7f2", WebkitUserSelect:"none", userSelect:"none", padding:"clamp(12px,2.5vh,24px) 16px clamp(16px,3.5vh,30px)", display:"flex", flexDirection:"column" } },
       h("div", { style:{ maxWidth:440, margin:"0 auto", width:"100%", flex:1, display:"flex", flexDirection:"column" } },
         h("div", { className:"flex items-center justify-between mb-1" },
           h("button", { onClick: () => { setStatus("title"); statusRef.current = "title"; SFX.tap(); }, className:"text-xs px-3 py-1.5 rounded-lg", style:{ background:"rgba(255,255,255,.1)", color:"#c9bfe0", border:"1px solid #453b5c" } }, "◀ 戻る"),
@@ -5005,7 +5013,7 @@ function DropBattle() {
     const cardNodes = selIds.map(id => map.nodes.find(n => n.id === id)).filter(Boolean).sort((a, b) => a.row - b.row || a.col - b.col);
     return h("div", { style: rootStyle, className:"w-full flex justify-center px-3 py-2" },
       // スマホでは下に大きく余るため、画面全体を縦flexにしてマップパネルへ縦空間を配分する
-      h("div", { key:"scr-map", className:"w-full fade-in", style:{ maxWidth:440, display:"flex", flexDirection:"column", minHeight:"calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px)" } },
+      h("div", { key:"scr-map", className:"w-full fade-in", style:{ maxWidth:440, display:"flex", flexDirection:"column", minHeight:"calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px)" } },
         header,
         relicBarEl,
         h("div", { className:"flex items-center gap-2 rounded-xl px-3 py-1.5 mb-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c5a48" } },
