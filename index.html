@@ -5480,12 +5480,15 @@ function DropBattle() {
         const isUsed = used.has(key);
         const isSel = action === key && !isUsed;
         const crossBonus = !isSel && selEff ? (key === "atk" ? selEff.splitAtk : key === "def" ? selEff.splitDef : selEff.healBonus) : 0;
-        const mkBreakdown = (total, base, bonus, tc) => h("span", { style:{ display:"flex", alignItems:"baseline", gap:2, justifyContent:"center" } },
+        const mkBreakdown = (total, base, bonus, tc) => h("span", { style:{ display:"inline-flex", alignItems:"baseline", gap:2, justifyContent:"center" } },
           h("span", { style:{ fontSize:"1.15rem", color:tc, fontWeight:900, textShadow:`0 0 8px ${tc}` } }, total),
           h("span", { style:{ fontSize:"0.58rem", opacity:0.6 } }, `(+${bonus})`));
+        const mkTotal = (total, tc) => h("span", { style:{ fontSize:"1.15rem", color:tc, fontWeight:900, textShadow:`0 0 8px ${tc}` } }, total);
         let valEl;
         const bAn = buffAnim && buffAnim.st === key ? buffAnim : null;
         const sAn = storeAnim && (key === "atk" || key === "def") ? storeAnim : null;
+        // ノアの蓄積は予約中（解決前）も攻撃・防御へ「+N」を出しっぱなしにする。段階演出中は出さない
+        const storeAdd = (!bAn && !sAn && (key === "atk" || key === "def") && tv.storePend) ? tv.storePend.add : null;
         if (bAn) {
           // ガレス強化の段階表示: 元の値 → 「元の値 ×倍率」 → 最終値（金色・倍率を併記）
           valEl = bAn.stage === 1 ? String(bAn.from)
@@ -5507,15 +5510,17 @@ function DropBattle() {
           if (key === "def") v += selEff.splitDef;
           if (key === "heal") v += selEff.healBonus;
           const base = dispTv[key];
-          valEl = base > 0 ? mkBreakdown(base + v, base, v, info && info.mult > 1 ? "#ffe88a" : "#fff") : `+${v}`;
+          const tc = info && info.mult > 1 ? "#ffe88a" : "#fff";
+          // 蓄積(+N)と併記するときは「(+bonus)」内訳を省いて合計だけにする（3つ並ぶと段差になるため）
+          valEl = base > 0 ? (storeAdd != null ? mkTotal(base + v, tc) : mkBreakdown(base + v, base, v, tc)) : `+${v}`;
         } else if (crossBonus > 0) {
           const base = dispTv[key];
-          valEl = base > 0 ? mkBreakdown(base + crossBonus, base, crossBonus, "#ffcf5d") : `+${crossBonus}`;
+          valEl = base > 0 ? (storeAdd != null ? mkTotal(base + crossBonus, "#ffcf5d") : mkBreakdown(base + crossBonus, base, crossBonus, "#ffcf5d")) : `+${crossBonus}`;
         } else valEl = String(dispTv[key]);
-        // ノアの蓄積は予約中（解決前）も攻撃・防御の両方に「+N」を出しっぱなしにする
-        if (!bAn && !sAn && (key === "atk" || key === "def") && tv.storePend) {
-          valEl = h("span", null, valEl,
-            h("span", { style:{ color:"#b9a4ff", fontSize:"0.82rem", marginLeft:3, fontWeight:900 } }, "+" + tv.storePend.add));
+        // 蓄積の「+N」は合計値と同じ1行に並べる（inline-flex/nowrap で段差にしない）
+        if (storeAdd != null) {
+          valEl = h("span", { style:{ display:"inline-flex", alignItems:"baseline", gap:3, whiteSpace:"nowrap" } }, valEl,
+            h("span", { style:{ color:"#b9a4ff", fontSize:"0.82rem", fontWeight:900 } }, "+" + storeAdd));
         }
         // 強化の倍率計算中は対象ボタン、蓄積の加算中は攻撃・防御の両方を光らせる（暗転も解除）。
         // 光らせるのは計算中の stage2 だけ。stage3（×倍率を出したまま待つ段階）は
