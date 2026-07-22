@@ -2913,16 +2913,33 @@ function DropBattle() {
     // 効果とHP消費はコイントスの後（成功=効果のみ・ノーコスト／失敗=HPだけ払う）
     if (act === "heal" && skill === "gamble") {
       const cell = boardRef.current[idx];
-      // お邪魔だけのグループには賭けられない（コスト0で無効）。「無効」を出してコイントスも起こさない（アクション消費なし）
-      const showVoid = () => { SFX.tap(); setGambleVoid({ key: UID++ }); setTimeout(() => setGambleVoid(null), 1000); };
-      if (cell.type === JUNK) { showVoid(); return; }
       const gCoreK = CORE_BY_COLOR[cell.type];
       const gx = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed[gCoreK]);
+      const ginfo = groupInfo(boardRef.current, gx.ids);
+      // お邪魔だけのグループに賭けても効果ゼロ（コスト0で無効）。「無効」を出し、お邪魔は盤面から消すが
+      // コイントスは開かず効果も発動しない。賭けアクション自体はしっかり消費してターンを進める（ムダ撃ち扱い）
+      if (cell.type === JUNK || ginfo.junk) {
+        SFX.tap();
+        setGambleVoid({ key: UID++ }); setTimeout(() => setGambleVoid(null), 1000);
+        const { next } = refill(boardRef.current, gx.ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
+        const clearedIdxs = [];
+        boardRef.current.forEach((c, i) => { if (gx.ids.has(c.id)) clearedIdxs.push(i); });
+        const nu = new Set(usedRef.current); nu.add("heal");
+        setUsed(nu); usedRef.current = nu;
+        setLocked(true); lockedRef.current = true;
+        flyParticles(clearedIdxs, "heal");
+        setClearing(new Set(gx.ids));
+        SFX.clear();
+        setTimeout(() => {
+          commitBoard(next); setClearing(new Set()); syncBag();
+          if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
+          else { const na = nextInOrder(nu); setAction(na); actionRef.current = na; setLocked(false); lockedRef.current = false; }
+        }, FAST ? 40 : 240);
+        return;
+      }
       if (gx.blast) turnRef.current.blastUsed = true;
       if (gx.cross) turnRef.current.crossUsed = true;
       if (gx.red.length) turnRef.current.coreUsed[gCoreK] = true; // 核レリックは色ごとに1ターン1回
-      const ginfo = groupInfo(boardRef.current, gx.ids);
-      if (ginfo.junk) { showVoid(); return; }
       const count = ginfo.count;
       const mode = gambleModeRef.current;
       const cost = gambleCost(mode, count) * ginfo.mult; // 外したときに失うHP（成功時は0）。スター/トリプル倍率は効果と揃える
