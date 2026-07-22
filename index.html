@@ -1039,7 +1039,7 @@ const expandClear = (b, idx, blastOk, crossOk, coreOk) => {
       });
     }
   }
-  // 核レリック: タップした色の核を持っていれば、タップした素の同色グループの各ドロップの上下も爆破（赤/黄/紫/翠の4色・1ターン1回）。
+  // 核レリック: タップした色の核を持っていれば、タップした素の同色グループの各ドロップの上下も爆破（赤/黄/紫/翠の4色）。発動制限は色ごとに1ターン1回（緑と紫を両方持てば別々に発動）。
   // 爆破核/十字晶/X字晶・爆弾・雷などに「巻き込まれて」消える同色は起点にしない＝連鎖しない
   const coreK = CORE_BY_COLOR[b[idx].type];
   if (coreK && hasR(coreK) && coreOk !== false) {
@@ -1882,7 +1882,7 @@ function DropBattle() {
     try { base = localStorage.getItem("db_tut") || ""; seen = localStorage.getItem("db_tut_sp") || ""; } catch (e) {}
     if (base && !seen) setSpTut(0);
   }, [turn, status, tut, gtut, ctut]);
-  const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false, aoe:false, aoeUp:false });
+  const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false, aoe:false, aoeUp:false, coreUsed: {} });
   const turnRef = useRef(freshTurn());
   const syncTurn = () => setTv({ ...turnRef.current });
 
@@ -2912,10 +2912,11 @@ function DropBattle() {
     if (act === "heal" && skill === "gamble") {
       const cell = boardRef.current[idx];
       if (cell.type === JUNK) { SFX.tap(); return; } // お邪魔だけのグループには賭けられない（アクション消費なし）
-      const gx = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed);
+      const gCoreK = CORE_BY_COLOR[cell.type];
+      const gx = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed[gCoreK]);
       if (gx.blast) turnRef.current.blastUsed = true;
       if (gx.cross) turnRef.current.crossUsed = true;
-      if (gx.red.length) turnRef.current.coreUsed = true;
+      if (gx.red.length) turnRef.current.coreUsed[gCoreK] = true; // 核レリックは色ごとに1ターン1回
       const ginfo = groupInfo(boardRef.current, gx.ids);
       if (ginfo.junk) { SFX.tap(); return; }
       const count = ginfo.count;
@@ -2963,10 +2964,11 @@ function DropBattle() {
       }, FAST ? 40 : 240);
       return;
     }
-    const { ids, seedJunk, blast, cross, red } = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed);
+    const coreK = CORE_BY_COLOR[boardRef.current[idx].type];
+    const { ids, seedJunk, blast, cross, red } = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed[coreK]);
     if (blast) turnRef.current.blastUsed = true;
     if (cross) turnRef.current.crossUsed = true; // 十字晶は1ターン1回
-    if (red.length) turnRef.current.coreUsed = true; // 核レリックも1ターン1回
+    if (red.length) turnRef.current.coreUsed[coreK] = true; // 核レリックは色ごとに1ターン1回（緑と紫など別色は個別に発動）
     const info = groupInfo(boardRef.current, ids);
     const eff = computeEffect(act, info);
     const pureCount = findGroup(boardRef.current, idx).size; // 「同じ色を◯個」の判定は素の同色グループ数で
@@ -3435,7 +3437,7 @@ function DropBattle() {
         charSkillRef.current === "smith" && smithModeRef.current !== "stock") {
       const grp = findGroup(b, idx); return { ids:grp, over:true, info: groupInfo(b, grp) };
     }
-    const { ids } = expandClear(b, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed);
+    const { ids } = expandClear(b, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed[CORE_BY_COLOR[b[idx].type]]);
     return { ids, over:true, info: groupInfo(b, ids) };
   };
   useEffect(() => {
@@ -3783,7 +3785,10 @@ function DropBattle() {
       const tgt = ens.find(e => e.id === sv.target && e.alive) || ens.find(e => e.alive) || ens[0];
       if (tgt) { setTargetId(tgt.id); targetRef.current = tgt.id; }
       restoreBoard();
-      turnRef.current = { ...freshTurn(), ...(sv.tv || {}) }; syncTurn();
+      turnRef.current = { ...freshTurn(), ...(sv.tv || {}) };
+      // 旧セーブ互換: coreUsed は色ごとのオブジェクトに正規化（旧版は boolean）
+      if (!turnRef.current.coreUsed || typeof turnRef.current.coreUsed !== "object") turnRef.current.coreUsed = {};
+      syncTurn();
       setTurn(sv.turnNum || 1); turnNumRef.current = sv.turnNum || 1;
       const us = new Set(sv.used || []); setUsed(us); usedRef.current = us;
       const nxt = actOrderRef.current.find(k => !us.has(k)) || actOrderRef.current[0];
