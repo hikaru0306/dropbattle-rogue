@@ -17,3 +17,13 @@ shot_*.png
 # 作業用（公開リポジトリに入れない）
 color_feedback_sheet.mjs
 *.xlsx
+
+# テクスチャ差し替え作業用（2026-07）
+assets_regen_raw/
+assets_backup_pre_chatgpt/
+assets_before_minimal/
+assets_removed/
+regen_*.png
+retex_targets.txt
+retex_check.html
+redo_pick.html

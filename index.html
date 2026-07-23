@@ -229,7 +229,7 @@ const BATTLE_BGS = ["assets/bg_battle.jpg", "assets/bg_battle2.jpg", "assets/bg_
 const ACT_POOLS = [
   { light:["slime","bat","wolf","bee","crow","pixie"], mid:["slime","wolf","spore","mandra","pixie","fox","crow"], heavy:["imp","boar","snail","mandra","fox"] },
   { light:["bat","shade","eel","wisp","toad"], mid:["shade","toad","eel","wisp","sludge","spore","turtle"], heavy:["golem","mudman","crab","scorp","turtle"] },
-  { light:["shade","hound","skel","sala"], mid:["scorp","sala","hound","skel","ifrita","spore","wraith"], heavy:["golem","gargo","knight","bomber","wraith"] }
+  { light:["shade","hound","skel","ifrita"], mid:["scorp","ifrita","hound","skel","spore","wraith","bomber"], heavy:["golem","gargo","knight","bomber","wraith"] }
 ];
 // ===== 裏ステージ（各キャラで表3章クリア → そのキャラで挑戦可能。全5章・高難度） =====
 const URA_ACTS = 5;
@@ -490,7 +490,6 @@ const KINDS = {
   crab:  { name:"シザークラブ", hp:160, atk:32, size:62, idle:"b", bigMul:2.0, pats:[["attack","attack","bigatk"], ["double","charge","bigatk"]] },
   sludge:{ name:"ヘドロスライム", hp:135, atk:30, size:58, idle:"a", jamN:3, pats:[["jam","attack"], ["jamatk","attack"], ["poison","jam","attack"]] },
   turtle:{ name:"ロックタートル", hp:195, atk:30, size:62, idle:"b", bigMul:2.4, pats:[["charge","bigatk"], ["charge","charge","bigatk"], ["attack","charge","charge","bigatk"]] },
-  sala:  { name:"サラマンドラ", hp:140, atk:35, size:60, idle:"a", bigMul:1.8, pats:[["attack","bigatk"], ["attack","attack","bigatk"], ["double","bigatk"]] },
   bomber:{ name:"ボムデビル",   hp:130, atk:32, size:58, idle:"f", bigMul:3.0, pats:[["charge","bigatk"], ["attack","charge","bigatk"]] },
   knight:{ name:"ダークナイト", hp:180, atk:34, size:66, idle:"b", bigMul:2.2, pats:[["attack","attack","bigatk"], ["double","charge","bigatk"], ["attack","charge","bigatk","double"]] },
   hound: { name:"ヘルハウンド", hp:130, atk:31, size:60, idle:"a", bigMul:2.0, pats:[["double","attack","bigatk"], ["double","double","bigatk"]] },
@@ -601,7 +600,7 @@ const chargeLeft = en => {
 const SHIELDS = {
   snail:{sh:25,c:0.55}, boar:{sh:15,c:0.5}, crow:{sh:12,c:0.35},
   turtle:{sh:30,c:0.55}, golem:{sh:25,c:0.45}, mudman:{sh:20,c:0.5}, crab:{sh:22,c:0.5}, toad:{sh:15,c:0.45},
-  gargo:{sh:30,c:0.55}, knight:{sh:25,c:0.5}, skel:{sh:15,c:0.4}, sala:{sh:15,c:0.4},
+  gargo:{sh:30,c:0.55}, knight:{sh:25,c:0.5}, skel:{sh:15,c:0.4},
   kslime:{sh:25,c:0.4}, treant:{sh:40,c:0.5}, alraune:{sh:30,c:0.45},
   vamp:{sh:25,c:0.4}, lich:{sh:35,c:0.45}, toadking:{sh:30,c:0.4},
   demon:{sh:50,c:0.45}, dragon:{sh:60,c:0.45}, ifrit:{sh:45,c:0.45}, reaper:{sh:70,c:0.4},
