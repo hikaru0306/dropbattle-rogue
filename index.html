@@ -10,6 +10,11 @@
 <meta property="og:type" content="website" />
 <meta property="og:image" content="https://hikaru0306.github.io/dropbattle-rogue/assets/bg_title2.jpg" />
 <meta name="theme-color" content="#131019" />
+<!-- iOSでホーム画面に追加したとき、Safariのツールバー無しの全画面(standalone)で起動する。これにより100vhと実表示領域の差で生じる微スクロールが起きない -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="ドロプシア" />
 <link rel="icon" type="image/png" href="assets/favicon.png" />
 <link rel="apple-touch-icon" href="assets/touch-icon.png" />
 <link rel="manifest" href="manifest.json" />
@@ -39,8 +44,11 @@ if (location.protocol !== "file:" && location.search.indexOf("test=1") < 0 && lo
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
 html,body{margin:0;padding:0;background:#131019;overscroll-behavior:none;overflow-x:hidden;-webkit-text-size-adjust:100%}
+/* 100dvh は iOS Safari のツールバー表示分を差し引いた「実際に見えている高さ」に追従する。
+   従来の 100vh（＝ツールバーを隠した最大高さ）だと表示領域より数px高くなり、その差だけ
+   ページ全体が微スクロールしてズレていた。未対応ブラウザ向けに 100vh を先に書いて上書きする */
 body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-#root{min-height:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+#root{min-height:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;padding:0;margin:0}
 button:active{filter:brightness(1.12)}
 .relative{position:relative}.absolute{position:absolute}.fixed{position:fixed}
@@ -279,6 +287,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
+const APP_VERSION = "0.0.1"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -975,19 +984,20 @@ const expandIds = (cells, ids) => {
 const groupInfo = (cells, ids) => {
   const sp = initZero();
   const spu = initZero();
-  let junkCnt = 0;
+  let junkCnt = 0, realCnt = 0;
   for (const cell of cells) if (ids.has(cell.id)) {
     if (cell.special && sp[cell.special] !== undefined) { sp[cell.special]++; if (cell.up) spu[cell.special]++; }
-    if (cell.type === JUNK) junkCnt++;
+    if (cell.type === JUNK) junkCnt++; else realCnt++;
   }
-  const junk = junkCnt > 0 && junkCnt === ids.size; // 全部お邪魔のときだけ効果ゼロ
-  const base = ids.size + sp.plus + spu.plus + spu.pierce + spu.bolt * 3; // ＋/貫＋/雷＋のボーナス込み
+  const junk = junkCnt > 0 && realCnt === 0; // 全部お邪魔のときだけ効果ゼロ
+  // お邪魔（敵が生成）は数に含めない＝爆破等で巻き込んで消えても効果ゼロ（賭博師のコスト/効果もお邪魔ぶんは増えない）
+  const base = realCnt + sp.plus + spu.plus + spu.pierce + spu.bolt * 3; // ＋/貫＋/雷＋のボーナス込み
   let mult = 1;
   const starOn = sp.star > 0 && base >= Math.max(4, STAR_THRESHOLD - (hasR("starbook") ? 1 : 0));
   if (starOn) mult *= 1 + sp.star + spu.star; // 強化★は1つで3倍（★の数×2+1倍）。発動個数は強化で変わらない
-  const threeOn = ids.size === 3;
+  const threeOn = realCnt === 3;
   if (sp.three > 0 && threeOn) mult *= spu.three > 0 ? 4 : 3;
-  return { count:ids.size, base, sp, spu, mult, starOn, threeOn: threeOn && sp.three > 0, junk };
+  return { count:realCnt, base, sp, spu, mult, starOn, threeOn: threeOn && sp.three > 0, junk };
 };
 const perOf = act =>
   (CUR_SKILL === "recolor" && act !== "heal" ? 8 : ACTIONS[act].per) // イリスは攻/防の基礎値8（色変えで大グループを作れる代償）
@@ -1030,7 +1040,7 @@ const expandClear = (b, idx, blastOk, crossOk, coreOk) => {
       });
     }
   }
-  // 核レリック: タップした色の核を持っていれば、タップした素の同色グループの各ドロップの上下も爆破（赤/黄/紫/翠の4色・1ターン1回）。
+  // 核レリック: タップした色の核を持っていれば、タップした素の同色グループの各ドロップの上下も爆破（赤/黄/紫/翠の4色）。発動制限は色ごとに1ターン1回（緑と紫を両方持てば別々に発動）。
   // 爆破核/十字晶/X字晶・爆弾・雷などに「巻き込まれて」消える同色は起点にしない＝連鎖しない
   const coreK = CORE_BY_COLOR[b[idx].type];
   if (coreK && hasR(coreK) && coreOk !== false) {
@@ -1445,8 +1455,8 @@ function HpBar({ value, max, height, fontSize, flash, shield, broken }) {
       h("div", { style:{ position:"absolute", left:0, top:0, height:"100%", width:pct+"%", background:"#e8963c", transition:"width .45s ease .3s" } }),
       h("div", { style:{ position:"absolute", left:0, top:0, height:"100%", width:pct+"%", background: sh ? "linear-gradient(180deg,#4a7cb4 0%,#2b4d88 100%)" : "linear-gradient(180deg,#c9463f 0%,#96201f 100%)", transition:"width .12s ease" } }),
       // 撃破時(0)は数値を出さない（敵のフェードアウト中に「0/130」が残って見えるため）
-      // translateY(-0.5px) はフォントメトリクス由来の見た目下ズレの補正（padding方式はバー高さごとに丸めが変わり効かないバーが出る。実測でバー中心に合わせた）
-      value > 0 && h("span", { style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", transform:"translateY(-0.75px)", fontWeight:700, fontSize, lineHeight:1, color: flash || "#fff", transition:"color .3s",
+      // translateY(0.75px) はフォントメトリクス由来の見た目上ズレの補正（数字グリフはディセンダを持たないため行ボックス中央より高く見える。padding方式はバー高さごとに丸めが変わり効かないバーが出るため実測でバー中心に合わせた）
+      value > 0 && h("span", { style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", transform:"translateY(0.75px)", fontWeight:700, fontSize, lineHeight:1, color: flash || "#fff", transition:"color .3s",
         textShadow:"0 1px 1px rgba(0,0,0,.9), 0 0 2px rgba(0,0,0,.7)", fontVariantNumeric:"tabular-nums", letterSpacing:"0.02em" } }, value, "/", max)),
     // バッジはバーの上辺に3pxだけ乗せる（深く重ねると幅の狭い敵バーでHP数値の先頭が隠れる）
     (sh || broken) && h("span", { className:"flex items-center", style:{ position:"absolute", left:-3, top:-14, gap:2, padding:"1px 5px", borderRadius:8,
@@ -1873,7 +1883,7 @@ function DropBattle() {
     try { base = localStorage.getItem("db_tut") || ""; seen = localStorage.getItem("db_tut_sp") || ""; } catch (e) {}
     if (base && !seen) setSpTut(0);
   }, [turn, status, tut, gtut, ctut]);
-  const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false, aoe:false, aoeUp:false });
+  const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false, aoe:false, aoeUp:false, coreUsed: {} });
   const turnRef = useRef(freshTurn());
   const syncTurn = () => setTv({ ...turnRef.current });
 
@@ -1940,6 +1950,7 @@ function DropBattle() {
   const [hurtSeq, setHurtSeq] = useState(0);            // 賭博師: 賭け失敗の赤い被弾フラッシュ
   const [wildFx, setWildFx] = useState(new Set());      // 賭博師: 虹変換バースト中のセル番号
   const [gambleDmg, setGambleDmg] = useState(null);     // 賭博師: ウィンドウが閉じた後に画面中央へ出す大ダメージ {cost,key}
+  const [gambleVoid, setGambleVoid] = useState(null);   // 賭博師: お邪魔のみに賭けたとき「無効」を出す {key}
   const [pops, setPops] = useState({}); // ダメージポップ {key:{text,color,seq}}
   const popSeq = useRef(0);
   const addPop = (key, text, color, icon) => {
@@ -2775,7 +2786,7 @@ function DropBattle() {
     setGambleAsk(null); gamblePendRef.current = null; // 賭けのコイントスもバトルごとに掃除
     // フラッシュ/シェイクの連番をリセット。残したままだとシーンDOMの再マウントで
     // CSSアニメが頭から再生され、バトル開始時に赤フラッシュ等が一瞬出てしまう
-    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null);
+    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null); setGambleVoid(null);
     setPoison(0); // 毒はバトルごとにリセット
     soloShownRef.current = false;
     turnRef.current = freshTurn(); syncTurn();
@@ -2902,16 +2913,36 @@ function DropBattle() {
     // 効果とHP消費はコイントスの後（成功=効果のみ・ノーコスト／失敗=HPだけ払う）
     if (act === "heal" && skill === "gamble") {
       const cell = boardRef.current[idx];
-      if (cell.type === JUNK) { SFX.tap(); return; } // お邪魔だけのグループには賭けられない（アクション消費なし）
-      const gx = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed);
+      const gCoreK = CORE_BY_COLOR[cell.type];
+      const gx = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed[gCoreK]);
+      const ginfo = groupInfo(boardRef.current, gx.ids);
+      // お邪魔だけのグループに賭けても効果ゼロ（コスト0で無効）。「無効」を出し、お邪魔は盤面から消すが
+      // コイントスは開かず効果も発動しない。賭けアクション自体はしっかり消費してターンを進める（ムダ撃ち扱い）
+      if (cell.type === JUNK || ginfo.junk) {
+        SFX.tap();
+        setGambleVoid({ key: UID++ }); setTimeout(() => setGambleVoid(null), 1000);
+        const { next } = refill(boardRef.current, gx.ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
+        const clearedIdxs = [];
+        boardRef.current.forEach((c, i) => { if (gx.ids.has(c.id)) clearedIdxs.push(i); });
+        const nu = new Set(usedRef.current); nu.add("heal");
+        setUsed(nu); usedRef.current = nu;
+        setLocked(true); lockedRef.current = true;
+        flyParticles(clearedIdxs, "heal");
+        setClearing(new Set(gx.ids));
+        SFX.clear();
+        setTimeout(() => {
+          commitBoard(next); setClearing(new Set()); syncBag();
+          if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
+          else { const na = nextInOrder(nu); setAction(na); actionRef.current = na; setLocked(false); lockedRef.current = false; }
+        }, FAST ? 40 : 240);
+        return;
+      }
       if (gx.blast) turnRef.current.blastUsed = true;
       if (gx.cross) turnRef.current.crossUsed = true;
-      if (gx.red.length) turnRef.current.coreUsed = true;
-      const ginfo = groupInfo(boardRef.current, gx.ids);
-      if (ginfo.junk) { SFX.tap(); return; }
+      if (gx.red.length) turnRef.current.coreUsed[gCoreK] = true; // 核レリックは色ごとに1ターン1回
       const count = ginfo.count;
       const mode = gambleModeRef.current;
-      const cost = gambleCost(mode, count); // 外したときに失うHP（成功時は0）
+      const cost = gambleCost(mode, count) * ginfo.mult; // 外したときに失うHP（成功時は0）。スター/トリプル倍率は効果と揃える
       // 賭けチップ（ジン専用）: グループ内の枚数だけ、外れたときに自動でコイントスをやり直す（＋化は2回分）
       const retries = ((ginfo.sp.chip || 0) - (ginfo.spu.chip || 0)) + (ginfo.spu.chip || 0) * 2;
       // 特殊ドロップのアクション非依存効果（剣/盾/ハート/金貨/貫通）は賭けでも発動する。
@@ -2936,28 +2967,74 @@ function DropBattle() {
       if (gll.length) addLog([gll.join(" / ")]);
       const { next, newPositions } = refill(boardRef.current, gx.ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
       // 賭けを持ち回る（消去演出の後にオーバーレイを開く）。newPositions は虹の賭けの落下先
-      // mult=スター/トリプル倍率。効果にだけ乗る（コストは素のcountのまま）
+      // mult=スター/トリプル倍率。効果とHPコストの両方に乗る（cost は上で mult 済み）
       gamblePendRef.current = { mode, cost, count, retries, newPositions, mult: ginfo.mult };
       const nu = new Set(usedRef.current); nu.add("heal");
       gambleUsedRef.current = nu; // 結果確定後にこの used でターン進行を判定
       setUsed(nu); usedRef.current = nu;
-      const clearedIdxs = [];
-      boardRef.current.forEach((c, i) => { if (gx.ids.has(c.id)) clearedIdxs.push(i); });
+      // 消去演出（爆破/十字晶/核/雷/ライン等）を通常消去と同じ段階演出で再生し、演出が終わってからコイントスへ入る
+      const clearedIdxs = [], bombIdxs = [];
+      boardRef.current.forEach((c, i) => { if (gx.ids.has(c.id)) { clearedIdxs.push(i); if (c.special === "bombx" || c.special === "bombd") bombIdxs.push(i); } });
+      const baseIds = findGroup(boardRef.current, idx);
+      const hasExtra = gx.ids.size > baseIds.size;
+      const linevCols = [...new Set(boardRef.current.map((c, i) => (gx.ids.has(c.id) && c.special === "linev") ? (i % SIZE) : -1).filter(x => x >= 0))];
+      const linehRows = [...new Set(boardRef.current.map((c, i) => (gx.ids.has(c.id) && c.special === "lineh") ? ((i / SIZE) | 0) : -1).filter(x => x >= 0))];
+      const boltExtra = boardRef.current.map((c, i) => (gx.ids.has(c.id) && !baseIds.has(c.id) && ginfo.sp.bolt > 0) ? i : -1).filter(i => i >= 0);
+      const r0 = Math.floor(idx / SIZE), c0 = idx % SIZE;
+      const xgTrig = hasR("xgem") && baseIds.size === 5 && hasExtra;
+      const playEffects = () => {
+        const explode = bombIdxs.slice();
+        if (gx.blast) explode.push(idx);
+        if (xgTrig) {
+          for (let d = 1; d < SIZE; d++) {
+            [[r0 + d, c0 + d], [r0 + d, c0 - d], [r0 - d, c0 + d], [r0 - d, c0 - d]].forEach(rc => {
+              if (rc[0] >= 0 && rc[0] < SIZE && rc[1] >= 0 && rc[1] < SIZE) explode.push(rc[0] * SIZE + rc[1]);
+            });
+          }
+          explode.push(idx);
+        }
+        if (explode.length) boomAt(explode);
+        let sweptLine = false;
+        linevCols.forEach(c => { barBlast("v", colCells(c)); sweptLine = true; });
+        linehRows.forEach(r => { barBlast("h", rowCells(r)); sweptLine = true; });
+        if (gx.cross) { barBlast("v", colCells(c0)); barBlast("h", rowCells(r0)); boomAt([idx]); sweptLine = true; }
+        if (gx.red && gx.red.length) {
+          const N2 = SIZE * SIZE;
+          gx.red.forEach(i => barBlast("v", [i - SIZE, i, i + SIZE].filter(k => k >= 0 && k < N2 && (k % SIZE) === (i % SIZE))));
+          SFX.crack();
+        }
+        if (sweptLine) SFX.swish();
+        if (boltExtra.length) lightningAt(boltExtra);
+      };
+      // 消去演出が終わってから天使/悪魔のコイントスを開く（この時点では効果もHP消費も未発動）
+      const openCoin = () => setGambleAsk({ mode, cost, count, retries, mult: ginfo.mult, phase: "pick", pick: null, face: null, win: null });
+      const finishBetClear = () => { commitBoard(next); setClearing(new Set()); syncBag(); openCoin(); };
       setLocked(true); lockedRef.current = true;
-      flyParticles(clearedIdxs, "heal");
-      setClearing(new Set(gx.ids));
       SFX.clear();
-      setTimeout(() => {
-        commitBoard(next); setClearing(new Set()); syncBag();
-        // 消した直後に天使/悪魔のコイントスへ（この時点では効果もHP消費も未発動）
-        setGambleAsk({ mode, cost, count, retries, mult: ginfo.mult, phase: "pick", pick: null, face: null, win: null });
-      }, FAST ? 40 : 240);
+      if (!hasExtra) {
+        if (bombIdxs.length) boomAt(bombIdxs);
+        flyParticles(clearedIdxs, "heal");
+        setClearing(new Set(gx.ids));
+        setTimeout(finishBetClear, FAST ? 40 : 240);
+      } else {
+        // 段階演出: 通常範囲を消す → 爆破等エフェクト → 追加分を消す → コイントス
+        setClearing(new Set(baseIds));
+        setTimeout(() => {
+          playEffects();
+          setTimeout(() => {
+            setClearing(new Set(gx.ids));
+            flyParticles(clearedIdxs, "heal");
+            setTimeout(finishBetClear, FAST ? 30 : 220);
+          }, FAST ? 20 : 300);
+        }, FAST ? 20 : 190);
+      }
       return;
     }
-    const { ids, seedJunk, blast, cross, red } = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed);
+    const coreK = CORE_BY_COLOR[boardRef.current[idx].type];
+    const { ids, seedJunk, blast, cross, red } = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed[coreK]);
     if (blast) turnRef.current.blastUsed = true;
     if (cross) turnRef.current.crossUsed = true; // 十字晶は1ターン1回
-    if (red.length) turnRef.current.coreUsed = true; // 核レリックも1ターン1回
+    if (red.length) turnRef.current.coreUsed[coreK] = true; // 核レリックは色ごとに1ターン1回（緑と紫など別色は個別に発動）
     const info = groupInfo(boardRef.current, ids);
     const eff = computeEffect(act, info);
     const pureCount = findGroup(boardRef.current, idx).size; // 「同じ色を◯個」の判定は素の同色グループ数で
@@ -3153,17 +3230,21 @@ function DropBattle() {
   // ===== 賭博師のコイントス =====
   // コインの出目（テストでは coinRigRef で固定できる）
   const gambleFlip = () => coinRigRef.current || (Math.random() < 0.5 ? "angel" : "demon");
-  // 天使/悪魔を選択 → 回転演出 → 出目判定
+  // 天使/悪魔を選択 → 回転演出（一定時間で自動確定。回転中のタップで即確定も可）
   const gambleChoose = pick => {
     const ask = gambleAskRef.current;
     if (!ask || ask.phase !== "pick") return;
     SFX.pick();
     setGambleAsk({ ...ask, pick, phase: "spin", face: null, win: null });
-    setTimeout(() => gambleSpinDone(pick, ask.retries), FAST ? 120 : 1000);
+    setTimeout(() => gambleReveal(), FAST ? 120 : 1000); // 自動でも止まる（gambleReveal はspin時のみ動くのでタップと二重確定しない）
   };
-  // 回転が終わって出目が出た瞬間。外れ＆チップ残ありなら自動でやり直す
+  // 出目を確定させる（回転の自動終了 or 回転中のタップ）。外れ＆チップ残ありなら結果を見せてから投げ直し
   // 初回チュートリアル中はどちらを選んでも必ず的中させる（rigCoinより優先）
-  const gambleSpinDone = (pick, retriesLeft) => {
+  const gambleReveal = () => {
+    const ask = gambleAskRef.current;
+    if (!ask || ask.phase !== "spin") return; // 既に確定済み（タップ/自動のどちらか先勝ち）なら何もしない
+    const pick = ask.pick;
+    const retriesLeft = ask.retries;
     const face = (ctutRef.current && ctutRef.current.skill === "gamble") ? pick : gambleFlip();
     const win = face === pick;
     SFX.coin();
@@ -3171,7 +3252,7 @@ function DropBattle() {
       setGambleAsk(a => a ? { ...a, phase: "retry", face, win: false } : a);
       setTimeout(() => {
         setGambleAsk(a => a ? { ...a, phase: "spin", face: null, retries: retriesLeft - 1 } : a);
-        setTimeout(() => gambleSpinDone(pick, retriesLeft - 1), FAST ? 120 : 800);
+        setTimeout(() => gambleReveal(), FAST ? 120 : 800); // 投げ直しも自動で止まる（タップで即確定も可）
       }, FAST ? 140 : 900);
       return;
     }
@@ -3186,12 +3267,13 @@ function DropBattle() {
     const pend = gamblePendRef.current;
     if (!pend) { setGambleAsk(null); return; }
     const { mode, count, cost } = pend;
-    const starMul = pend.mult || 1; // スター/トリプル: 効果にだけ乗る（コストは素のcount基準のまま）
+    const starMul = pend.mult || 1; // スター/トリプル: 効果に乗る（HPコストは cost 側で mult 済み）
     const pactWin = win && pick === "demon" && hasR("devilpact"); // 悪魔の契約: 悪魔を当てたときだけ倍率アップ
     const boost = pactWin ? GAMBLE_PACT_MUL : 1;
     const scale = win ? 1 : (hasR("luckcoin") ? GAMBLE_LUCK_RATE : 0); // 幸運の銀貨: 外れても効果の50%
     const logs = [];
     let shownAmt = 0; // ボタン表示用の結果値（回復量/虹の数/倍率）
+    let animMs = 0;   // 虹変換など「消えるまで待つ」演出の所要ms（この間は盤面ロックを維持）
     if (scale > 0) {
       if (mode === "heal2") {
         // 回復はここでは発動しない。他キャラと同じくターン解決の回復フェーズで反映される（予約のみ）
@@ -3214,6 +3296,8 @@ function DropBattle() {
           setWildFx(s => { const ns = new Set(s); ns.add(ti); return ns; });
           setTimeout(() => setWildFx(s => { const ns = new Set(s); ns.delete(ti); return ns; }), 520);
         }, FAST ? 0 : 160 * k));
+        // 変換が全部終わるまで（最後の1個の変換＋演出ぶん）盤面を触れないようにする
+        animMs = FAST ? 0 : 160 * Math.max(0, targets.length - 1) + 320;
         shownAmt = targets.length;
         if (targets.length) logs.push(`🌈 虹の賭け${win ? "的中" : "（幸運）"}！虹ドロップ${targets.length}個`);
       } else {
@@ -3245,10 +3329,11 @@ function DropBattle() {
     }
     if (dead) return; // 敗北処理済み（盤面ロックのまま）
     if (ctutRef.current && ctutRef.current.skill === "gamble") ctutFinish(); // 賭けチュートリアルの締めへ
-    // コイントスは消した直後に解決する。3アクション目ならターン解決へ、まだなら次のアクションへ
+    // コイントスは消した直後に解決する。3アクション目ならターン解決へ、まだなら次のアクションへ。
+    // 虹変換など演出中(animMs>0)は、その間ずっと盤面ロックを維持し、完了後に解除して進める（変換中のタップを防ぐ）
     const nu = gambleUsedRef.current || usedRef.current;
-    if (nu.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
-    else { const na = nextInOrder(nu); setAction(na); actionRef.current = na; setLocked(false); lockedRef.current = false; }
+    if (nu.size >= 3) setTimeout(() => resolveTurn(), (FAST ? 60 : 350) + animMs);
+    else setTimeout(() => { const na = nextInOrder(nu); setAction(na); actionRef.current = na; setLocked(false); lockedRef.current = false; }, animMs);
   };
   // 賭け金の支払い。HPが0以下になったら敗北処理（不死鳥の羽で復活）を通す。敗北したら true
   const payGambleCost = cost => {
@@ -3426,7 +3511,7 @@ function DropBattle() {
         charSkillRef.current === "smith" && smithModeRef.current !== "stock") {
       const grp = findGroup(b, idx); return { ids:grp, over:true, info: groupInfo(b, grp) };
     }
-    const { ids } = expandClear(b, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed);
+    const { ids } = expandClear(b, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed[CORE_BY_COLOR[b[idx].type]]);
     return { ids, over:true, info: groupInfo(b, ids) };
   };
   useEffect(() => {
@@ -3556,6 +3641,33 @@ function DropBattle() {
   const [codeVal, setCodeVal] = useState("");
   const [codeMsg, setCodeMsg] = useState(null);
   const codeBufRef = useRef("");
+  // ===== バージョン更新チェック =====
+  // 起動時にサーバーの version.json を（キャッシュ無効で）取得し、ゲーム内 APP_VERSION より新しければ更新案内を出す
+  const [updateVer, setUpdateVer] = useState(null); // 新バージョン番号（あれば表示）
+  useEffect(() => {
+    let alive = true;
+    const isNewer = (a, b) => { // a が b より新しいか（数値セマンティック比較）
+      const pa = String(a).split("."), pb = String(b).split(".");
+      for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const x = parseInt(pa[i] || "0", 10) || 0, y = parseInt(pb[i] || "0", 10) || 0;
+        if (x !== y) return x > y;
+      }
+      return false;
+    };
+    fetch("version.json?t=" + Date.now(), { cache: "no-store" })
+      .then(r => (r && r.ok) ? r.json() : null)
+      .then(d => { if (alive && d && d.version && isNewer(d.version, APP_VERSION)) setUpdateVer(String(d.version)); })
+      .catch(() => {}); // オフラインや file:// では黙って無視（更新案内は出さない）
+    return () => { alive = false; };
+  }, []);
+  // 「今すぐ更新」: 可能ならキャッシュを破棄し、サーバーと再検証するリロードで最新版を取り込む
+  const doUpdate = () => {
+    const reload = () => { try { location.reload(); } catch (e) { location.href = location.href; } };
+    try {
+      if (window.caches && caches.keys) caches.keys().then(ks => Promise.all(ks.map(k => caches.delete(k)))).then(reload, reload);
+      else reload();
+    } catch (e) { reload(); }
+  };
   const logoTapRef = useRef({ n: 0, t: 0 });
   const unlockAll = () => {
     const all = [0, 1, 2, 3, 4, 5, 6];
@@ -3755,7 +3867,7 @@ function DropBattle() {
     setRestMsg(null); setAnims({}); setGuide(null);
     setBuffAnim(null); setStoreAnim(null); setDcapTut(null);
     // 連番を残すとシーン再マウントでCSSアニメが頭から再生される（v99の教訓）
-    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null);
+    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null); setGambleVoid(null);
     soloShownRef.current = false;
     setLocked(false); lockedRef.current = false;
     setFx([]);
@@ -3774,7 +3886,10 @@ function DropBattle() {
       const tgt = ens.find(e => e.id === sv.target && e.alive) || ens.find(e => e.alive) || ens[0];
       if (tgt) { setTargetId(tgt.id); targetRef.current = tgt.id; }
       restoreBoard();
-      turnRef.current = { ...freshTurn(), ...(sv.tv || {}) }; syncTurn();
+      turnRef.current = { ...freshTurn(), ...(sv.tv || {}) };
+      // 旧セーブ互換: coreUsed は色ごとのオブジェクトに正規化（旧版は boolean）
+      if (!turnRef.current.coreUsed || typeof turnRef.current.coreUsed !== "object") turnRef.current.coreUsed = {};
+      syncTurn();
       setTurn(sv.turnNum || 1); turnNumRef.current = sv.turnNum || 1;
       const us = new Set(sv.used || []); setUsed(us); usedRef.current = us;
       const nxt = actOrderRef.current.find(k => !us.has(k)) || actOrderRef.current[0];
@@ -4036,6 +4151,9 @@ function DropBattle() {
       rigCoin: face => { coinRigRef.current = face; }, // "angel"/"demon"/null
       setGambleMode: m => setGambleMode(m),
       gambleChoose: f => gambleChoose(f),
+      gambleReveal: () => gambleReveal(), // 回転中のタップ相当（出目を確定）
+      showUpdate: v => setUpdateVer(v ? String(v) : null), // 更新案内ウィンドウの表示テスト用
+      appVersion: () => APP_VERSION,
       gambleAsk: () => gambleAskRef.current ? { ...gambleAskRef.current } : null
     };
   }, []);
@@ -4082,7 +4200,7 @@ function DropBattle() {
   }, 0) - effDef) + poisonPreview; // 毒は防御無視で確定発生するため別枠で加算
   const rootStyle = {
     fontFamily: FONT,
-    minHeight: "calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
+    minHeight: "calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
     background: '#141019 url("assets/bg_texture.jpg") repeat', backgroundSize:"512px",
     color: "#f4eef9",
     WebkitUserSelect: "none",
@@ -4091,15 +4209,17 @@ function DropBattle() {
 
   // レリックが増えても段組みにせず、アイコン列だけ横スクロール（「効果一覧」は右端に固定）
   // paddingRight: 「効果一覧」ボタンが画面右端にぴったり付くと窮屈なので少し余白を空ける
-  const relicBarEl = relicsView.length > 0 && h("div", { className:"flex items-center gap-1 mb-1", style:{ paddingRight:6 } },
-    h("div", { className:"relic-scroll flex items-center gap-1", ref: relicScrollRef, onScroll: updRelicMore,
+  // レリック0個のときも同じ高さ(26px)の空間を確保しておく。1個目獲得でバーが
+  // 出現して以降のレイアウトが下へずれる「ガタッ」を防ぐ（高さ常に一定）
+  const relicBarEl = h("div", { className:"flex items-center gap-1 mb-1", style:{ paddingRight:6, minHeight:26 } },
+    relicsView.length > 0 && h("div", { className:"relic-scroll flex items-center gap-1", ref: relicScrollRef, onScroll: updRelicMore,
       style:{ flex:"1 1 auto", minWidth:0,
         maskImage: relicMore ? "linear-gradient(90deg,#000 calc(100% - 16px),transparent)" : "none",
         WebkitMaskImage: relicMore ? "linear-gradient(90deg,#000 calc(100% - 16px),transparent)" : "none" } },
       relicsView.map(k => h("button", { key:k, title:`${RELICS[k].name}: ${RELICS[k].desc}`,
         onClick: () => { setRelicOpen(true); SFX.open(); },
         className:"rounded-lg flex items-center justify-center", style:{ width:26, height:26, flex:"0 0 auto", background:"rgba(30,24,42,.92)", border:"1px solid #6e5a3c" } }, Ic(RELICS[k].img, 20)))),
-    h("button", { onClick: () => { setRelicOpen(true); SFX.open(); },
+    relicsView.length > 0 && h("button", { onClick: () => { setRelicOpen(true); SFX.open(); },
       className:"rounded-lg text-[9px] font-bold", style:{ height:26, padding:"0 12px", flex:"0 0 auto", background:"rgba(30,24,42,.92)", border:"1px solid #3c3450", color:"#c9bfe0" } },
       "効果一覧", h("span", { style:{ opacity:0.7, marginLeft:3 } }, relicsView.length)));
 
@@ -4152,11 +4272,12 @@ function DropBattle() {
 
   // ===== タイトル =====
   if (status === "title") {
-    return h("div", { style: { fontFamily:FONT, minHeight:"calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))", background:'#0d131a url("assets/bg_texture.jpg") repeat', backgroundSize:"512px", color:"#ece7f2", position:"relative", overflow:"hidden", WebkitUserSelect:"none", userSelect:"none", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"space-between", padding:"clamp(28px,6vh,56px) 20px clamp(24px,5vh,44px)", textAlign:"center" } },
+    return h("div", { style: { fontFamily:FONT, minHeight:"calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))", background:'#0d131a url("assets/bg_texture.jpg") repeat', backgroundSize:"512px", color:"#ece7f2", position:"relative", overflow:"hidden", WebkitUserSelect:"none", userSelect:"none", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"space-between", padding:"clamp(28px,6vh,56px) 20px clamp(24px,5vh,44px)", textAlign:"center" } },
       h("img", { src:"assets/bg_title2.jpg", alt:"", draggable:false, className:"title-bg", style:{ position:"absolute", inset:0, width:"100%", height:"100%" } }),
       h("div", { style:{ position:"absolute", inset:0, background:"linear-gradient(180deg, rgba(10,14,20,.42) 0%, rgba(10,14,20,0) 30%, rgba(10,14,20,0) 62%, rgba(10,14,20,.7) 100%)" } }),
       h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
         h("div", { "aria-hidden":"true", className:"title-glow", style:{ position:"absolute", top:"46%", left:"50%", width:"128%", height:150, transform:"translate(-50%,-50%)", background:"radial-gradient(ellipse at center, rgba(232,192,106,.32) 0%, rgba(232,192,106,0) 68%)", pointerEvents:"none", zIndex:0 } }),
+        h("p", { style:{ position:"relative", zIndex:1, fontSize:"clamp(0.58rem,1.9vw,0.72rem)", color:"#e8d8a8", letterSpacing:"0.18em", fontWeight:800, marginBottom:6, opacity:0.85, textShadow:"0 1px 2px #000" } }, "v" + APP_VERSION),
         h("p", { style:{ position:"relative", zIndex:1, fontSize:"clamp(0.62rem,2vw,0.78rem)", color:"#c4d2d8", letterSpacing:"0.32em", marginBottom:8, textShadow:"0 1px 2px #000" } }, "PUZZLE × ROGUELIKE"),
         h("h1", { className:"title-logo", onClick: logoTap, style:{ position:"relative", zIndex:1, fontSize:"clamp(2.7rem,12.5vw,4.2rem)", margin:"0 0 2px", cursor:"default" } }, "ドロプシア",
           h("span", { className:"title-sheen", "aria-hidden":"true", style:{ fontSize:"inherit" } }, "ドロプシア")),
@@ -4174,6 +4295,15 @@ function DropBattle() {
             h("a", { href:"terms.html", target:"_blank", rel:"noopener", style:FOOT_LINK }, "利用規約"),
             h("a", { href:"privacy.html", target:"_blank", rel:"noopener", style:FOOT_LINK }, "プライバシー")),
           h("p", { style:{ margin:0, fontSize:"0.6rem", color:"#7f7694", letterSpacing:"0.08em", textShadow:"0 1px 2px #000" } }, TXC.copyright || "© 2026 HIKARU"))),
+      // ===== 更新案内ウィンドウ：サーバーに新バージョンがあるとき =====
+      updateVer && h("div", { className:"fade-in", style:{ position:"fixed", inset:0, zIndex:90, background:"rgba(8,4,14,.86)", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 24px" } },
+        h("div", { className:"pop-in rounded-2xl", style:{ maxWidth:320, width:"100%", background:"rgba(30,24,42,.98)", border:"2px solid #e8c06a", textAlign:"center", padding:"24px 22px", boxShadow:"0 10px 34px rgba(0,0,0,.6), 0 0 22px rgba(255,215,94,.4)" } },
+          h("p", { style:{ fontSize:"1.7rem", margin:"0 0 6px" } }, "✨"),
+          h("p", { style:{ color:"#ffe9b0", fontWeight:900, fontSize:"1.05rem", margin:"0 0 8px" } }, "新しいバージョンがあります"),
+          h("p", { style:{ color:"#c9bfe0", fontSize:"0.82rem", fontWeight:700, margin:"0 0 18px", lineHeight:1.7 } },
+            "v" + APP_VERSION + " → v" + updateVer, h("br"), "最新版に更新してください"),
+          h("button", { onClick: doUpdate, style:{ width:"100%", background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", borderRadius:12, padding:"13px", fontSize:"1.02rem", fontWeight:900, letterSpacing:"0.08em", border:"2px solid #6e4e1a", boxShadow:"0 3px 0 #6e4e1a", fontFamily:"inherit", cursor:"pointer" } }, "今すぐ更新"),
+          h("button", { onClick: () => setUpdateVer(null), style:{ marginTop:12, background:"none", border:"none", color:"#8f86a4", fontSize:"0.76rem", fontWeight:800, fontFamily:"inherit", cursor:"pointer" } }, "あとで"))),
       // ロードゲート：タイトルを薄暗くして中央に進捗（フェードは出さない＝チラつき防止）
       loadGate && h("div", { "data-loadgate":"1", style:{ position:"fixed", inset:0, zIndex:80, background:"rgba(8,10,16,.72)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:14, padding:"0 40px" } },
         h("div", { style:{ width:"100%", maxWidth:250, height:8, borderRadius:999, background:"rgba(20,17,32,.9)", border:"1px solid #3c3450", overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,.5)" } },
@@ -4253,7 +4383,7 @@ function DropBattle() {
     const uraOpen = selOpen && charState.c.includes(selView);            // このキャラで裏に挑めるか
     const effMode = uraOpen && selMode === "ura" ? "ura" : "omote";      // 実際に開始するモード
     const URA_C = "#b06af0";                                             // 裏のテーマ色
-    return h("div", { style:{ fontFamily:FONT, minHeight:"calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom))", background:'#0d131a url("assets/bg_texture.jpg") repeat', backgroundSize:"512px", color:"#ece7f2", WebkitUserSelect:"none", userSelect:"none", padding:"clamp(12px,2.5vh,24px) 16px clamp(16px,3.5vh,30px)", display:"flex", flexDirection:"column" } },
+    return h("div", { style:{ fontFamily:FONT, minHeight:"calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))", background:'#0d131a url("assets/bg_texture.jpg") repeat', backgroundSize:"512px", color:"#ece7f2", WebkitUserSelect:"none", userSelect:"none", padding:"clamp(12px,2.5vh,24px) 16px clamp(16px,3.5vh,30px)", display:"flex", flexDirection:"column" } },
       h("div", { style:{ maxWidth:440, margin:"0 auto", width:"100%", flex:1, display:"flex", flexDirection:"column" } },
         h("div", { className:"flex items-center justify-between mb-1" },
           h("button", { onClick: () => { setStatus("title"); statusRef.current = "title"; SFX.tap(); }, className:"text-xs px-3 py-1.5 rounded-lg", style:{ background:"rgba(255,255,255,.1)", color:"#c9bfe0", border:"1px solid #453b5c" } }, "◀ 戻る"),
@@ -4656,8 +4786,8 @@ function DropBattle() {
           h("div", { style:{ marginBottom:10 } }, Ic(f === "angel" ? "assets/coin_angel.png" : "assets/coin_demon.png", 64)),
           h("div", { style:{ fontWeight:800, fontSize:"0.92rem" } }, f === "angel" ? gt.angel : gt.demon)))));
     } else if (spinning) {
-      // 回転中は表(天使)/裏(悪魔)の2枚を交互に見せる
-      inner.push(h("div", { key:"spin", style:{ minHeight:128, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"6px 0" } },
+      // 回転中は表(天使)/裏(悪魔)の2枚を交互に見せる。タップで出目を確定
+      inner.push(h("div", { key:"spin", style:{ minHeight:128, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"6px 0", cursor:"pointer" } },
         h("div", { className:"coin-flip3d", style:{ width:76, height:76, marginBottom:14 } },
           h("img", { src:"assets/coin_angel.png", alt:"", draggable:false }),
           h("img", { src:"assets/coin_demon.png", alt:"", draggable:false })),
@@ -4670,7 +4800,7 @@ function DropBattle() {
           g.phase === "retry" ? gt.lose : g.win ? gt.win : gt.lose),
         g.phase === "retry" && h("div", { style:{ color:"#ffcf5d", fontSize:"0.8rem", fontWeight:800, marginTop:8 } }, gt.retry)));
     }
-    overlays.push(h("div", { key:"gamble", className:"fixed inset-0 flex items-center justify-center fade-in", style:{ background:"rgba(6,3,12,.82)", zIndex:85 } },
+    overlays.push(h("div", { key:"gamble", className:"fixed inset-0 flex items-center justify-center fade-in", onClick: spinning ? gambleReveal : undefined, style:{ background:"rgba(6,3,12,.82)", zIndex:85, cursor: spinning ? "pointer" : "default" } },
       // 賭けオーバーレイの枠は最初から最後まで金色（死の警告は中の文字で見せる）
       h("div", { className:"rounded-2xl pop-in", style:{ maxWidth:360, width:"92%", padding:"26px 22px 28px", background:"rgba(28,20,34,.98)",
         border:"2px solid #ffd75e", textAlign:"center",
@@ -4682,6 +4812,12 @@ function DropBattle() {
       h("div", { className:"gdmg-pop", style:{ fontSize:"2.6rem", fontWeight:900, color:"#ff4646",
         // 白縁取り（8方向シャドウ）＋下に黒の落ち影で、どの背景でも読めるように
         textShadow:"-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, -2px 0 0 #fff, 2px 0 0 #fff, 0 -2px 0 #fff, 0 2px 0 #fff, 0 4px 10px rgba(0,0,0,.75)" } }, "HP-" + gambleDmg.cost)));
+  }
+  if (gambleVoid) {
+    // お邪魔のみに賭けたとき: 画面中央へ「無効」（コスト0・コイントスなし）
+    overlays.push(h("div", { key:"gvoid" + gambleVoid.key, className:"fixed inset-0 pointer-events-none flex items-center justify-center", style:{ zIndex:84 } },
+      h("div", { className:"gdmg-pop", style:{ fontSize:"2.2rem", fontWeight:900, color:"#b8b0c0",
+        textShadow:"-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, -2px 0 0 #fff, 2px 0 0 #fff, 0 -2px 0 #fff, 0 2px 0 #fff, 0 4px 10px rgba(0,0,0,.7)" } }, "無効")));
   }
   if (armed !== null && items[armed]) {
     const c = CONSUM[items[armed]];
@@ -5002,7 +5138,7 @@ function DropBattle() {
     const cardNodes = selIds.map(id => map.nodes.find(n => n.id === id)).filter(Boolean).sort((a, b) => a.row - b.row || a.col - b.col);
     return h("div", { style: rootStyle, className:"w-full flex justify-center px-3 py-2" },
       // スマホでは下に大きく余るため、画面全体を縦flexにしてマップパネルへ縦空間を配分する
-      h("div", { key:"scr-map", className:"w-full fade-in", style:{ maxWidth:440, display:"flex", flexDirection:"column", minHeight:"calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px)" } },
+      h("div", { key:"scr-map", className:"w-full fade-in", style:{ maxWidth:440, display:"flex", flexDirection:"column", minHeight:"calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px)" } },
         header,
         relicBarEl,
         h("div", { className:"flex items-center gap-2 rounded-xl px-3 py-1.5 mb-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c5a48" } },
@@ -5343,12 +5479,15 @@ function DropBattle() {
         const isUsed = used.has(key);
         const isSel = action === key && !isUsed;
         const crossBonus = !isSel && selEff ? (key === "atk" ? selEff.splitAtk : key === "def" ? selEff.splitDef : selEff.healBonus) : 0;
-        const mkBreakdown = (total, base, bonus, tc) => h("span", { style:{ display:"flex", alignItems:"baseline", gap:2, justifyContent:"center" } },
+        const mkBreakdown = (total, base, bonus, tc) => h("span", { style:{ display:"inline-flex", alignItems:"baseline", gap:2, justifyContent:"center" } },
           h("span", { style:{ fontSize:"1.15rem", color:tc, fontWeight:900, textShadow:`0 0 8px ${tc}` } }, total),
           h("span", { style:{ fontSize:"0.58rem", opacity:0.6 } }, `(+${bonus})`));
+        const mkTotal = (total, tc) => h("span", { style:{ fontSize:"1.15rem", color:tc, fontWeight:900, textShadow:`0 0 8px ${tc}` } }, total);
         let valEl;
         const bAn = buffAnim && buffAnim.st === key ? buffAnim : null;
         const sAn = storeAnim && (key === "atk" || key === "def") ? storeAnim : null;
+        // ノアの蓄積は予約中（解決前）も攻撃・防御へ「+N」を出しっぱなしにする。段階演出中は出さない
+        const storeAdd = (!bAn && !sAn && (key === "atk" || key === "def") && tv.storePend) ? tv.storePend.add : null;
         if (bAn) {
           // ガレス強化の段階表示: 元の値 → 「元の値 ×倍率」 → 最終値（金色・倍率を併記）
           valEl = bAn.stage === 1 ? String(bAn.from)
@@ -5370,15 +5509,17 @@ function DropBattle() {
           if (key === "def") v += selEff.splitDef;
           if (key === "heal") v += selEff.healBonus;
           const base = dispTv[key];
-          valEl = base > 0 ? mkBreakdown(base + v, base, v, info && info.mult > 1 ? "#ffe88a" : "#fff") : `+${v}`;
+          const tc = info && info.mult > 1 ? "#ffe88a" : "#fff";
+          // 蓄積(+N)と併記するときは「(+bonus)」内訳を省いて合計だけにする（3つ並ぶと段差になるため）
+          valEl = base > 0 ? (storeAdd != null ? mkTotal(base + v, tc) : mkBreakdown(base + v, base, v, tc)) : `+${v}`;
         } else if (crossBonus > 0) {
           const base = dispTv[key];
-          valEl = base > 0 ? mkBreakdown(base + crossBonus, base, crossBonus, "#ffcf5d") : `+${crossBonus}`;
+          valEl = base > 0 ? (storeAdd != null ? mkTotal(base + crossBonus, "#ffcf5d") : mkBreakdown(base + crossBonus, base, crossBonus, "#ffcf5d")) : `+${crossBonus}`;
         } else valEl = String(dispTv[key]);
-        // ノアの蓄積は予約中（解決前）も攻撃・防御の両方に「+N」を出しっぱなしにする
-        if (!bAn && !sAn && (key === "atk" || key === "def") && tv.storePend) {
-          valEl = h("span", null, valEl,
-            h("span", { style:{ color:"#b9a4ff", fontSize:"0.82rem", marginLeft:3, fontWeight:900 } }, "+" + tv.storePend.add));
+        // 蓄積の「+N」は合計値と同じ1行に並べる（inline-flex/nowrap で段差にしない）
+        if (storeAdd != null) {
+          valEl = h("span", { style:{ display:"inline-flex", alignItems:"baseline", gap:3, whiteSpace:"nowrap" } }, valEl,
+            h("span", { style:{ color:"#b9a4ff", fontSize:"0.82rem", fontWeight:900 } }, "+" + storeAdd));
         }
         // 強化の倍率計算中は対象ボタン、蓄積の加算中は攻撃・防御の両方を光らせる（暗転も解除）。
         // 光らせるのは計算中の stage2 だけ。stage3（×倍率を出したまま待つ段階）は

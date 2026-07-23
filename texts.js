@@ -176,7 +176,7 @@ window.TEXTS = {
     winLabel:  "当たると",
     angel:     "天使",
     demon:     "悪魔",
-    spin:      "コインが回っている…",
+    spin:      "タップで演出スキップ",
     win:       "的中！",
     lose:      "はずれ…",
     retry:     "賭 チップでもう一度！",
@@ -284,18 +284,7 @@ window.TEXTS = {
   credits: {
     sections: [
       { title: "企画・開発",
-        lines: ["HIKARU"] },
-      { title: "BGM（すべてCC0 / パブリックドメイン）",
-        lines: [
-          "\"Awake! (Megawall-10)\" — cynicmusic.com / pixelsphere.org",
-          "\"Crystal Cave (Song 18)\" — cynicmusic.com / pixelsphere.org",
-          "\"Battle Theme A\" — cynicmusic.com / pixelsphere.org",
-          "\"Boss Battle #2 (Symphonic Metal)\" — nene (OpenGameArt)",
-          "（CC0のためクレジット義務はありませんが感謝を込めて）" ] },
-      { title: "フォント",
-        lines: ["M PLUS Rounded 1c (SIL Open Font License 1.1)"] },
-      { title: "使用技術",
-        lines: ["React (MIT License)", "Firebase (Google LLC)", "キャラクターアート: ComfyUI + Anima により生成"] }
+        lines: ["HIKARU"] }
     ]
   }
 };

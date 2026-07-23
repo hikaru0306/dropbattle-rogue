@@ -20,6 +20,22 @@ def st(p): return p.evaluate("window.__test.state()")
 def ci(p): return p.evaluate("window.__test.charInfo()")
 def gask(p): return p.evaluate("window.__test.gambleAsk()")
 
+def resolve_coin(p):
+    """新フロー: 回転中はタップ(gambleReveal)で出目を出す。チップのやり直しも含め、
+    出目が確定してオーバーレイが閉じる（またはHP0で敗北）まで reveal を繰り返す。"""
+    for _ in range(30):
+        ga = gask(p)
+        if not ga: return
+        ph = ga.get("phase")
+        if ph == "spin":
+            p.evaluate("window.__test.gambleReveal()"); time.sleep(0.15)
+        elif ph == "retry":
+            time.sleep(0.2)   # 投げ直し(spin)へ戻るのを待って次のタップへ
+        elif ph == "result":
+            time.sleep(0.3); return  # gambleFinish が閉じる
+        else:
+            time.sleep(0.1)
+
 def make_group(p, idxs, t):
     for i in range(36):
         r, c = divmod(i, 6)
@@ -67,7 +83,8 @@ def gamble_turn(p, mode, group, seed, pick, rig, base_atk_group=None):
     ga = gask(p)  # ここで初めて天使/悪魔のコイントスが開く（3アクション消し終わった後）
     assert ga and ga["mode"] == mode and ga["phase"] == "pick", f"expected coin/pick after 3rd action, got {ga}"
     cost = ga["cost"]; count = ga["count"]
-    p.evaluate(f"window.__test.gambleChoose('{pick}')"); time.sleep(1.3)
+    p.evaluate(f"window.__test.gambleChoose('{pick}')"); time.sleep(0.1)
+    resolve_coin(p)
     return {"php0": php0, "cost": cost, "count": count, "base_atk": base_atk}
 
 with sync_playwright() as pw:
@@ -112,7 +129,8 @@ with sync_playwright() as pw:
     page.evaluate("window.__test.commit(0)"); time.sleep(0.5)
     ga0 = gask(page)
     chk("賭け消去直後にコイントス開封", bool(ga0) and ga0["phase"] == "pick", str(ga0))
-    page.evaluate("window.__test.gambleChoose('angel')"); time.sleep(1.3)
+    page.evaluate("window.__test.gambleChoose('angel')"); time.sleep(0.1)
+    resolve_coin(page)
     chk("コイントス後は次のアクションへ（ターン未解決）", gask(page) is None and st(page)["status"] == "battle", str(st(page)["status"]))
     # 残る防御を消す → 3揃い → ターン解決
     use_act(page, "def", [35], 35)
@@ -172,7 +190,8 @@ with sync_playwright() as pw:
     page.evaluate("window.__test.rigCoin('demon')")  # angel賭け・demon出る=はずれ→cost50支払いでHP0
     page.evaluate("window.__test.setAct('heal')")
     page.evaluate("window.__test.commit(0)"); time.sleep(0.55)
-    page.evaluate("window.__test.gambleChoose('angel')"); time.sleep(1.3)
+    page.evaluate("window.__test.gambleChoose('angel')"); time.sleep(0.1)
+    resolve_coin(page)
     chk("LOSE at HP0 => lose", st(page)["status"] == "lose", f"status={st(page)['status']}")
 
     # ================= 6) 専用チップ chip → 失敗時リトライ回数に反映 =================
@@ -189,7 +208,8 @@ with sync_playwright() as pw:
     page.evaluate("window.__test.commit(0)"); time.sleep(0.55)
     ga = gask(page)
     chk("chip retries = 1 + 2 = 3", ga and ga.get("retries") == 3, str(ga))
-    page.evaluate("window.__test.gambleChoose('angel')"); time.sleep(2.2)
+    page.evaluate("window.__test.gambleChoose('angel')"); time.sleep(0.1)
+    resolve_coin(page)
     chk("chip flow closed overlay", gask(page) is None)
 
     # ================= 7) レリック luckcoin: 失敗でも効果50%（HPは払う）=================
@@ -214,7 +234,8 @@ with sync_playwright() as pw:
     ga2 = gask(page)
     # atkx count5 => raw50 => ceil(25)=25
     chk("angelfeather halves cost (50->25)", ga2 and ga2["cost"] == 25, str(ga2))
-    page.evaluate("window.__test.gambleChoose('angel')"); time.sleep(1.3)
+    page.evaluate("window.__test.gambleChoose('angel')"); time.sleep(0.1)
+    resolve_coin(page)
 
     # ================= 9) レリック devilpact: 悪魔で当てると×1.5 =================
     fresh_battle(page)
