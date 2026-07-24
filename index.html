@@ -287,7 +287,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.1"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.2"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -1269,13 +1269,16 @@ const SFX = {
   open: () => { noise(0.07, 1800, 0.05); softTone(520, 0.12, "sine", 0.05, 0.01, 760); }
 };
 
-// ===== BGM（CC0実音源: cynicmusic / Juhani Junkala）=====
-const BGM_FILES = { title:"assets/bgm/title.mp3", map:"assets/bgm/map.mp3", battle:"assets/bgm/battle.mp3", boss:"assets/bgm/boss.mp3",
-  result:"assets/bgm/result.mp3", bossclear:"assets/bgm/bossclear.mp3" }; // result=勝利ファンファーレ(CC0 cynicmusic "Victory Fanfare Short")/bossclear=達成テーマ(CC0 cynicmusic "Victory Theme for RPG")
-const BGM_NOLOOP = { result:true, bossclear:true }; // ジングル系は1回再生（ループしない）
+// ===== BGM（全曲自作: dropsia-bgm-forge 製の生成曲）=====
+// ループ曲は ogg(ギャップレス・軽量) を優先し、非対応ブラウザ(iOS Safari等)は wav へフォールバック
+const BGM_EXT = (() => { try { return new Audio().canPlayType('audio/ogg; codecs="vorbis"') ? ".ogg" : ".wav"; } catch (e) { return ".wav"; } })();
+const BGM_FILES = { title:"assets/bgm/title"+BGM_EXT, map:"assets/bgm/map"+BGM_EXT, battle:"assets/bgm/battle"+BGM_EXT, boss:"assets/bgm/boss"+BGM_EXT,
+  result:"assets/bgm/result"+BGM_EXT, bossclear:"assets/bgm/bossclear"+BGM_EXT };
+const BGM_NOLOOP = { result:true }; // 勝利ファンファーレのみ1回再生（bossclearはループ曲に変更済み）
 let bgmOn = true, bgmVol = 0.6, bgmAudio = null, bgmTrack = null, bgmGain = null, bgmWired = false;
 try { const v = parseFloat(localStorage.getItem("db_bgmvol")); if (v >= 0 && v <= 1) bgmVol = v; } catch (e) {}
-const bgmBase = name => (name === "battle" ? 0.26 : name === "result" || name === "bossclear" ? 0.34 : 0.3);
+// 自作曲は全トラック同一基準で正規化済みのため一律（ジングルのresultだけ少し前に出す）
+const bgmBase = name => (name === "result" ? 0.34 : 0.3);
 // iOS Safari は audio.volume を変更できない（常に1）ため、WebAudio の GainNode 経由で音量制御する
 const bgmWire = () => {
   if (bgmWired || !bgmAudio) return;
