@@ -4260,7 +4260,8 @@ function DropBattle() {
 
   const header = h("div", { className:"flex items-center justify-between mb-1 rounded-xl px-3 py-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450" } },
     h("h1", { className:"font-bold", style:{ fontSize:"0.98rem", color: mode === "ura" ? "#cf9af8" : "#f2e6c8", whiteSpace:"nowrap", textShadow:"0 2px 0 rgba(0,0,0,.55)" } },
-      mode === "ura" ? "裏・" : "", "第", act + 1, "章"),
+      mode === "ura" ? "裏・" : "", "第", act + 1, "章",
+      progRow ? h("span", { style:{ marginLeft:6, fontSize:"0.82rem", opacity:0.9 } }, progRow, "層") : null),
     h("div", { className:"flex items-center gap-2" },
       // コインが5桁になっても「残N」袋バッジが押されて縦2行に折れないよう、
       // 各バッジは nowrap+shrink禁止、コインだけ桁数に応じてフォントを縮める
