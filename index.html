@@ -104,6 +104,7 @@ button:active{filter:brightness(1.12)}
 @keyframes buyPop{0%{opacity:0;transform:scale(.55)}14%{opacity:1;transform:scale(1.1)}26%{transform:scale(1)}78%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.97)}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes intentBlink{0%,100%{opacity:1}50%{opacity:.55}}
+@keyframes autoBlink{0%,100%{opacity:1;box-shadow:0 0 0 2px rgba(124,255,176,.55),0 0 16px rgba(124,255,176,.4)}50%{opacity:.55;box-shadow:0 0 0 2px rgba(124,255,176,.18),0 0 4px rgba(124,255,176,.12)}}
 .sp-idle-a{animation:breathA 2.6s ease-in-out infinite;transform-origin:50% 100%}
 .sp-idle-b{animation:breathB 3.4s ease-in-out infinite;transform-origin:50% 100%}
 .sp-idle-f{animation:floatY 3.2s ease-in-out infinite}
@@ -287,7 +288,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.3"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.4"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -1763,6 +1764,13 @@ function DropBattle() {
   const [bgmOnView, setBgmOnView] = useState(bgmOn);
   const [soundOpen, setSoundOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  // ===== 操作設定（オートモード）=====
+  const [ctrlOpen, setCtrlOpen] = useState(false);        // 操作設定モーダル
+  const [autoMode, setAutoMode_] = useState(() => { try { return localStorage.getItem("db_auto") === "1"; } catch (e) { return false; } });
+  const autoModeRef = useRef(autoMode);
+  const setAutoMode = v => { autoModeRef.current = v; setAutoMode_(v); try { localStorage.setItem("db_auto", v ? "1" : "0"); } catch (e) {} };
+  const [autoAsk, setAutoAsk] = useState(false);          // 「オートモードを解除しますか？」確認
+  const autoAskRef = useRef(false); autoAskRef.current = autoAsk;
   const [sfxVolView, setSfxVolView] = useState(sfxVol);
   const [bgmVolView, setBgmVolView] = useState(bgmVol);
   const [tut, setTut] = useState(null); // チュートリアル 0..2
@@ -3564,6 +3572,79 @@ function DropBattle() {
     SFX.tap();
   };
 
+  // ===== オートモード =====
+  // 盤面全マスを走査し、消したとき最も効果が大きい場所を返す。
+  // 通常消去は expandClear の巻き込み（爆弾・雷・ライン・パターン系レリック）込みの
+  // base×mult（＋/貫＋/雷＋ボーナスとスター/トリプル倍率を含む実効値）で採点する
+  const autoPickIdx = () => {
+    const b = boardRef.current;
+    const act = actionRef.current;
+    const skill = charSkillRef.current;
+    // 鍛冶の生成/強化は対象か素材が無いとアクションを消費できず止まってしまうので、
+    // 打てる対象が盤面に無ければ補充モードへ戻して通常消去として進める
+    if (act === "heal" && skill === "smith" && smithModeRef.current !== "stock") {
+      const mode = smithModeRef.current;
+      const ok = stockRef.current > 0 && b.some(c => mode === "gen"
+        ? (c.type !== JUNK && !c.wild && !c.special)
+        : (c.special && !c.up));
+      if (!ok) setSmithMode("stock");
+    }
+    let best = -1, bestScore = -1, bestSize = -1;
+    for (let i = 0; i < b.length; i++) {
+      const cell = b[i];
+      if (cell.type === JUNK) continue;
+      let score = 0, size = 0;
+      if (act === "heal" && skill === "recolor") {
+        // 色変えは「現インク色以外の最大グループ」を塗る（虹は塗れないので除外）
+        if (cell.wild) continue;
+        const grp = findGroupStopAtWild(b, i);
+        size = grp.size;
+        score = size + (cell.type !== paintColorRef.current ? 1000 : 0);
+      } else if (act === "heal" && skill === "smith" && smithModeRef.current !== "stock") {
+        // 生成/強化は「実際に打てる個数」が最大のグループを選ぶ
+        const grp = findGroup(b, i);
+        const cells = b.filter(x => grp.has(x.id));
+        const n = smithModeRef.current === "gen"
+          ? Math.min(stockRef.current, cells.filter(x => x.type !== JUNK && !x.wild && !x.special).length)
+          : Math.min(stockRef.current, cells.filter(x => x.special && !x.up).length);
+        if (n <= 0) continue;
+        score = n; size = grp.size;
+      } else {
+        const t = turnRef.current;
+        const { ids } = expandClear(b, i, !t.blastUsed, !t.crossUsed, !t.coreUsed[CORE_BY_COLOR[cell.type]]);
+        const info = groupInfo(b, ids);
+        if (info.junk) continue;
+        score = info.base * info.mult;
+        size = ids.size;
+      }
+      if (score > bestScore || (score === bestScore && size > bestSize)) { best = i; bestScore = score; bestSize = size; }
+    }
+    return best;
+  };
+  // オートモード本体: 手番が回ってくるたびに最良手を選び、少し見せてからタップする。
+  // チュートリアル・演出中(locked)・各種モーダル表示中・解除確認中は手を出さない
+  useEffect(() => {
+    if (!autoMode || status !== "battle" || locked || autoAsk) return;
+    if (gtut || ctut || tut != null || spTut != null || dcapTut != null) return;
+    if (menuOpen || soundOpen || ctrlOpen || consumOpen || bagOpen || relicOpen || gambleAsk || resumeAsk || armed != null) return;
+    if (!action || used.has(action)) return;
+    let inner = null;
+    const t = setTimeout(() => {
+      if (!autoModeRef.current || statusRef.current !== "battle" || lockedRef.current || autoAskRef.current) return;
+      if (!actionRef.current || usedRef.current.has(actionRef.current)) return;
+      const idx = autoPickIdx();
+      if (idx < 0) return;
+      setPreview(makePreview(boardRef.current, idx)); // 消す場所を一瞬ハイライトしてからタップ
+      inner = setTimeout(() => {
+        setPreview(null);
+        if (!autoModeRef.current || statusRef.current !== "battle" || lockedRef.current) return;
+        commitRef.current(idx);
+      }, FAST ? 60 : 420);
+    }, FAST ? 80 : 620);
+    return () => { clearTimeout(t); if (inner) clearTimeout(inner); };
+  }, [autoMode, status, locked, action, used, board, autoAsk, gtut, ctut, tut, spTut, dcapTut,
+      menuOpen, soundOpen, ctrlOpen, consumOpen, bagOpen, relicOpen, gambleAsk, resumeAsk, armed]);
+
   // ===== アクションボタンの並べ替え（ドラッグ）=====
   // 左から順に消化されるので、並び＝消化順。使用済みのボタンは動かせない
   const actRowRef = useRef(null);
@@ -4157,6 +4238,10 @@ function DropBattle() {
       gambleReveal: () => gambleReveal(), // 回転中のタップ相当（出目を確定）
       showUpdate: v => setUpdateVer(v ? String(v) : null), // 更新案内ウィンドウの表示テスト用
       appVersion: () => APP_VERSION,
+      // オートモードテスト用
+      setAuto: v => setAutoMode(!!v),
+      auto: () => ({ on: autoModeRef.current, ask: autoAskRef.current }),
+      autoPick: () => autoPickIdx(),
       gambleAsk: () => gambleAskRef.current ? { ...gambleAskRef.current } : null
     };
   }, []);
@@ -4535,6 +4620,21 @@ function DropBattle() {
       soundRow("BGM", "assets/icon_note.png", bgmOnView, toggleBgm, bgmVolView, changeBgmVol, null),
       soundRow("効果音", "assets/icon_speaker.png", sfxOn, toggleSfx, sfxVolView, changeSfxVol, () => SFX.tap()),
       h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } }, "アイコンでON/OFF・スライダーで音量。設定は端末に保存されます。"))));
+  // 操作設定（オートモードのON/OFF）
+  if (ctrlOpen) overlays.push(h("div", { key:"ctrl", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setCtrlOpen(false) },
+    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+      h("div", { className:"flex justify-between items-center mb-3" },
+        h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, "🎮 操作設定"),
+        h("button", { onClick: () => setCtrlOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
+      h("div", { className:"rounded-xl px-3 py-3", style:{ background:"rgba(255,255,255,.05)", border:"1px solid #3c3450" } },
+        h("div", { className:"flex items-center gap-3" },
+          h("span", { className:"flex-1" },
+            h("span", { className:"font-bold text-sm block", style:{ color: autoMode ? "#f0e4c8" : "#c9bfe0" } }, "オートモード"),
+            h("span", { className:"block text-[11px] mt-0.5", style:{ opacity:0.75 } }, "ドロップを自動で消す")),
+          h("button", { onClick: () => { setAutoMode(!autoMode); SFX.mode(); }, className:"rounded-lg px-3 py-1.5 font-bold text-xs", "aria-label":"オートモード切替",
+            style:{ minWidth:54, background: autoMode ? "rgba(232,192,106,.18)" : "rgba(255,255,255,.06)", color: autoMode ? "#ffd75e" : "#776f88",
+              border:`1.5px solid ${autoMode ? "#8a6f3c" : "#3c3450"}`, fontFamily:"inherit" } }, autoMode ? "ON" : "OFF"))),
+      h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } }, "オートモード中はバトル画面下のボタンからいつでも解除できます。設定は端末に保存されます。"))));
   // メニューの行。アイコン幅を固定して見出しの開始位置を揃える（右端は任意の補助表示）
   const menuBtn = (img, label, onClick, right, muted) =>
     h("button", { key:label, onClick,
@@ -4559,12 +4659,31 @@ function DropBattle() {
       menuBtn("assets/cs_potion.png", "所持アイテム確認", () => { setMenuOpen(false); setDropArm(-1); setConsumOpen(true); SFX.open(); }, `${items.length}/${itemCap()}`),
       menuBtn("assets/icon_bag.png", "特殊ドロップの確認", () => { setMenuOpen(false); setBagOpen(true); SFX.open(); }, `${ownedTotal}個`),
       menuBtn("assets/icon_speaker.png", "サウンド設定", () => { setMenuOpen(false); setSoundOpen(true); SFX.open(); }),
+      menuBtn(null, "操作設定", () => { setMenuOpen(false); setCtrlOpen(true); SFX.open(); }, autoMode ? "オートON" : null),
       menuBtn(null, "冒険を中断してタイトルへ", suspendRun, null, true),
       h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } },
         "進行は自動保存されます（バトルや報酬選択の途中も含む）。キャラ選択で「続きから」再開できます。"),
       h("button", { onClick: () => { setMenuOpen(false); SFX.tap(); },
         className:"w-full rounded-xl py-2.5 font-bold text-sm mt-3",
         style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a", fontFamily:"inherit" } }, "▶ 冒険にもどる"))));
+  // オートモード中の解除バッジ（バトル画面の中央下・点滅）。タップで解除確認へ
+  if (autoMode && status === "battle") overlays.push(h("button", { key:"autoind",
+    onClick: () => { SFX.tap(); setAutoAsk(true); }, "aria-label":"オートモード解除",
+    className:"fixed font-bold",
+    style:{ bottom:"calc(env(safe-area-inset-bottom, 0px) + 14px)", left:"50%", transform:"translateX(-50%)", zIndex:55,
+      background:"rgba(19,14,28,.92)", color:"#7cffb0", border:"2px solid #4ecf8a", borderRadius:999,
+      padding:"8px 18px", fontSize:12, letterSpacing:"0.05em", fontFamily:"inherit", whiteSpace:"nowrap",
+      animation:"autoBlink 1.3s ease-in-out infinite" } },
+    "タップでオートモード解除"));
+  // オートモードの解除確認
+  if (autoAsk) overlays.push(h("div", { key:"autoask", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.72)", zIndex:70 }, onClick: () => setAutoAsk(false) },
+    h("div", { className:"w-full rounded-2xl p-4 pop-in text-center", style:{ maxWidth:300, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+      h("p", { className:"font-bold mb-3", style:{ color:"#f0e4c8", fontSize:"0.95rem", margin:"4px 0 14px" } }, "オートモードを解除しますか？"),
+      h("div", { className:"flex gap-2" },
+        h("button", { onClick: () => { SFX.tap(); setAutoMode(false); setAutoAsk(false); }, className:"flex-1 rounded-xl py-2.5 font-bold",
+          style:{ background:"linear-gradient(180deg,#e8c06a,#b8862e)", color:"#2c2030", border:"1px solid #6e4e1a", fontFamily:"inherit" } }, "はい"),
+        h("button", { onClick: () => { SFX.tap(); setAutoAsk(false); }, className:"flex-1 rounded-xl py-2.5 font-bold",
+          style:{ background:"rgba(255,255,255,.08)", color:"#c9bfe0", border:"1px solid #453b5c", fontFamily:"inherit" } }, "いいえ")))));
   if (relicOpen) overlays.push(h("div", { key:"relics", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setRelicOpen(false) },
     h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, maxHeight:"78vh", overflowY:"auto", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-2" },
