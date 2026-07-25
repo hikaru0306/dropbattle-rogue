@@ -288,7 +288,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.4"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.5"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -3644,6 +3644,18 @@ function DropBattle() {
     return () => { clearTimeout(t); if (inner) clearTimeout(inner); };
   }, [autoMode, status, locked, action, used, board, autoAsk, gtut, ctut, tut, spTut, dcapTut,
       menuOpen, soundOpen, ctrlOpen, consumOpen, bagOpen, relicOpen, gambleAsk, resumeAsk, armed]);
+  // 賭博師のコイントス: オート中は手動待ちになる「天使/悪魔」の選択を自動で「天使」にする
+  // （回転・投げ直し・出目確定はもともと自動で進むので、選択さえすれば止まらない）
+  useEffect(() => {
+    if (!autoMode || !gambleAsk || gambleAsk.phase !== "pick" || autoAsk) return;
+    if (ctut) return; // 賭けチュートリアル中は選ぶ体験を奪わない
+    const t = setTimeout(() => {
+      if (!autoModeRef.current || autoAskRef.current) return;
+      const ask = gambleAskRef.current;
+      if (ask && ask.phase === "pick") gambleChoose("angel");
+    }, FAST ? 100 : 800);
+    return () => clearTimeout(t);
+  }, [autoMode, gambleAsk, autoAsk, ctut]);
 
   // ===== アクションボタンの並べ替え（ドラッグ）=====
   // 左から順に消化されるので、並び＝消化順。使用済みのボタンは動かせない

@@ -6,6 +6,7 @@
 4. バトル中、盤面を触らずにアクションが自動消化されターンが進む
 5. バトル画面の中央下に点滅バッジ「タップでオートモード解除」が出る
 6. バッジタップ→確認「オートモードを解除しますか？」→いいえで継続／はいで解除・バッジ消滅
+7. 賭博師: コイントスの天使/悪魔選択で止まらず、自動で天使を選んでターンが進む
 """
 import os, sys, time
 from playwright.sync_api import sync_playwright
@@ -106,6 +107,31 @@ with sync_playwright() as pw:
     assert badge.count() == 0, "badge still shown after release"
     assert page.evaluate("localStorage.getItem('db_auto')") == "0", "db_auto not cleared"
     print("6 badge -> confirm (いいえ/はい) OK")
+
+    # 7. 賭博師: 賭けのコイントスで止まらず自動で天使を選んで進む
+    page.evaluate("window.__test.setChar(6)")          # 賭博師ジンへ切替（skill=gamble）
+    page.evaluate("window.__test.spawn(['golem'])")    # 高HPの敵にして途中で勝負がつかないように
+    page.evaluate("window.__test.rigCoin('angel')")    # 出目を天使に固定（当たり続ける＝HP減で紛れない）
+    time.sleep(0.3)
+    t_start = st(page)["turn"]
+    page.evaluate("window.__test.setAuto(true)")
+    picked = False
+    t0 = time.time()
+    while time.time() - t0 < 30:
+        ga = page.evaluate("window.__test.gambleAsk()")
+        if ga and ga.get("pick") == "angel":
+            picked = True                              # 自動選択が天使であることを目撃
+        s = st(page)
+        if s["status"] == "battle" and s["turn"] >= t_start + 2:
+            break
+        time.sleep(0.1)
+    s = st(page)
+    assert s["turn"] >= t_start + 2, f"gambler auto stuck: turn={s['turn']} (start={t_start}) ask={page.evaluate('window.__test.gambleAsk()')}"
+    assert picked, "never observed auto angel pick"
+    assert page.evaluate("window.__test.gambleAsk()") is None or st(page)["turn"] >= t_start + 2, "coin overlay left open"
+    print("7 gambler coin toss auto-picks angel and turns progress OK:",
+          {"turns": s["turn"] - t_start})
+    page.evaluate("window.__test.setAuto(false)")
 
     browser.close()
 print("ALL AUTO OK")
