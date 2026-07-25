@@ -287,7 +287,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.2"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.3"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -4260,7 +4260,8 @@ function DropBattle() {
 
   const header = h("div", { className:"flex items-center justify-between mb-1 rounded-xl px-3 py-1", style:{ background:"rgba(30,24,42,.92)", border:"2px solid #3c3450" } },
     h("h1", { className:"font-bold", style:{ fontSize:"0.98rem", color: mode === "ura" ? "#cf9af8" : "#f2e6c8", whiteSpace:"nowrap", textShadow:"0 2px 0 rgba(0,0,0,.55)" } },
-      mode === "ura" ? "裏・" : "", "第", act + 1, "章"),
+      mode === "ura" ? "裏・" : "", "第", act + 1, "章",
+      progRow ? h("span", { style:{ marginLeft:6, fontSize:"0.82rem", opacity:0.9 } }, progRow, "層") : null),
     h("div", { className:"flex items-center gap-2" },
       // コインが5桁になっても「残N」袋バッジが押されて縦2行に折れないよう、
       // 各バッジは nowrap+shrink禁止、コインだけ桁数に応じてフォントを縮める
