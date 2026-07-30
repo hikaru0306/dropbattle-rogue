@@ -2155,7 +2155,7 @@ function DropBattle() {
     for (const en of ens) {
       if (turnRef.current.stun) break; // 行動もパターン進行も1ターン遅れる
       if (!en.alive) continue;
-      const actsN = en.twiceNow ? 2 : 1; // 激昂3以上の2回行動（前ターン終了時に抽選済み。予告×2と必ず一致）
+      const actsN = en.twiceNow ? 2 : 1; // 激昂3以上の2回行動（前ターン終了時に抽選済み。予告の「2回」バッジと必ず一致）
       for (let ai = 0; ai < actsN; ai++) {
       const iv = intentOf(en, ens);
       en.pi++;
@@ -2328,7 +2328,7 @@ function DropBattle() {
           en.atk = Math.round(en.atk * 1.08);
           regenLogs.push(`🔥 ${en.name}が激昂！攻撃力上昇${en.enr === 3 ? "・たまに2回行動するように！" : `（${en.enr}）`}`);
           const eid = en.id, twice = en.enr === 3;
-          setTimeout(() => { addPop(eid, twice ? "激昂!×2行動解禁" : "激昂!攻撃UP", "#ff8a5a"); setAnim(eid, "heal"); }, 250);
+          setTimeout(() => { addPop(eid, twice ? "激昂!2回行動解禁" : "激昂!攻撃UP", "#ff8a5a"); setAnim(eid, "heal"); }, 250);
         }
         if (!SIM_MODE && en.shdMax && Math.random() < en.shdC) {
           const gain = Math.round(en.shdMax * (0.5 + Math.random() * 0.5));
@@ -2336,7 +2336,7 @@ function DropBattle() {
         }
         // 激昂3以上の2回行動は毎ターン確定ではなく「次ターンぶん」をここで抽選する。
         //  - 2手目が大技(bigatk)になる並びでは発動しない＝「⏳あと1」の予告を破って ため→大技 を同ターンに撃たない
-        //  - ため/大技のターンはごく稀(15%)・それ以外は50%。予告バッジの×2とダメージ予測はこの結果をそのまま使う
+        //  - ため/大技のターンはごく稀(15%)・それ以外は50%。予告の「2回」バッジとダメージ予測はこの結果をそのまま使う
         const npat = en.pat || KINDS[en.kind].pats[0];
         const nx = npat[en.pi % npat.length], nx2 = npat[(en.pi + 1) % npat.length];
         en.twiceNow = (en.enr || 0) >= 3 && nx2 !== "bigatk"
@@ -4140,6 +4140,7 @@ function DropBattle() {
       hurtEnemies: () => { const ens = enemiesRef.current.map(e => e.alive ? { ...e, hp: Math.max(1, e.hp - 30) } : e); setEnemiesBoth(ens); },
       setShd: (i, v) => { const ens = enemiesRef.current.map((e, ix) => ix === i ? { ...e, shd: v } : e); setEnemiesBoth(ens); },
       setEnrEvery: (i, v) => { const ens = enemiesRef.current.map((e, ix) => ix === i ? { ...e, enrEvery: v } : e); setEnemiesBoth(ens); },
+      setTwice: (i, v) => { const ens = enemiesRef.current.map((e, ix) => ix === i ? { ...e, twiceNow: !!v } : e); setEnemiesBoth(ens); },
       setPat: (i, pat) => { const ens = enemiesRef.current.map((e, ix) => ix === i ? { ...e, pat, pi: 0 } : e); setEnemiesBoth(ens); },
       setCellType: (i, t) => { const b = boardRef.current.slice(); b[i] = { ...b[i], type: t, special: false, up: false, wild: false }; commitBoard(b); },
       setCellSpecial: (i, k, up, wild, extra) => { const b = boardRef.current.slice(); b[i] = { ...b[i], special: k, up: !!up, wild: !!wild, extra: !!extra }; commitBoard(b); },
@@ -5374,7 +5375,7 @@ function DropBattle() {
             const iv = intentOf(en, enemies);
             const pm = PATTERNS[iv.act];
             const charging = en.alive && iv.act === "bigatk";
-            const twice = !!en.twiceNow; // ×2バッジは実際に2回行動するターンだけ（抽選結果と常に一致）
+            const twice = !!en.twiceNow; // 「2回」バッジは実際に2回行動するターンだけ（抽選結果と常に一致）
             // 予告アイコンは塗り画像で表示（数値はテキスト）。IIco=小さめのインライン画像
             const IIco = (src, s = 13) => h("img", { src, alt:"", draggable:false, width:s, height:s, style:{ width:s, height:s, maxWidth:s, maxHeight:s, flexShrink:0, objectFit:"contain", verticalAlign:"middle" } });
             const intentEls = (
@@ -5385,7 +5386,7 @@ function DropBattle() {
               : iv.act === "double" ? [IIco(pm.img), iv.hit + "×" + iv.hits]
               : iv.act === "poison" ? [IIco(pm.img), "+" + POISON_DMG]
               : [IIco(pm.img), iv.dmg]
-              ).concat(twice ? [h("span", { style:{ color:"#ff9a5a", fontWeight:900, marginLeft:1 } }, "×2")] : []);
+              );
             const isDmgIntent = iv.act === "attack" || iv.act === "double" || iv.act === "bigatk" || iv.act === "drain" || iv.act === "jamatk";
             // 状態バッジ（激昂・怒気）の有無。HPバー右上に重ねて出す
             // （以前はスプライト上に行として積んでいて、出た瞬間に攻撃予告が1段上へずれて見づらかった）
@@ -5414,6 +5415,11 @@ function DropBattle() {
                     color: isDmgIntent ? "#ffd9d4" : pm.color,
                     fontSize: gtut === "warn" && isDmgIntent ? 14 : iv.act === "bigatk" ? 11 : 10,
                     textShadow:"0 1px 2px #000" } }, ...intentEls),
+                  // 2回行動は独立セグメントで「2回」と出す。予告の数値に×2を続けると連撃の「140×2」と繋がって
+                  // 「140×2 ×2」になり倍率の重ね掛けに見えてしまう（2手目は別の行動のこともあるので×4への合算も不可）
+                  twice && h("span", { style:{ display:"inline-flex", alignItems:"center", height:16, lineHeight:"16px", padding:"0 5px",
+                    background:"rgba(70,16,10,.92)", borderLeft:"1px solid rgba(255,150,90,.6)", color:"#ff9a5a",
+                    fontSize:10, fontWeight:900, textShadow:"0 1px 2px #000" } }, "2回"),
                   // 条件は必ず真偽値にする: soloUp は 0 を持つため素で && すると 0 が返り、React が「0」を描画してしまう
                   // 高さは予告側と同じ16を明示（未指定だと行送りで1〜2px高くなり継ぎ目に段差が出る）
                   hasStat && h("span", { style:{ display:"inline-flex", alignItems:"center", gap:2, height:16, lineHeight:"16px", padding:"0 5px",
