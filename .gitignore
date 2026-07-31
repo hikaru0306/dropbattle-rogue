@@ -27,3 +27,6 @@ regen_*.png
 retex_targets.txt
 retex_check.html
 redo_pick.html
+
+# アイコン余白トリム前のバックアップ（2026-08）
+assets_backup_pre_trim/
