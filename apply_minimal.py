@@ -32,7 +32,7 @@ def apply(name):
         a[..., 3][bg] = 0
         im = Image.fromarray(a)
         note = f"bgcut({int(bg.sum())}px)"
-    bb = im.getbbox()
+    bb = im.split()[3].getbbox()  # アルファのみでトリム（透明だがRGBが残る画素を無視）
     im = im.crop(bb)
     tgt_max = max(Image.open(dst).size)
     s = tgt_max / max(im.size)
