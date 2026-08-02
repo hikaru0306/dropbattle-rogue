@@ -213,24 +213,12 @@ const P_MAX = 300;
 const NUM_SPECIAL = 5;
 const STAR_THRESHOLD = 6;
 const ATK_PER = 10, DEF_PER = 10, HEAL_PER = 1;
-// 調律師の「共鳴」: ターン開始時に提示される「お題の数」ちょうどで消すと段階が上がる。
-//   倍率 = 1 + 段階（×1 → ×2 → ×3）。そのターンの攻撃・防御・回復すべてに乗る。
-//   外すと段階は0に戻る（余韻の鈴があれば1段階下がるだけ）。
-// 「お題」に使う数。重み付けはせず一様に引き、さらに3つとも別の数にする
-// （偏らせると毎ターン4・5・6ばかりが並んで「似たようなお題」に見えてしまうため）。
-// 調律の音叉を持つと極端な数（2と7）が出なくなる
-const RESO_POOL   = [2, 3, 4, 5, 6, 7];
-const RESO_POOL_F = [3, 4, 5, 6];
-const RESO_SUM_MAX = 16;               // 3つとも大きいと1ターンで成立しないので合計に上限を置く
-// お題の上限は「今ある一番大きい塊 + RESO_STRETCH」まで。消せば上から落ちてきて塊は育つので、
-// 今ちょうどの大きさが無くても“上手く消せば作れる”ぶんの余裕を持たせる
-const RESO_STRETCH = 2;
-const TUNE_MAX = 4;                    // 調律で切り取れる数の上限（ボタンのタップで 1→2→3→4 と循環）
-// お題を合わせるたびに 0.5 ずつ上がる倍率。1.5 → 2 → 2.5 → 3 → 3.5 → 4 と伸び、
-// バトル中はターンをまたいで積み上がり続ける（バトルが変わるとリセット）。大和音の譜で +0.5 底上げ
-const RESO_BASE = 1.5, RESO_STEP = 0.5, RESO_CAP = 4;
-const resoMulAt = (n, up) => Math.min(RESO_BASE + (up ? RESO_STEP : 0) + RESO_STEP * n, RESO_CAP + (up ? RESO_STEP : 0));
-const fmtMul = v => (v % 1 ? v.toFixed(1) : String(v));
+// 調律師の「共鳴」: 3つ目の「調律」で消した数がそのターンの“お題”になる。
+//   攻撃と防御で消した数の合計がお題ちょうどならターン成立＝攻撃・防御・回復すべてに倍率。
+//   倍率は成功したターンが続くほど ×2 → ×3 → ×4 と伸び、1度でも外すと最初（×2）に戻る。
+const RESO_MUL_START = 2;              // 最初に成立したターンの倍率
+const RESO_MUL_CAP = 4;                // 倍率の上限（大和音の譜で +1）
+const resoMulFor = (streak, up) => Math.min(RESO_MUL_START + streak, RESO_MUL_CAP + (up ? 1 : 0));
 // 賭博師の「賭け」: 消した数が賭け金（HP）と見返りの両方を決める。
 //   払うHP = GAMBLE_COST[モード] × 消した数（天使の羽根で最終額を半減・切り上げ）
 //   剛運/鉄運は成功すると「消した数」がそのままその倍率になる（5個消し＝×5）
@@ -1030,26 +1018,6 @@ const perOf = act =>
   + (act === "heal" ? (hasR("healbook") ? 2 : 0) + (hasR("saintprayer") ? 3 : 0) + (hasR("holywater") ? 1 : 0) : 0);
 // タップ起点の消去範囲を確定する。パターン系レリックの追加爆破と、
 // 爆破に巻き込まれた特殊ドロップ（爆弾連鎖・雷）の再帰発動まで含む
-// 調律（カノンの3つ目）用: タップ位置に近いほうから n 個だけを切り取る。
-// findGroup と同じ連結条件を、幅優先で「近い順」に辿ることで実現する（切り取り位置が直感どおりになる）
-const takeNearest = (cells, idx, n) => {
-  const grp = findGroup(cells, idx);
-  const ids = new Set(), seen = new Set([idx]), q = [idx];
-  while (q.length && ids.size < n) {
-    const i = q.shift();
-    if (!grp.has(cells[i].id)) continue;
-    ids.add(cells[i].id);
-    const r = Math.floor(i / SIZE), c = i % SIZE;
-    const nb = [];
-    if (r > 0) nb.push(i - SIZE);
-    if (r < SIZE - 1) nb.push(i + SIZE);
-    if (c > 0) nb.push(i - 1);
-    if (c < SIZE - 1) nb.push(i + 1);
-    for (const j of nb) if (!seen.has(j) && grp.has(cells[j].id)) { seen.add(j); q.push(j); }
-  }
-  return { ids, size: grp.size };
-};
-
 const expandClear = (b, idx, blastOk, crossOk, coreOk) => {
   const seedJunk = b[idx].type === JUNK;
   const ids0 = findGroup(b, idx);
@@ -1943,69 +1911,11 @@ function DropBattle() {
   // 次ターン・バトル開始・リスタート・中断復帰の全経路が1箇所で片付く。
   const resoRef = useRef(0);                               // このバトルでお題を合わせた回数（ターンをまたいで継続）
   const [resoView, setResoView] = useState(0);
-  const [tuneN, setTuneN_] = useState(1);                  // 調律で切り取る数（ボタンのタップで1〜4を循環・冒険をまたいで保持）
-  const tuneNRef = useRef(1);
-  const setTuneN = v => { tuneNRef.current = v; setTuneN_(v); };
-  const boardRef = useRef(board);                          // ※お題抽選が盤面を見るので freshTurn より前に置く
-  const resoRigRef = useRef(null);                          // テスト用: お題3つを固定する
-  // いまの盤面で「実際に作れる消去数」の集合。
-  //  ・攻撃/防御 … expandClear 込みの実消去数（爆弾や核レリックの巻き込みも実際に消える数）
-  //  ・調律     … 塊から好きな数を切り取れるので 1〜TUNE_MAX（最大の塊の大きさまで）が作れる
-  // 1ターン1回の効果（爆破/十字/核）は新しいターンで復活するので、全部使える前提で数える
-  const reachableCounts = () => {
-    const b = boardRef.current;
-    if (!b || !b.length) return null;
-    const seen = new Set(), out = new Set();
-    let maxPlain = 0;
-    for (let i = 0; i < b.length; i++) {
-      const cell = b[i];
-      if (!cell || cell.type === JUNK || seen.has(cell.id)) continue;
-      const grp = findGroup(b, i);
-      grp.forEach(id => seen.add(id));
-      if (grp.size > maxPlain) maxPlain = grp.size;
-      const { ids } = expandClear(b, i, true, true, true);
-      const n = groupInfo(b, ids).count;
-      if (n > 0) out.add(n);
-    }
-    for (let n = 1; n <= Math.min(TUNE_MAX, maxPlain); n++) out.add(n);
-    return out;
-  };
-  const rollQuota = () => {
-    if (resoRigRef.current) return resoRigRef.current.slice();
-    const pool = hasR("tuningfork") ? RESO_POOL_F : RESO_POOL;
-    // いま盤面で作れる数を優先して引く（完全ランダムだと最初から不可能なお題が出てしまう）。
-    // 足りないぶんだけ通常のプールから補う＝お邪魔などで作れる数が少ないターンは自然と難しくなる
-    const reach = reachableCounts();
-    const mx = reach && reach.size ? Math.max(...reach) : 0;
-    // 「今ちょうど作れる数」ぴったりだけに絞ると毎ターン同じ数ばかりになるので、
-    // 上限だけ盤面に合わせる（最大の塊 + 2 まで）。消して落ちてくれば塊は育つ＝上手く消せば届く範囲
-    const cap = mx ? Math.min(7, mx + RESO_STRETCH) : 7;
-    const allowed = pool.filter(v => v <= cap);
-    const q = [];
-    const drawFrom = (bag, want) => {
-      const lim = Math.min(3, q.length + (want == null ? 3 : want));
-      while (q.length < lim && bag.length) q.push(bag.splice(Math.floor(Math.random() * bag.length), 1)[0]);
-    };
-    // 1つ目だけ「今すぐ作れる数」から引く（そのターンに必ず1つは取れる形にする）。
-    // 残り2つは上限内から自由に引く＝毎ターン同じ数ばかりにならない
-    drawFrom(reach ? allowed.filter(v => reach.has(v)) : [], 1);
-    const surely = q.length;
-    drawFrom(allowed.filter(v => !q.includes(v)));
-    drawFrom(pool.filter(v => !q.includes(v)));    // 保険（allowed が3種に満たないとき）
-    while (q.length < 3) q.push(3);
-    // 盤面から取れていないぶんが混ざるターンだけ、合計が大きすぎる組み合わせを避ける
-    let guard = 0;
-    while (surely < 1 && q.reduce((t, v) => t + v, 0) > RESO_SUM_MAX && guard++ < 40) {
-      const i = q.indexOf(Math.max(...q));
-      const cand = pool.filter(v => !q.includes(v) || v === q[i]);
-      q[i] = cand[Math.floor(Math.random() * cand.length)];
-    }
-    // 小さい順に並びがちにならないよう順番もシャッフルする
-    for (let i = 2; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = q[i]; q[i] = q[j]; q[j] = t; }
-    return q;
-  };
-  const resoMul = n => resoMulAt(n, hasR("grandchord")); // n=これまでに合わせた回数 → そのときの倍率
-  const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false, aoe:false, aoeUp:false, coreUsed: {}, resoQuota: CUR_SKILL === "resonate" ? rollQuota() : [0, 0, 0], resoHit: [null, null, null] });
+  const boardRef = useRef(board);
+  const resoRigRef = useRef(null);                          // テスト用: 調律で切る数を固定する（=お題を固定する）
+  // streak = これまで連続で成立したターン数 → このターン成立したときの倍率
+  const resoMul = streak => resoMulFor(streak, hasR("grandchord"));
+  const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false, aoe:false, aoeUp:false, coreUsed: {}, resoTarget: null, resoCnt: {} });
   const turnRef = useRef(freshTurn());
   const syncTurn = () => setTv({ ...turnRef.current });
 
@@ -2131,12 +2041,49 @@ function DropBattle() {
       // 強化と同様、テキストも効果音も出さず間だけ（加算は攻撃/防御の数値と光りで見せる）
       storeStep = { act:"heal", wait: FAST ? 40 : 700 };
     }
+    // カノンの共鳴: 調律で決めたお題に、攻撃も防御も同じ数ちょうどで届いていたらターン成立。
+    // 成立するとそのターンの攻撃・防御・回復すべてに倍率がかかり、続けるほど ×2→×3→×4 と伸びる。
+    // 1度でも外すと最初（×2）からやり直し
+    let resoStep = null;
+    if (charSkillRef.current === "resonate") {
+      const rc = turnRef.current.resoCnt || {};
+      const tgt = turnRef.current.resoTarget;
+      const sum = ["atk", "def"].reduce((t, k) => t + (rc[k] ? rc[k].n : 0), 0);
+      const tol = ["atk", "def", "tune"].reduce((t, k) => t + (rc[k] ? rc[k].tol : 0), 0)
+        + (hasR("tuningfork") ? 1 : 0);   // 調律の音叉: ズレを1個ぶん許す
+      const diff = tgt != null ? Math.abs(sum - tgt) : 99;
+      let ok = tgt != null && rc.atk && rc.def && diff <= tol;
+      // 余韻の鈴: 1ターンに1回だけ、1個ぶんのズレを埋めて成立させる
+      if (!ok && tgt != null && rc.atk && rc.def && hasR("echobell") && diff <= tol + 1) {
+        ok = true; addLog(["鈴 余韻の鈴: 1個ぶんのズレを埋めた"]);
+      }
+      if (ok) {
+        const mul = resoMul(resoRef.current);
+        resoRef.current += 1; setResoView(resoRef.current);
+        const fromAtk = turnRef.current.atk, fromDef = turnRef.current.def, fromHeal = turnRef.current.heal;
+        turnRef.current.atk = Math.round(fromAtk * mul);
+        turnRef.current.def = Math.round(fromDef * mul);
+        turnRef.current.heal = Math.round(fromHeal * mul);
+        turnRef.current.resoMul = mul;
+        syncTurn();
+        addLog([`🎵 共鳴！ 攻撃＋防御で${sum}個＝お題${tgt}個 → このターンの効果すべて ×${mul}`]);
+        playFx([{ text: `共鳴 ×${mul}！`, color:"#8fb2ff" }]);
+        SFX.pick();
+        resoStep = { act:"heal", wait: FAST ? 40 : 700 };
+      } else if (tgt != null || rc.atk || rc.def) {
+        const lost = resoRef.current;
+        resoRef.current = 0; setResoView(0);
+        addLog([tgt == null ? "… 調律を使わなかったので共鳴しなかった"
+          : `… 攻撃＋防御で${sum}個（お題は${tgt}個）でそろわなかった${lost > 0 ? "（倍率は最初から）" : ""}`]);
+      }
+    }
     let { atk, def, heal } = turnRef.current;
     recordCharStats(curCharRef.current, atk, def); // このターンの攻撃力/防御力で記録更新
     const seq = [];
     const logs = [`― ターン ${turnNumRef.current} ―`];
     if (buffStep) seq.push(buffStep);
     if (storeStep) seq.push(storeStep);
+    if (resoStep) seq.push(resoStep);
     const ens = enemiesRef.current.map(e => ({ ...e }));
     const tn = turnNumRef.current;
 
@@ -3165,65 +3112,10 @@ function DropBattle() {
       }
       return;
     }
-    // 調律師の3つ目「調律」: タップした塊から「その手番のお題」ちょうどぶんだけを切り取って消す。
-    // 必ずお題を達成できるが、攻撃・防御・回復そのものは出ない（ガレスの強化と同じ“効果を出さない枠”）。
-    // 塊がお題より小さいと切り取れない＝アクションを消費せずタップ無効。
-    if (act === "heal" && skill === "resonate") {
-      const cell0 = boardRef.current[idx];
-      const slot0 = usedRef.current.size;
-      const q0 = (turnRef.current.resoQuota || [])[slot0] || 0;
-      const n0 = tuneNRef.current;                              // 切り取る数（ボタンのタップで選ぶ）
-      if (cell0.type === JUNK) { SFX.tap(); return; }
-      const cut = takeNearest(boardRef.current, idx, n0);
-      if (cut.size < n0 || cut.ids.size < n0) { SFX.tap(); return; } // 選んだ数に足りない塊は調律できない
-      const tinfo = groupInfo(boardRef.current, cut.ids);
-      // 特殊ドロップのアクション非依存効果（剣/盾/♥/金貨/貫通）は調律で消しても発動する
-      const teff = computeEffect("heal", tinfo);
-      if (teff.splitAtk) turnRef.current.atk += teff.splitAtk;
-      if (teff.splitDef) turnRef.current.def += teff.splitDef;
-      if (teff.healBonus) turnRef.current.heal += teff.healBonus;
-      if (tinfo.sp.pierce > 0) turnRef.current.pierce = true;
-      if (tinfo.sp.gold > 0) {
-        const g = (tinfo.sp.gold - tinfo.spu.gold) * 5 + tinfo.spu.gold * 12;
-        setCoinsBoth(coinsRef.current + g); SFX.coin(); addLog([`金 コイン+${g}`]);
-      }
-      // 切り取った数がその手番のお題と一致していればお題達成（響石の許容差も効く）。
-      // 一致させずに切り取って「盤面を次のターン用に整える」使い方もできる
-      const tolT = ((tinfo.sp.chord || 0) - (tinfo.spu.chord || 0)) + (tinfo.spu.chord || 0) * 2;
-      const hitT = Math.abs(n0 - q0) <= tolT;
-      const mulT = hitT ? resoMul(resoRef.current) : 1;
-      turnRef.current.resoHit[slot0] = hitT ? mulT : 0;
-      if (hitT) {
-        resoRef.current += 1; setResoView(resoRef.current);
-        addLog([`🎵 調律: ${n0}個ちょうどに切り取った（お題${q0}個 達成 ×${fmtMul(mulT)}）`]);
-        if ((turnRef.current.resoHit || []).filter(v => v).length >= 3) { playFx([{ text:"パーフェクト共鳴！", color:"#8fb2ff" }]); SFX.pick(); }
-        else SFX.mode();
-      } else {
-        // お題に合わせずに切り取った場合も「外し」扱い＝はしごは最初からやり直し。
-        // 盤面を整えることとはしごを伸ばすことのトレードオフになる
-        const lostT = resoRef.current;
-        resoRef.current = 0; setResoView(0);
-        addLog([`🎵 調律: ${n0}個だけ切り取った（お題は${q0}個・盤面を整えた${lostT > 0 ? "が倍率は最初から" : ""}）`]);
-        SFX.mode();
-      }
-      ctutFinish();
-      syncTurn();
-      const { next: nextT } = refill(boardRef.current, cut.ids, bagRef, ownedRef, bagUpRef, ownedUpRef);
-      const clearedT = [];
-      boardRef.current.forEach((c, i) => { if (cut.ids.has(c.id)) clearedT.push(i); });
-      const nuT = new Set(usedRef.current); nuT.add("heal");
-      setUsed(nuT); usedRef.current = nuT;
-      setLocked(true); lockedRef.current = true;
-      flyParticles(clearedT, "heal");
-      setClearing(new Set(cut.ids));
-      SFX.clear();
-      setTimeout(() => {
-        commitBoard(nextT); setClearing(new Set()); syncBag();
-        if (nuT.size >= 3) setTimeout(() => resolveTurn(), FAST ? 60 : 350);
-        else { const na = nextInOrder(nuT); setAction(na); actionRef.current = na; setLocked(false); lockedRef.current = false; }
-      }, FAST ? 40 : 240);
-      return;
-    }
+    // 調律師の3つ目「調律」: タップした塊をまるごと消し、その数がそのターンの“お題”になる。
+    // 調律そのものは攻撃・防御・回復を出さない（ガレスの強化と同じ“効果を出さない枠”）。
+    // お邪魔だけの塊では決められない＝アクションを消費せずタップ無効。
+    if (act === "heal" && skill === "resonate" && boardRef.current[idx].type === JUNK) { SFX.tap(); return; }
     const coreK = CORE_BY_COLOR[boardRef.current[idx].type];
     const { ids, seedJunk, blast, cross, red } = expandClear(boardRef.current, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed[coreK]);
     if (blast) turnRef.current.blastUsed = true;
@@ -3259,34 +3151,27 @@ function DropBattle() {
     let mainAdd = eff.main;
     if (act === "atk" && turnRef.current.atkBoost) mainAdd *= 2;
     if (act === "def" && turnRef.current.defBoost) mainAdd *= 2;
-    // 調律師の「お題そろえ」: 何手目かに対応するお題の数ちょうどで消したら、そのアクションの効果に倍率。
-    // 合わせるほど倍率が上がる（1つ目×2 → 2つ目×3 → 3つそろえて×4）。倍率は消した瞬間に確定＝手応えが即わかる
-    if (skill === "resonate" && act !== "heal") {
-      const slot = usedRef.current.size;                       // 0=1手目 / 1=2手目 / 2=3手目
-      const q = (turnRef.current.resoQuota || [])[slot] || 0;
-      // 響石（カノン専用ドロップ）: 1個につきお題との許容差が±1（＋化は±2）
+    // 調律師: 攻撃・防御で消した数を控えておく（お題＝調律で消した数との突き合わせはターン解決時）。
+    // 響石は「合計とお題の差をどこまで許すか」なので、消したときの枚数を一緒に覚えておく
+    if (skill === "resonate") {
       const tol = ((info.sp.chord || 0) - (info.spu.chord || 0)) + (info.spu.chord || 0) * 2;
-      let hit = Math.abs(info.count - q) <= tol;
-      let saved = false;
-      // 余韻の鈴: 1ターンに1回だけ、外したお題を「合った」ことにする
-      if (!hit && hasR("echobell") && !turnRef.current.bellUsed) { hit = true; saved = true; turnRef.current.bellUsed = true; }
-      const mul = hit ? resoMul(resoRef.current) : 1;
-      turnRef.current.resoHit[slot] = hit ? mul : 0;
-      if (hit) {
-        resoRef.current += 1; setResoView(resoRef.current);      // はしごはバトル中ずっと積み上がる
-        mainAdd = Math.round(mainAdd * mul);
-        addLog([`🎵 お題${q}個ぴったり！ ${ACTIONS[act].label} ×${fmtMul(mul)}${saved ? "（余韻の鈴）" : ""}`]);
-        if ((turnRef.current.resoHit || []).filter(v => v).length >= 3) { playFx([{ text:"パーフェクト共鳴！", color:"#8fb2ff" }]); SFX.pick(); }
-        else SFX.mode();
+      if (act === "heal") {
+        turnRef.current.resoTarget = info.count;
+        turnRef.current.resoCnt.tune = { n: info.count, tol };
+        addLog([`🎵 調律: ${info.count}個消した → このターンのお題は「攻撃＋防御で ${info.count}個」`]);
+        SFX.mode();
       } else {
-        // 外したら、はしごは最初（×1.5）からやり直し
-        const lost = resoRef.current;
-        resoRef.current = 0; setResoView(0);
-        addLog([`… お題${q}個に対して${info.count}個。共鳴が途切れた${lost > 0 ? "（倍率は最初から）" : ""}`]);
+        turnRef.current.resoCnt[act] = { n: info.count, tol };
+        const tgt = turnRef.current.resoTarget;
+        const sum = ["atk", "def"].reduce((t, k) => t + (turnRef.current.resoCnt[k] ? turnRef.current.resoCnt[k].n : 0), 0);
+        if (tgt != null) addLog([`🎵 ${ACTIONS[act].label}: ${info.count}個（合計 ${sum} / お題 ${tgt}）`]);
       }
       syncTurn();
     }
-    if (act === "heal" && skill === "buff") {
+    if (act === "heal" && skill === "resonate") {
+      // 調律はお題を決めるだけ。攻撃・防御・回復そのものは出さない
+      ctutFinish();
+    } else if (act === "heal" && skill === "buff") {
       // 強化キャラ：3つ目で消すと倍率を「予約」する。実際の計算はターン解決の攻撃直前
       // （＝強化を先に消しても、後から積んだ攻撃/防御にちゃんと倍率が乗る）
       const st = skillTargetRef.current;
@@ -3732,14 +3617,6 @@ function DropBattle() {
         charSkillRef.current === "smith" && smithModeRef.current !== "stock") {
       const grp = findGroup(b, idx); return { ids:grp, over:true, info: groupInfo(b, grp) };
     }
-    // 調律（カノンの3つ目）は「実際に切り取られる分」だけを光らせる＝どこが消えるかが消す前に見える。
-    // 塊がお題より小さいときは塊全体を出して「足りない」ことを見せる
-    if (statusRef.current === "battle" && actionRef.current === "heal" && charSkillRef.current === "resonate") {
-      const n = tuneNRef.current;
-      const cut = takeNearest(b, idx, n);
-      const ids = cut.size >= n ? cut.ids : findGroup(b, idx);
-      return { ids, over:true, info: groupInfo(b, ids), tuneShort: cut.size < n };
-    }
     const { ids } = expandClear(b, idx, !turnRef.current.blastUsed, !turnRef.current.crossUsed, !turnRef.current.coreUsed[CORE_BY_COLOR[b[idx].type]]);
     return { ids, over:true, info: groupInfo(b, ids) };
   };
@@ -3834,21 +3711,25 @@ function DropBattle() {
         if (info.junk) continue;
         score = info.base * info.mult;
         size = ids.size;
-        // 調律師は「その手番のお題の数」に合わせるのが最優先（通常の最大化とは評価軸が逆）
+        // 調律師は「お題の数」に合わせるのが最優先（通常の最大化とは評価軸が逆）
         if (skill === "resonate") {
-          const q = (t.resoQuota || [])[usedRef.current.size] || 0;
           if (act === "heal") {
-            // 調律は「選んだ数」を切り取る。オートはお題に合わせられるならそれを選ぶ（上限4）。
-            // 余りを盤面に残しすぎないよう、条件を満たす中で最小の塊を選ぶ
-            const n = tuneNRef.current;
-            const raw = findGroup(b, i).size;
-            if (raw < n) continue;
-            score = 100000 - (raw - n) * 1000 + (n === q ? 5000 : 0);
-            size = raw;
+            // 調律はここでお題が決まる。攻防2回で分けやすい 4〜6 個あたりを狙う
+            const want = 5;
+            score = 100000 - Math.abs(info.count - want) * 1000 + Math.min(999, info.base * info.mult);
           } else {
-            const tol = ((info.sp.chord || 0) - (info.spu.chord || 0)) + (info.spu.chord || 0) * 2;
-            const diff = Math.max(0, Math.abs(info.count - q) - tol);
-            score = 100000 - diff * 1000 + Math.min(999, info.base * info.mult);
+            // お題までの「残り」ちょうどを狙う（お題が未定なら大きめに消しておく）
+            const tgt = t.resoTarget;
+            const rc = t.resoCnt || {};
+            const done = ["atk", "def"].reduce((a, k) => a + (rc[k] ? rc[k].n : 0), 0);
+            const need = tgt != null ? tgt - done : null;
+            // お題が未定、または既に合計が超えていて今ターンは成立しないなら、素の効果を最大化する
+            if (need == null || need <= 0) { score = info.base * info.mult; }
+            else {
+              const tol = ((info.sp.chord || 0) - (info.spu.chord || 0)) + (info.spu.chord || 0) * 2;
+              const diff = Math.max(0, Math.abs(info.count - need) - tol);
+              score = 100000 - diff * 1000 + Math.min(999, info.base * info.mult);
+            }
           }
         }
       }
@@ -4158,7 +4039,7 @@ function DropBattle() {
         sv.target = targetRef.current;
         sv.poison = poisonRef.current;
         sv.store = storeRef.current; sv.stock = stockRef.current; sv.reso = resoRef.current;
-        sv.ui = { pc: paintColor, st: skillTarget, sm: smithMode, gm: gambleMode, tn: tuneN };
+        sv.ui = { pc: paintColor, st: skillTarget, sm: smithMode, gm: gambleMode };
       }
       localStorage.setItem(saveKey(curCharRef.current), JSON.stringify(sv));
     } catch (e) {}
@@ -4232,7 +4113,7 @@ function DropBattle() {
       storeRef.current = sv.store || 0; setStoreView(storeRef.current);
       stockRef.current = sv.stock || 0; setStockView(stockRef.current);
       resoRef.current = sv.reso || 0; setResoView(resoRef.current);
-      if (sv.ui) { setPaintColor(sv.ui.pc || 0); setSkillTarget(sv.ui.st || "atk"); setSmithMode(sv.ui.sm || "stock"); setGambleMode(sv.ui.gm || "heal2"); setTuneN(sv.ui.tn || 1); }
+      if (sv.ui) { setPaintColor(sv.ui.pc || 0); setSkillTarget(sv.ui.st || "atk"); setSmithMode(sv.ui.sm || "stock"); setGambleMode(sv.ui.gm || "heal2"); }
       setRewards(null); setShop(null); setCampfire(null);
       setActClear(sv.actClear || null);
       setStatus("battle"); statusRef.current = "battle";
@@ -4473,7 +4354,7 @@ function DropBattle() {
         URA_HP_ACT, URA_ATK_ACT, URA_BOSSHP_ACT, URA_BOSSATK_ACT, CHARS }),
       setCleared: i => setCharState(s => { const c = s.c.includes(i) ? s.c : [...s.c, i]; const ns = { u:s.u, c, cu:s.cu }; saveCharState(ns); return ns; }),
       recordStats: (i, a, d) => recordCharStats(i, a, d), // 0101救済テスト用: 実績を付けて本物クリア扱いにする
-      charInfo: () => ({ cur:curCharRef.current, skill:charSkillRef.current, paint:paintColorRef.current, target:skillTargetRef.current, store:storeRef.current, smithMode:smithModeRef.current, stock:stockRef.current, gambleMode:gambleModeRef.current, tuneN:tuneNRef.current, reso:resoRef.current, resoQuota:(turnRef.current.resoQuota || []).slice(), resoHit:(turnRef.current.resoHit || []).slice() }),
+      charInfo: () => ({ cur:curCharRef.current, skill:charSkillRef.current, paint:paintColorRef.current, target:skillTargetRef.current, store:storeRef.current, smithMode:smithModeRef.current, stock:stockRef.current, gambleMode:gambleModeRef.current, reso:resoRef.current, resoTarget:turnRef.current.resoTarget, resoCnt:{ ...(turnRef.current.resoCnt || {}) }, resoMul:turnRef.current.resoMul || null }),
       setPaint: c => setPaintColor(c),
       setSkillTarget: t => setSkillTarget(t),
       setSmithMode: m => setSmithMode(m),
@@ -4484,9 +4365,7 @@ function DropBattle() {
       recordClear: () => recordClear(),
       // 賭博師テスト用: コインの出目固定 / 4択のモード選択 / 天使悪魔選択 / オーバーレイ状態
       rigCoin: face => { coinRigRef.current = face; }, // "angel"/"demon"/null
-      setTuneN: n => setTuneN(n),
-      resoReach: () => { const r = reachableCounts(); return r ? [...r].sort((x, y) => x - y) : null; },
-      rigReso: q => { resoRigRef.current = q; if (q) { turnRef.current.resoQuota = q.slice(); syncTurn(); } }, // お題3つを固定（nullで解除）
+      resoMulNow: () => resoMul(resoRef.current), // 今このターン成立したときの倍率
       setGambleMode: m => setGambleMode(m),
       gambleChoose: f => gambleChoose(f),
       gambleReveal: () => gambleReveal(), // 回転中のタップ相当（出目を確定）
@@ -5707,6 +5586,9 @@ function DropBattle() {
           tv.atkBoost && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#e05a50", border:"1px solid #e05a50", padding:"1px 4px" } }, "攻2倍"),
           tv.defBoost && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#5a8fd0", border:"1px solid #5a8fd0", padding:"1px 4px" } }, "防2倍"),
           tv.stun && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ color:"#c9a2ff", border:"1px solid #c9a2ff", padding:"1px 4px" } }, "時止め"),
+          CHARS[curChar].skill === "resonate" && h("span", { className:"text-[9px] font-bold rounded-lg", style:{ whiteSpace:"nowrap",
+            color: resoView > 0 ? "#ffd75e" : "#8fb2ff", border:`1px solid ${resoView > 0 ? "#ffd75e" : "rgba(77,123,240,.65)"}`, padding:"1px 4px" } },
+            "そろえば ×", resoMul(resoView)),
           h("span", { className:"flex items-center", style:{ color:"#ff8a80", ...numCell, gap:2, justifyContent:"flex-end" } },
             h("img", { src:"assets/icon_atk.png", alt:"攻", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), dispTv.atk),
           h("span", { className:"flex items-center", style:{ color:"#9db8e8", ...numCell, gap:2, justifyContent:"flex-end" } },
@@ -5725,38 +5607,33 @@ function DropBattle() {
             "（", h("img", { src:"assets/icon_def.png", alt:"", draggable:false, width:11, height:11, style:{ width:11, height:11, maxWidth:11, maxHeight:11, flexShrink:0, objectFit:"contain" } }), effDef, "）"))),
       // アクション（並び＝消化順。ドラッグで入れ替え）
       h("div", { className:"grid grid-cols-3 gap-2 mb-1", ref: actRowRef }, actOrder.map((key, oi) => {
-        // カノンの「お題」バッジ。ボタンの並び順＝消化順なので oi 番目のボタンが oi 番目のお題を担当する。
-        // 絶対配置なので行が増えず、スマホの画面高を圧迫しない（お題帯は廃止してここへ集約）
+        // カノンの「お題」バッジ。お題は調律で消した数（1ターンに1つ）。
+        // 攻撃/防御ボタンには「その数で消せ」、調律ボタンには「これから決める数」を出す。
+        // 絶対配置なので行が増えず、スマホの画面高を圧迫しない
         const quotaBadge = (() => {
           if (CHARS[curChar].skill !== "resonate") return null;
-          const q = (tv.resoQuota || [])[oi] || 0;
-          const hit = (tv.resoHit || [])[oi];                    // null=未消化 / 0=外し / N=倍率
-          const isNow = oi === used.size && !locked;
-          // ドラッグ中は「今つかんでいるグループ」でぴったり判定を先出しする（調律は選んだ切り取り数で判定）
-          const near = isNow && info
-            ? (key === "heal"
-              ? tuneN === q
-              : Math.abs(info.count - q) <= (((info.sp.chord || 0) - (info.spu.chord || 0)) + (info.spu.chord || 0) * 2))
+          const tgt = tv.resoTarget;                             // null = まだ調律していない
+          const rc = tv.resoCnt || {};
+          const isTune = key === "heal";
+          const done = ["atk", "def"].reduce((a, k) => a + (rc[k] ? rc[k].n : 0), 0);
+          const used_ = isTune ? tgt != null : !!rc[key];
+          const isSelNow = action === key && !used.has(key) && !locked;
+          // 攻撃/防御は「お題まであと何個」を出す。調律はお題を決める側
+          const need = tgt != null ? tgt - done : null;
+          const label = isTune ? (tgt != null ? String(tgt) : "?")
+            : (tgt == null ? "?" : used_ ? String(rc[key].n) : String(Math.max(0, need)));
+          const near = !isTune && isSelNow && info && tgt != null
+            ? Math.abs(info.count - need) <= (((info.sp.chord || 0) - (info.spu.chord || 0)) + (info.spu.chord || 0) * 2)
             : false;
-          const col = hit ? "#ffd75e" : hit === 0 ? "#6b6480" : near ? "#ffd75e" : isNow ? "#8fb2ff" : "#9b93a6";
+          const col = used_ ? "#ffd75e" : near ? "#ffd75e" : isSelNow ? "#8fb2ff" : "#9b93a6";
           return h("span", { key:"q", className:"absolute flex items-center font-bold", style:{ left:3, top:2, gap:1, padding:"0 3px", borderRadius:7,
             fontSize:10, lineHeight:1.5, color:col, fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap", pointerEvents:"none", zIndex:2,
-            background: near ? "rgba(255,215,94,.2)" : isNow ? "rgba(77,123,240,.18)" : "transparent",
-            border:`1px solid ${hit ? "#ffd75e" : near ? "#ffd75e" : isNow ? "rgba(77,123,240,.65)" : "#3c3450"}`,
-            textDecoration: hit === 0 ? "line-through" : "none",
-            textShadow: (near || hit) ? "0 0 6px rgba(255,215,94,.8)" : "none",
+            background: near ? "rgba(255,215,94,.2)" : isSelNow ? "rgba(77,123,240,.18)" : "transparent",
+            border:`1px solid ${used_ ? "#ffd75e" : near ? "#ffd75e" : isSelNow ? "rgba(77,123,240,.65)" : "#3c3450"}`,
+            textShadow: (near || used_) ? "0 0 6px rgba(255,215,94,.8)" : "none",
             transition:"color .15s ease, border-color .15s ease, background .15s ease" } },
-            q || "-", h("span", { style:{ fontSize:8, opacity:0.9 } },
-              // 320px幅ではバッジがアイコンに被るので矢印は入れない（達成=金/これから=青の色分けで区別できる）
-              hit ? "×" + fmtMul(hit) : hit === 0 ? "－" : isNow ? "×" + fmtMul(resoMul(resoView)) : "個"));
-        })();
-        // カノン: 今つかんでいるグループが「その手番のお題」ぴったりなら、かかる予定の倍率
-        const resoPrevMul = (() => {
-          if (CHARS[curChar].skill !== "resonate" || !info || key === "heal") return 1;
-          const q = (tv.resoQuota || [])[used.size] || 0;
-          const tol = ((info.sp.chord || 0) - (info.spu.chord || 0)) + (info.spu.chord || 0) * 2;
-          if (Math.abs(info.count - q) > tol) return 1;
-          return resoMul(resoView);
+            label, h("span", { style:{ fontSize:8, opacity:0.9 } },
+              isTune ? "個" : used_ ? "消" : tgt == null ? "" : "残"));
         })();
         const curSkill = CHARS[curChar].skill;
         const dragSt = actDragStyle(key, oi);
@@ -5850,23 +5727,17 @@ function DropBattle() {
                 : h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color:"#ff8a8a" } }, "はずれ"))
               : h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color: selN > 0 ? (willDie ? "#ff6a6a" : "#ffd75e") : "#e0d8f0", textShadow: willDie ? "0 0 8px rgba(255,60,60,.9)" : "none" } },
                   effTxt);
-                    } else if (curSkill === "resonate") {
-            // 調律: タップで選んだ数(1〜4)ぶんだけ切り取る。お題と一致していれば達成＝金色で予告する
-            const rq = (tv.resoQuota || [])[used.size] || 0;
-            title = "調律 " + tuneN + "個";
+          } else if (curSkill === "resonate") {
+            // 調律: タップで選んだ数(1〜4)ぶんだけ切り取る。ここで消した数がそのターンのお題になる
+            title = tv.resoTarget != null ? "調律 " + tv.resoTarget + "個" : "調律";
             iconEl = h("img", { src:"assets/mk_chord.png", alt:"", draggable:false, width:18, height:18, style:{ width:18, height:18, maxWidth:18, maxHeight:18, marginTop:5, objectFit:"contain", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.4))" } });
-            const rMul = fmtMul(resoMul(resoView));
-            // ドラッグ中は「その塊から切り取れるか」を出す（塊がお題以上なら必ず達成できる）
-            const canCut = isSel && preview && preview.ids ? !preview.tuneShort : null;
-            const willHitQ = tuneN === rq;                       // 選んだ数がお題と一致＝そのまま達成できる
+            // ドラッグ中は「この塊を消すとお題がいくつになるか」を出す
+            const selN = isSel && info ? info.count : 0;
             valEl = isUsed
-              ? h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color:"#ffd75e" } }, "切り取り")
-              : canCut === false
-              ? h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color:"#ff8a8a" } }, "足りない")
-              : willHitQ
-              // 「お題ぴったり ×1.5」は幅に収まらず2行に折れてタイトルへ被るので短くしてnowrap固定
-              ? h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color:"#ffd75e", whiteSpace:"nowrap", textShadow: canCut ? "0 0 8px rgba(255,215,94,.9)" : "none" } }, "ぴったり ×" + rMul)
-              : h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color:"#c9bfe0", whiteSpace:"nowrap" } }, "切り取りのみ");
+              ? h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color:"#ffd75e", whiteSpace:"nowrap" } }, "お題 " + tv.resoTarget + "個")
+              : selN > 0
+              ? h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color:"#ffd75e", whiteSpace:"nowrap", textShadow:"0 0 8px rgba(255,215,94,.9)" } }, "お題 " + selN + "個")
+              : h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color:"#c9bfe0", whiteSpace:"nowrap" } }, "お題を決める");
           } else {
             title = "蓄積";
             iconEl = h("img", { src:"assets/mk_store.png", alt:"", draggable:false, width:18, height:18, style:{ width:18, height:18, maxWidth:18, maxHeight:18, marginTop:5, objectFit:"contain", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.4))" } });
@@ -5888,7 +5759,6 @@ function DropBattle() {
               else if (curSkill === "smith") { setSmithMode(smithMode === "stock" ? "gen" : smithMode === "gen" ? "up" : "stock"); SFX.mode(); }
               else if (curSkill === "buff") { setSkillTarget(skillTarget === "atk" ? "def" : "atk"); SFX.mode(); }
               else if (curSkill === "gamble") { const gi = GAMBLE_MODES.indexOf(gambleMode); setGambleMode(GAMBLE_MODES[(gi + 1) % GAMBLE_MODES.length]); SFX.mode(); }
-              else if (curSkill === "resonate") { setTuneN(tuneN % TUNE_MAX + 1); SFX.mode(); }
               // チュートリアルのステップ進行（切替の体験 → 対象指定へ）
               if (ct) {
                 if (ct.step === "cycle1") setCtut({ ...ct, step: "cycle2" });
@@ -5952,12 +5822,12 @@ function DropBattle() {
         } else if (isSel && selEff) {
           // カノン: お題ぴったりなら、消す前のプレビュー段階で倍率をかけた値を出す
           // （「4個でぴったり → 攻撃が80になる」が消す前に見えるのがこのキャラの手応え）
-          let v = selEff.main * (curSkill === "resonate" ? resoPrevMul : 1);
+          let v = selEff.main;
           if (key === "atk") v += selEff.splitAtk;
           if (key === "def") v += selEff.splitDef;
           if (key === "heal") v += selEff.healBonus;
           const base = dispTv[key];
-          const tc = (info && info.mult > 1) || resoPrevMul > 1 ? "#ffe88a" : "#fff";
+          const tc = info && info.mult > 1 ? "#ffe88a" : "#fff";
           // 蓄積(+N)と併記するときは「(+bonus)」内訳を省いて合計だけにする（3つ並ぶと段差になるため）
           valEl = base > 0 ? (storeAdd != null ? mkTotal(base + v, tc) : mkBreakdown(base + v, base, v, tc)) : `+${v}`;
         } else if (crossBonus > 0) {

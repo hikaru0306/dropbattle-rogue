@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 """調律師カノン（resonate）検証。
 
-コア: 毎ターン「お題」が3つ出る。1手目・2手目・3手目をその数ちょうどで消すと、
-そのアクションの効果に倍率がかかる。倍率は合わせるたびに0.5ずつ上がり
-（×1.5 → ×2 → ×2.5 → ×3 → ×3.5 → ×4・上限4）、バトル中はターンをまたいで伸び続ける。
-外すと ×1.5 からやり直し。
-倍率は消した瞬間に確定する（＝手応えが即わかる）。外しても他の手には影響しない。
-3つ目の「調律」はボタンのタップで切り取る数を1〜4から選び、その数だけを塊から切り取る。
-専用ドロップ響石=許容差±1(＋化±2)／レリック 音叉(お題3〜6)・余韻の鈴(1回だけ救済)・大和音の譜(倍率+1段)。
+コア: 3つ目の「調律」でタップした塊をまるごと消すと、その数がそのターンの「お題」になる。
+攻撃と防御で消した数の“合計”がお題ちょうどならターン成立＝攻撃・防御・回復すべてに倍率。
+倍率は成功したターンが続くほど ×2 → ×3 → ×4（上限4）と伸び、外すと ×2 からやり直し。
+調律そのものは攻撃・防御・回復を出さない。
+専用ドロップ響石=ズレの許容+1(＋化+2)／レリック 音叉(許容+1)・余韻の鈴(1個ズレを救済)・
+大和音の譜(倍率の上限+1)。
 """
 import sys, time
 from playwright.sync_api import sync_playwright
@@ -41,9 +40,8 @@ def run_of(n, row=0):
     return idxs
 
 def do_act(p, act, n, row=0, chord=None):
-    """act を n 個消しで1回使う。chord に (pos, up) を渡すとそのセルに響石を仕込む。
-    3手目はコミット直後に自動でターン解決へ入って resoHit が freshTurn で消えるので、
-    判定結果は「同じ evaluate の中で」読み取って返す。"""
+    """act を n 個の塊で1回使う。chord に (pos, up) を渡すとそのセルに響石を仕込む。
+    3手目はコミット直後に自動でターン解決へ入るので、結果は同じ evaluate 内で読み取って返す。"""
     idxs = run_of(n, row)
     make_group(p, idxs); time.sleep(0.08)
     if chord is not None:
@@ -51,9 +49,10 @@ def do_act(p, act, n, row=0, chord=None):
         p.evaluate(f"window.__test.setCellSpecial({idxs[pos]}, 'chord', {str(up).lower()}, false, false)")
         time.sleep(0.1)
     p.evaluate(f"window.__test.setAct('{act}')")
-    hits = p.evaluate(f"(() => {{ window.__test.commit({idxs[0]}); return window.__test.charInfo().resoHit; }})()")
+    info = p.evaluate(f"(() => {{ window.__test.commit({idxs[0]}); const c = window.__test.charInfo();"
+                      f" return {{ target: c.resoTarget, cnt: c.resoCnt, reso: c.reso }}; }})()")
     time.sleep(0.35)
-    return hits
+    return info
 
 def fresh_battle(p):
     p.evaluate("window.__test.restart()"); time.sleep(0.4)
@@ -61,15 +60,17 @@ def fresh_battle(p):
     p.evaluate(f"window.__test.enter({s['selectable'][0]})"); time.sleep(0.8)
     p.evaluate("window.__test.spawn(['golem'])"); time.sleep(0.3)
 
-def roll_quotas(p, n):
-    """アクションを消さずにターン解決だけ回して、毎ターンの (お題3つ, その盤面で作れる数) を集める"""
-    rolls = []
-    for _ in range(n):
-        if st(p)["status"] != "battle": break
-        rolls.append((ci(p)["resoQuota"], p.evaluate("window.__test.resoReach()") or []))
-        p.evaluate("window.__test.setPHP(300)")
-        p.evaluate("window.__test.resolve()"); time.sleep(0.75)
-    return rolls
+def full_turn(p, tune_n, atk_n, def_n):
+    """調律 → 攻撃 → 防御 の順で1ターン回す（3手目で自動解決）。
+    tune_n がお題、atk_n + def_n がそれに一致すれば成立する。
+    倍率が乗ると敵を倒してしまい、次のバトルで連勝数がリセットされるので毎ターン敵を出し直す"""
+    p.evaluate("window.__test.setPHP(300)")
+    p.evaluate("window.__test.spawn(['golem'])"); time.sleep(0.2)
+    do_act(p, "heal", tune_n, 0)              # 調律（塊まるごと＝この数がお題）
+    do_act(p, "atk", atk_n, 2)
+    do_act(p, "def", def_n, 4)                # 3手目 → 自動でターン解決
+    time.sleep(1.6)
+    if st(p)["status"] != "battle": fresh_battle(p)
 
 with sync_playwright() as pw:
     b = pw.chromium.launch(executable_path=EXE)
@@ -88,105 +89,94 @@ with sync_playwright() as pw:
     page.click("text=この仲間と冒険に出る"); time.sleep(0.6)
     chk("char applied (resonate)", ci(page)["skill"] == "resonate", ci(page)["skill"])
 
-    # ―― 2) 初期袋: 3つ目が「調律」で回復でないので 剣4/盾4/回復1 + 響石3 ――
+    # ―― 2) 初期袋: 3つ目が回復でないので 剣4/盾4/回復1 + 響石3 ――
     o = st(page)["owned"]
     chk("owns chord x3 + 4/4/1", o["chord"] == 3 and o["atk"] == 4 and o["def"] == 4 and o["heal"] == 1, str(o))
 
+    # ―― 3) 調律で消した数がそのターンのお題になる ――
     fresh_battle(page)
+    chk("no target before 調律", ci(page)["resoTarget"] is None, str(ci(page)["resoTarget"]))
+    r = do_act(page, "heal", 5, 0)            # 5個の塊をまるごと消す
+    chk("調律 sets the turn target to the cleared count", r["target"] == 5, str(r["target"]))
+    tv = st(page)["tv"]
+    chk("調律 produces no atk/def/heal", tv["atk"] == 0 and tv["def"] == 0 and tv["heal"] == 0,
+        str({k: tv[k] for k in ("atk", "def", "heal")}))
 
-    # ―― 3) お題は3つ・毎ターン引き直し・2〜7 ――
-    page.evaluate("window.__test.rigReso(null)")
-    q = ci(page)["resoQuota"]
-    chk("quota has 3 numbers", isinstance(q, list) and len(q) == 3, str(q))
-    rolls = roll_quotas(page, 24)
-    seen = {v for q, _ in rolls for v in q}
-    chk("quota values in 2..7", all(2 <= v <= 7 for v in seen), str(sorted(seen)))
-    chk("quota re-rolled (>2 distinct values overall)", len(seen) > 2, str(sorted(seen)))
-    # 偏り対策: 同じターンに同じ数を出さない／4-5-6ばかりにならない
-    chk("the 3 quotas of a turn are always different", all(len(set(q)) == 3 for q, _ in rolls),
-        str([q for q, _ in rolls if len(set(q)) != 3][:3]))
-    flat = [v for q, _ in rolls for v in q]
-    mid = sum(1 for v in flat if v in (4, 5, 6)) / max(1, len(flat))
-    chk("4/5/6 do not dominate (<70%)", mid < 0.70, f"{mid:.0%} of {len(flat)} draws")
-    # 盤面で作れる数から出す: 毎ターン最低1つは「今すぐ作れる数」、残りも
-    # 「一番大きい塊+2」の範囲（消して落ちてくれば届く）に収まっている
-    bad_now = [(q, r) for q, r in rolls if r and not any(v in r for v in q)]
-    chk("every turn offers at least one quota that is makeable right now", not bad_now, str(bad_now[:2]))
-    bad_cap = [(q, r) for q, r in rolls if r and max(q) > min(7, max(r) + 2)]
-    chk("quotas stay within (biggest group + 2)", not bad_cap, str(bad_cap[:2]))
-
-    # ―― 4) 本丸: 1手目 4個 → 攻撃×2 / 2手目 2個 → 防御×3 / 3手目 3個 → 回復×4 ――
-    fresh_battle(page)
-    page.evaluate("window.__test.rigReso([4,2,3])"); time.sleep(0.1)
-    chk("rigReso fixes quota", ci(page)["resoQuota"] == [4, 2, 3], str(ci(page)["resoQuota"]))
+    # ―― 4) 本丸: 攻撃も防御も同じ数で消したら全パラメーターに倍率 ――
     per = st(page)["per"]
-    do_act(page, "atk", 4, 0)                        # 1手目 ぴったり → ×1.5
-    tv1 = st(page)["tv"]
-    chk("hit1: atk = 4 x per x1.5", tv1["atk"] == round(4 * per["atk"] * 1.5), f"{tv1['atk']} vs {round(4*per['atk']*1.5)}")
-    chk("hit1 recorded as x1.5", ci(page)["resoHit"][0] == 1.5, str(ci(page)["resoHit"]))
-    do_act(page, "def", 2, 2)                        # 2手目 ぴったり → ×2
-    tv2 = st(page)["tv"]
-    chk("hit2: def = 2 x per x2", tv2["def"] == 2 * per["def"] * 2, f"{tv2['def']} vs {2*per['def']*2}")
-    chk("hit2 recorded as x2", ci(page)["resoHit"][1] == 2, str(ci(page)["resoHit"]))
+    do_act(page, "atk", 3, 2)                 # お題5 に対して 3 + 2 で合わせる
+    idxs = run_of(2, 4)
+    make_group(page, idxs); time.sleep(0.1)
+    page.evaluate(f"window.__test.setCellSpecial({idxs[1]}, 'heal', false, false, false)")  # 回復にも乗ることを見る
+    time.sleep(0.12)
+    page.evaluate("window.__test.setAct('def')")
+    raw = st(page)["tv"]
+    raw_atk, raw_heal = raw["atk"], raw["heal"]
     hp0 = st(page)["enemies"][0]["hp"]
-    page.evaluate("window.__test.setTuneN(3)"); time.sleep(0.1)
-    hit3 = do_act(page, "heal", 5, 4)                # 3手目=調律。5個の塊から3個を切り取る（お題3）→ ×2.5
-    chk("hit3 (調律) recorded as x2.5 (perfect)", hit3 == [1.5, 2, 2.5], str(hit3))
-    notes.append(f"お題4・2・3を全部ぴったり: 攻撃{tv1['atk']}（×1.5）/ 防御{tv2['def']}（×2）/ 調律×2.5")
+    # 3手目はコミット直後（数十ms後）に自動でターン解決へ入り、その頭で倍率が乗る。
+    # 「解決に入った後・freshTurn で初期化される前」の窓で tv を読む
+    page.evaluate(f"window.__test.commit({idxs[0]})")
+    time.sleep(0.25)
+    after = st(page)["tv"]
+    chk("atk x2 on the first success", after["atk"] == raw_atk * 2, f"{after['atk']} vs {raw_atk}")
+    chk("def x2 on the first success", after["def"] == 2 * per["def"] * 2, f"{after['def']} vs {2*per['def']*2}")
+    chk("heal x2 on the first success", after["heal"] == (raw_heal + 10) * 2, f"{after['heal']} vs {(raw_heal+10)*2}")
+    chk("streak becomes 1", ci(page)["reso"] == 1, str(ci(page)["reso"]))
+    notes.append(f"お題5を 攻撃3+防御2 で成立: 攻撃 {raw_atk}→{after['atk']} / 防御 →{after['def']} / 回復 →{after['heal']}（×2）")
     time.sleep(1.6)
     dealt = hp0 - st(page)["enemies"][0]["hp"]
-    chk("damage dealt matches the boosted atk", dealt == tv1["atk"], f"dealt={dealt} tv.atk={tv1['atk']}")
+    chk("damage dealt matches the doubled atk", dealt == after["atk"], f"dealt={dealt} atk={after['atk']}")
 
-    # ―― 5) 外した手は等倍。倍率のはしごは「合わせた回数」で進む ――
+    # ―― 5) 連続で成立すると ×2 → ×3 → ×4 と伸びて頭打ち ――
     fresh_battle(page)
-    page.evaluate("window.__test.rigReso([4,2,3])"); time.sleep(0.1)
-    do_act(page, "atk", 5, 0)                        # 1手目 外し（4に対して5個）
-    tvm = st(page)["tv"]
-    chk("miss: atk is plain", tvm["atk"] == 5 * per["atk"], f"{tvm['atk']} vs {5*per['atk']}")
-    chk("miss recorded as 0", ci(page)["resoHit"][0] == 0, str(ci(page)["resoHit"]))
-    do_act(page, "def", 2, 2)                        # 2手目 ぴったり → はしごは最初なので ×1.5
-    tvm2 = st(page)["tv"]
-    chk("after a miss, the next hit is x1.5", tvm2["def"] == round(2 * per["def"] * 1.5), f"{tvm2['def']} vs {round(2*per['def']*1.5)}")
-    chk("hit ladder counts hits, not slots", ci(page)["resoHit"] == [0, 1.5, None], str(ci(page)["resoHit"]))
+    streaks = []
+    for _ in range(4):
+        full_turn(page, 5, 3, 2)
+        streaks.append(ci(page)["reso"])
+    chk("streak climbs 1,2,3,4 over consecutive turns", streaks == [1, 2, 3, 4], str(streaks))
+    chk("multiplier caps at 4", page.evaluate("window.__test.resoMulNow()") == 4,
+        str(page.evaluate("window.__test.resoMulNow()")))
 
-    # ―― 5b) 伸ばしたはしごも、外した瞬間に×1.5へ巻き戻る ――
+    # ―― 6) 1つでも外すと ×2 からやり直し ――
+    full_turn(page, 5, 4, 3)                  # 攻撃だけ外す
+    chk("a miss resets the streak", ci(page)["reso"] == 0, str(ci(page)["reso"]))
+    chk("next success is x2 again", page.evaluate("window.__test.resoMulNow()") == 2,
+        str(page.evaluate("window.__test.resoMulNow()")))
+    full_turn(page, 5, 3, 2)
+    chk("and it climbs again from there", ci(page)["reso"] == 1, str(ci(page)["reso"]))
+
+    # ―― 7) 調律を使わなかったターンは成立しない ――
     fresh_battle(page)
-    page.evaluate("window.__test.rigReso([3,3,3])"); time.sleep(0.1)
-    page.evaluate("window.__test.setTuneN(3)"); time.sleep(0.1)
     do_act(page, "atk", 3, 0); do_act(page, "def", 3, 2)
-    chk("ladder climbed to 2 hits", ci(page)["reso"] == 2, str(ci(page)["reso"]))
-    do_act(page, "heal", 5, 4)                       # 3手目=調律(3個)でお題3を達成 → 3段目
+    tv0 = st(page)["tv"]
+    page.evaluate("window.__test.resolve()")
+    tv1 = st(page)["tv"]
+    chk("no 調律 -> no multiplier", tv1["atk"] == tv0["atk"], f"{tv1['atk']} vs {tv0['atk']}")
+    chk("no 調律 -> streak stays 0", ci(page)["reso"] == 0, str(ci(page)["reso"]))
     time.sleep(1.6)
-    if st(page)["status"] != "battle": fresh_battle(page)
-    page.evaluate("window.__test.rigReso([3,3,3])"); time.sleep(0.1)
-    chk("ladder is at 3 across the turn", ci(page)["reso"] == 3, str(ci(page)["reso"]))
-    do_act(page, "atk", 5, 0)                        # 外す → 巻き戻る
-    chk("a miss resets the ladder to the start", ci(page)["reso"] == 0, str(ci(page)["reso"]))
-    do_act(page, "def", 3, 2)                        # 次の的中は ×1.5 から
-    chk("after the reset the next hit is x1.5 again", ci(page)["resoHit"][1] == 1.5, str(ci(page)["resoHit"]))
 
-    # ―― 6) お題・達成状況はターン開始でリセットされる ――
-    page.evaluate("window.__test.setTuneN(3)"); time.sleep(0.1)
-    do_act(page, "heal", 5, 4)
-    time.sleep(1.6)
-    if st(page)["status"] != "battle": fresh_battle(page)
-    chk("resoHit cleared on the new turn", all(v is None for v in ci(page)["resoHit"]), str(ci(page)["resoHit"]))
-    chk("ladder itself survives the turn (still climbing)", ci(page)["reso"] >= 2, str(ci(page)["reso"]))
-
-    # ―― 7) 響石: お題との差1個でも「ぴったり」（＋化は2個） ――
+    # ―― 8) 調律: お邪魔だけの塊では決められない（アクションも消費しない） ――
     fresh_battle(page)
-    page.evaluate("window.__test.rigReso([4,4,4])"); time.sleep(0.1)
-    do_act(page, "atk", 5, 0, chord=(1, False))      # 5個（差1）＋響石1個 → 的中
-    chk("chord: |5-4|=1 counts as a hit", ci(page)["resoHit"][0] == 1.5, str(ci(page)["resoHit"]))
-    do_act(page, "def", 6, 2, chord=(1, True))       # 6個（差2）＋＋化響石 → 的中
-    chk("chord+: |6-4|=2 counts as a hit", ci(page)["resoHit"][1] == 2, str(ci(page)["resoHit"]))
-    page.evaluate("window.__test.setTuneN(4)"); time.sleep(0.1)
-    h3 = do_act(page, "heal", 6, 4)                  # 3手目=調律。切り取り数4=お題4 → 達成
-    chk("調律 with a matching cut fulfils the quota", h3[2] == 2.5, str(h3))
-    time.sleep(1.6)
+    make_group(page, run_of(3, 5)); time.sleep(0.1)
+    page.evaluate("window.__test.setCellType(35, 4)")   # JUNK
+    time.sleep(0.15)
+    used0 = st(page)["used"]
+    page.evaluate("window.__test.setAct('heal')")
+    page.evaluate("window.__test.commit(35)"); time.sleep(0.4)
+    chk("調律: a junk tap is rejected (action not spent)", st(page)["used"] == used0,
+        f"{st(page)['used']} vs {used0}")
+    chk("調律: a junk tap sets no target", ci(page)["resoTarget"] is None, str(ci(page)["resoTarget"]))
 
-    # ―― 8) 専用レリック: プールに3種／他キャラでは出ない ――
+    # ―― 10) 響石: お題との差1個でも「ぴったり」（＋化は2個） ――
+    fresh_battle(page)
+    do_act(page, "heal", 5, 0)                                   # お題=5
+    do_act(page, "atk", 3, 2, chord=(1, False))                  # 響石1個 → ズレ許容+1
+    do_act(page, "def", 3, 4)                                    # 合計6（お題5との差1）→ 響石で成立
+    time.sleep(1.6)
+    chk("chord widens the tolerance (turn still succeeds)", ci(page)["reso"] == 1, str(ci(page)["reso"]))
     if st(page)["status"] != "battle": fresh_battle(page)
+
+    # ―― 11) 専用レリック: プールに3種／他キャラでは出ない ――
     pool = page.evaluate("window.__test.relicPool()")
     for k in ("tuningfork", "echobell", "grandchord"):
         chk(f"relic {k} in canon pool", k in pool, "not in pool")
@@ -197,115 +187,43 @@ with sync_playwright() as pw:
         str([k for k in ("tuningfork", "echobell", "grandchord") if k in pool0]))
     page.evaluate("window.__test.setChar(7)"); time.sleep(0.2)
 
-    # ―― 9) 大和音の譜: 倍率が ×3 → ×4 → ×5 に底上げ ――
+    # ―― 12) 大和音の譜: 倍率の上限が×5になる ――
     fresh_battle(page)
     page.evaluate("window.__test.giveRelic('grandchord')"); time.sleep(0.2)
-    page.evaluate("window.__test.rigReso([3,3,3])"); time.sleep(0.1)
-    page.evaluate("window.__test.setTuneN(3)"); time.sleep(0.1)
-    do_act(page, "atk", 3, 0); do_act(page, "def", 3, 2)
-    hg = do_act(page, "heal", 5, 4)
-    chk("grandchord: ladder starts at 2 (+0.5)", hg == [2, 2.5, 3], str(hg))
-    time.sleep(1.6)
+    for _ in range(4):
+        full_turn(page, 5, 3, 2)
+    chk("grandchord: cap becomes 5", page.evaluate("window.__test.resoMulNow()") == 5,
+        str(page.evaluate("window.__test.resoMulNow()")))
 
-    # ―― 10) 余韻の鈴: 1ターンに1回だけ外しを救済する ――
+    # ―― 13) 余韻の鈴: 1つ外していても成立したことにする ――
     fresh_battle(page)
     page.evaluate("window.__test.giveRelic('echobell')"); time.sleep(0.2)
-    page.evaluate("window.__test.rigReso([3,3,3])"); time.sleep(0.1)
-    do_act(page, "atk", 5, 0)                        # 外し → 鈴が救済して的中扱い
-    chk("echobell saves the first miss", ci(page)["resoHit"][0] == 1.5, str(ci(page)["resoHit"]))
-    do_act(page, "def", 5, 2)                        # 2度目の外しは救済されない
-    chk("echobell works once per turn", ci(page)["resoHit"][1] == 0, str(ci(page)["resoHit"]))
-    chk("echobell: the saved miss did not reset the ladder, the real miss did", ci(page)["reso"] == 0, str(ci(page)["reso"]))
-    page.evaluate("window.__test.setTuneN(3)"); time.sleep(0.1)
-    do_act(page, "heal", 5, 4)
-    time.sleep(1.6)
-    if st(page)["status"] != "battle": fresh_battle(page)
-    page.evaluate("window.__test.rigReso([3,3,3])"); time.sleep(0.1)
-    ladder0 = ci(page)["reso"]
-    do_act(page, "atk", 5, 0)                        # 次のターンは鈴が復活している
-    chk("echobell recharges next turn", ci(page)["resoHit"][0] > 0, str(ci(page)["resoHit"]))
-    time.sleep(0.2)
+    full_turn(page, 5, 3, 3)                  # 合計6（お題5との差1）→ 鈴が救済
+    chk("echobell rescues a 1-off sum", ci(page)["reso"] == 1, str(ci(page)["reso"]))
+    fresh_battle(page)
+    page.evaluate("window.__test.giveRelic('echobell')"); time.sleep(0.2)
+    full_turn(page, 5, 4, 3)                  # 合計7（差2）→ 救済されない
+    chk("echobell does not rescue a 2-off sum", ci(page)["reso"] == 0, str(ci(page)["reso"]))
 
-    # ―― 11) 調律の音叉: お題が3〜6に狭まる ――
+    # ―― 14) 調律の音叉: 合計が1個ズレていても成立する ――
     fresh_battle(page)
     page.evaluate("window.__test.giveRelic('tuningfork')"); time.sleep(0.2)
-    page.evaluate("window.__test.rigReso(null)"); time.sleep(0.1)
-    page.evaluate("window.__test.resolve()"); time.sleep(1.2)
-    rolls2 = roll_quotas(page, 16)
-    seen2 = {v for q, _ in rolls2 for v in q}
-    chk("tuningfork: quota in 3..6", all(3 <= v <= 6 for v in seen2), str(sorted(seen2)))
-    chk("tuningfork: the 3 quotas are still all different", all(len(set(q)) == 3 for q, _ in rolls2),
-        str([q for q, _ in rolls2 if len(set(q)) != 3][:3]))
+    full_turn(page, 5, 3, 3)                  # 合計6（お題5との差1）→ 音叉で成立
+    chk("tuningfork: a 1-off sum still succeeds", ci(page)["reso"] == 1, str(ci(page)["reso"]))
 
-    # ―― 12) 中断セーブ往復でお題と達成状況が復元される ――
+    # ―― 15) 中断セーブ往復でお題・連勝数が復元される ――
     fresh_battle(page)
-    page.evaluate("window.__test.rigReso([4,2,3])"); time.sleep(0.1)
-    do_act(page, "atk", 4, 0)
-    q_before, hit_before = ci(page)["resoQuota"], ci(page)["resoHit"]
+    full_turn(page, 5, 3, 2)                  # 連勝1
+    do_act(page, "heal", 4, 0)                # 次のターンでお題だけ決めておく
+    tgt0, streak0 = ci(page)["resoTarget"], ci(page)["reso"]
     page.evaluate("window.__test.suspend()"); time.sleep(0.8)
     sv = page.evaluate("window.__test.saveData(7)")
-    chk("save keeps the quota", sv and sv.get("tv", {}).get("resoQuota") == q_before, str(sv.get("tv", {}).get("resoQuota") if sv else None))
+    chk("save keeps the streak", sv and sv.get("reso") == streak0, str(sv.get("reso") if sv else None))
+    chk("save keeps the target", sv and sv.get("tv", {}).get("resoTarget") == tgt0,
+        str(sv.get("tv", {}).get("resoTarget") if sv else None))
     page.evaluate("window.__test.resumeSave(7)"); time.sleep(1.0)
-    chk("resume restores the quota", ci(page)["resoQuota"] == q_before, f"{ci(page)['resoQuota']} vs {q_before}")
-    chk("resume restores the hits", ci(page)["resoHit"] == hit_before, f"{ci(page)['resoHit']} vs {hit_before}")
-
-    # ―― 13) 調律: お題ぶんだけ切り取る／足りない塊は使えない／攻防回は出ない ――
-    fresh_battle(page)
-    page.evaluate("window.__test.rigReso([3,3,3])"); time.sleep(0.1)
-    # 3つ目を先頭へ持ってきて1手目に調律を使う
-    page.evaluate("window.__test.setAct('heal')"); time.sleep(0.15)
-    page.evaluate("window.__test.setTuneN(3)"); time.sleep(0.1)
-    make_group(page, run_of(2, 5)); time.sleep(0.15)          # 切り取り3に対して2個 = 足りない
-    used0 = st(page)["used"]
-    page.evaluate("window.__test.commit(30)"); time.sleep(0.4)
-    chk("調律: too-small group is rejected (action not spent)", st(page)["used"] == used0, f"{st(page)['used']} vs {used0}")
-    # 最下段に6個の塊を作る。切り取った穴は上（市松の2/3）から落ちてくるので、
-    # 最下段に残る色1の数＝「切り取らずに残った数」を決定的に数えられる
-    make_group(page, run_of(6, 5)); time.sleep(0.15)
-    page.evaluate("window.__test.setAct('heal')")
-    hits = page.evaluate("(() => { window.__test.commit(30); return window.__test.charInfo().resoHit; })()")
-    time.sleep(0.6)
-    tv1 = st(page)["tv"]
-    chk("調律: fulfils the quota (x1.5 on a fresh ladder)", hits[0] == 1.5, str(hits))
-    chk("調律: produces no atk/def/heal", tv1["atk"] == 0 and tv1["def"] == 0 and tv1["heal"] == 0, str({k: tv1[k] for k in ("atk", "def", "heal")}))
-    left = sum(1 for c in st(page)["board"][30:36] if c["t"] == 1)
-    chk("調律: cuts exactly the chosen count and leaves the rest", left == 3, f"left={left} (expected 6-3)")
-
-    # ―― 14) 調律の切り取り数はボタンのタップで 1→2→3→4 と循環し、お題とズラすこともできる ――
-    fresh_battle(page)
-    page.evaluate("window.__test.rigReso([3,3,3])"); time.sleep(0.1)
-    page.evaluate("window.__test.setTuneN(1)"); time.sleep(0.1)
-    seq = []
-    for _ in range(5):
-        seq.append(ci(page)["tuneN"])
-        page.evaluate("""(() => { const b = [...document.querySelectorAll('button')].find(x => /調律/.test(x.textContent)); if (b) b.click(); })()""")
-        time.sleep(0.25)
-    chk("調律: tapping cycles 1→2→3→4→1", seq == [1, 2, 3, 4, 1], str(seq))
-    # お題3に対して切り取り2 = わざと外して盤面だけ整える
-    page.evaluate("window.__test.setTuneN(2)"); time.sleep(0.1)
-    make_group(page, run_of(6, 5)); time.sleep(0.15)
-    page.evaluate("window.__test.setAct('heal')")
-    hits2 = page.evaluate("(() => { window.__test.commit(30); return window.__test.charInfo().resoHit; })()")
-    time.sleep(0.6)
-    chk("調律: a deliberate mismatch does not fulfil the quota", hits2[0] == 0, str(hits2))
-    chk("調律: a deliberate mismatch also resets the ladder", ci(page)["reso"] == 0, str(ci(page)["reso"]))
-    left2 = sum(1 for c in st(page)["board"][30:36] if c["t"] == 1)
-    chk("調律: a mismatch still cuts the chosen count", left2 == 4, f"left={left2} (expected 6-2)")
-
-    # ―― 15) はしごは 1.5,2,2.5 / 3,3.5,4 とターンをまたいで伸び、×4で頭打ち ――
-    fresh_battle(page)
-    page.evaluate("window.__test.rigReso([3,3,3])"); time.sleep(0.1)
-    page.evaluate("window.__test.setTuneN(3)"); time.sleep(0.1)
-    got = []
-    for _ in range(3):                                   # 3ターン×3手=9回ぶん見る
-        do_act(page, "atk", 3, 0); got.append(ci(page)["resoHit"][0])
-        do_act(page, "def", 3, 2); got.append(ci(page)["resoHit"][1])
-        h = do_act(page, "heal", 5, 4); got.append(h[2])  # 3手目=調律（切り取り3=お題3）
-        time.sleep(1.6)
-        if st(page)["status"] != "battle": break
-    chk("ladder climbs 1.5,2,2.5 / 3,3.5,4 across turns and caps at 4",
-        got[:9] == [1.5, 2, 2.5, 3, 3.5, 4, 4, 4, 4], str(got))
-    notes.append("はしご実測: " + " → ".join(str(v) for v in got))
+    chk("resume restores the streak", ci(page)["reso"] == streak0, f"{ci(page)['reso']} vs {streak0}")
+    chk("resume restores the target", ci(page)["resoTarget"] == tgt0, f"{ci(page)['resoTarget']} vs {tgt0}")
 
     chk("no page errors", not errors, str(errors[:3]))
     b.close()
