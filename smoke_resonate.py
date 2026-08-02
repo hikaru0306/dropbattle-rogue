@@ -62,14 +62,14 @@ def fresh_battle(p):
     p.evaluate("window.__test.spawn(['golem'])"); time.sleep(0.3)
 
 def roll_quotas(p, n):
-    """アクションを消さずにターン解決だけ回して、お題の抽選値を集める"""
-    seen = set()
+    """アクションを消さずにターン解決だけ回して、毎ターンのお題（3つ組）を集める"""
+    rolls = []
     for _ in range(n):
         if st(p)["status"] != "battle": break
-        seen.update(ci(p)["resoQuota"])
+        rolls.append(ci(p)["resoQuota"])
         p.evaluate("window.__test.setPHP(300)")
         p.evaluate("window.__test.resolve()"); time.sleep(0.75)
-    return seen
+    return rolls
 
 with sync_playwright() as pw:
     b = pw.chromium.launch(executable_path=EXE)
@@ -98,9 +98,18 @@ with sync_playwright() as pw:
     page.evaluate("window.__test.rigReso(null)")
     q = ci(page)["resoQuota"]
     chk("quota has 3 numbers", isinstance(q, list) and len(q) == 3, str(q))
-    seen = roll_quotas(page, 18)
+    rolls = roll_quotas(page, 24)
+    seen = {v for r in rolls for v in r}
     chk("quota values in 2..7", all(2 <= v <= 7 for v in seen), str(sorted(seen)))
-    chk("quota re-rolled (>2 distinct)", len(seen) > 2, str(sorted(seen)))
+    chk("quota re-rolled (>2 distinct values overall)", len(seen) > 2, str(sorted(seen)))
+    # 偏り対策: 同じターンに同じ数を出さない／2と7もちゃんと出る／4-5-6ばかりにならない
+    chk("the 3 quotas of a turn are always different", all(len(set(r)) == 3 for r in rolls),
+        str([r for r in rolls if len(set(r)) != 3][:3]))
+    chk("the sum stays workable (<=16)", all(sum(r) <= 16 for r in rolls),
+        str([r for r in rolls if sum(r) > 16][:3]))
+    flat = [v for r in rolls for v in r]
+    mid = sum(1 for v in flat if v in (4, 5, 6)) / max(1, len(flat))
+    chk("4/5/6 do not dominate (<70%)", mid < 0.70, f"{mid:.0%} of {len(flat)} draws")
 
     # ―― 4) 本丸: 1手目 4個 → 攻撃×2 / 2手目 2個 → 防御×3 / 3手目 3個 → 回復×4 ――
     fresh_battle(page)
@@ -218,8 +227,11 @@ with sync_playwright() as pw:
     page.evaluate("window.__test.giveRelic('tuningfork')"); time.sleep(0.2)
     page.evaluate("window.__test.rigReso(null)"); time.sleep(0.1)
     page.evaluate("window.__test.resolve()"); time.sleep(1.2)
-    seen2 = roll_quotas(page, 16)
+    rolls2 = roll_quotas(page, 16)
+    seen2 = {v for r in rolls2 for v in r}
     chk("tuningfork: quota in 3..6", all(3 <= v <= 6 for v in seen2), str(sorted(seen2)))
+    chk("tuningfork: the 3 quotas are still all different", all(len(set(r)) == 3 for r in rolls2),
+        str([r for r in rolls2 if len(set(r)) != 3][:3]))
 
     # ―― 12) 中断セーブ往復でお題と達成状況が復元される ――
     fresh_battle(page)

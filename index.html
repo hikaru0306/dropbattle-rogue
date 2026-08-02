@@ -216,9 +216,12 @@ const ATK_PER = 10, DEF_PER = 10, HEAL_PER = 1;
 // 調律師の「共鳴」: ターン開始時に提示される「お題の数」ちょうどで消すと段階が上がる。
 //   倍率 = 1 + 段階（×1 → ×2 → ×3）。そのターンの攻撃・防御・回復すべてに乗る。
 //   外すと段階は0に戻る（余韻の鈴があれば1段階下がるだけ）。
-// 「お題」の抽選テーブル（3〜5が出やすく、7は稀）。調律の音叉を持つと極端な数が出ない
-const RESO_POOL   = [2, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 7];
-const RESO_POOL_F = [3, 3, 4, 4, 4, 5, 5, 5, 6];
+// 「お題」に使う数。重み付けはせず一様に引き、さらに3つとも別の数にする
+// （偏らせると毎ターン4・5・6ばかりが並んで「似たようなお題」に見えてしまうため）。
+// 調律の音叉を持つと極端な数（2と7）が出なくなる
+const RESO_POOL   = [2, 3, 4, 5, 6, 7];
+const RESO_POOL_F = [3, 4, 5, 6];
+const RESO_SUM_MAX = 16;               // 3つとも大きいと1ターンで成立しないので合計に上限を置く
 const TUNE_MAX = 4;                    // 調律で切り取れる数の上限（ボタンのタップで 1→2→3→4 と循環）
 // お題を合わせるたびに 0.5 ずつ上がる倍率。1.5 → 2 → 2.5 → 3 → 3.5 → 4 と伸び、
 // バトル中はターンをまたいで積み上がり続ける（バトルが変わるとリセット）。大和音の譜で +0.5 底上げ
@@ -1944,11 +1947,20 @@ function DropBattle() {
   const rollQuota = () => {
     if (resoRigRef.current) return resoRigRef.current.slice();
     const pool = hasR("tuningfork") ? RESO_POOL_F : RESO_POOL;
-    const pick = () => pool[Math.floor(Math.random() * pool.length)];
-    const q = [pick(), pick(), pick()];
-    // 3つとも大きいと1ターンで成立しないので、合計が大きすぎたら引き直す
+    // プールから重複なしで3つ引く（同じ数が並ぶと変化が乏しく見えるので必ず全部違う数にする）
+    const bag = pool.slice();
+    const q = [];
+    while (q.length < 3 && bag.length) q.push(bag.splice(Math.floor(Math.random() * bag.length), 1)[0]);
+    while (q.length < 3) q.push(3); // 保険（プールが3種未満のとき）
+    // 合計が大きすぎる組み合わせ（5+6+7など）は1ターンで成立しないので、一番大きい数を引き直す
     let guard = 0;
-    while (q[0] + q[1] + q[2] > 16 && guard++ < 20) q[Math.floor(Math.random() * 3)] = pick();
+    while (q.reduce((t, v) => t + v, 0) > RESO_SUM_MAX && guard++ < 40) {
+      const i = q.indexOf(Math.max(...q));
+      const cand = pool.filter(v => !q.includes(v) || v === q[i]);
+      q[i] = cand[Math.floor(Math.random() * cand.length)];
+    }
+    // 小さい順に並びがちにならないよう順番もシャッフルする
+    for (let i = 2; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = q[i]; q[i] = q[j]; q[j] = t; }
     return q;
   };
   const resoMul = n => resoMulAt(n, hasR("grandchord")); // n=これまでに合わせた回数 → そのときの倍率
