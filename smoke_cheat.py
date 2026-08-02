@@ -10,7 +10,7 @@ from playwright.sync_api import sync_playwright
 EXE = r"C:\Users\2000h\AppData\Local\ms-playwright\chromium_headless_shell-1223\chrome-headless-shell-win64\chrome-headless-shell.exe"
 URL = "file:///C:/Users/2000h/Downloads/dropbattle-rogue/index.html?test=1"
 
-ALL = [0, 1, 2, 3, 4, 5, 6]
+ALL = [0, 1, 2, 3, 4, 5, 6, 7]   # キャラを増やしたらここも増やす（unlockAll は CHARS.length 追従）
 
 errors = []
 with sync_playwright() as p:

@@ -133,5 +133,32 @@ with sync_playwright() as pw:
           {"turns": s["turn"] - t_start})
     page.evaluate("window.__test.setAuto(false)")
 
+    # 8. 調律師: オートは「その手番のお題の数に一番近いグループ」を選ぶ（通常の最大化とは逆）
+    page.evaluate("window.__test.setChar(7)")          # 調律師カノンへ切替（skill=resonate）
+    page.evaluate("window.__test.spawn(['golem'])"); time.sleep(0.3)
+    for i in range(36):                                 # 市松に塗って、3個と6個のグループだけ作る
+        r, c = divmod(i, 6)
+        page.evaluate(f"window.__test.setCellType({i}, {2 if (r + c) % 2 == 0 else 3})")
+    for i in [0, 1, 2, 3, 4, 5]:                        # 行0 = 6個
+        page.evaluate(f"window.__test.setCellType({i}, 1)")
+    for i in [24, 25, 26]:                              # 行4 = 3個
+        page.evaluate(f"window.__test.setCellType({i}, 1)")
+    page.evaluate("window.__test.rigReso([3,3,3])"); time.sleep(0.3)
+    page.evaluate("window.__test.setAct('atk')"); time.sleep(0.2)   # 攻撃はお題ぴったりを狙う
+    pick = page.evaluate("window.__test.autoPick()")
+    assert 24 <= pick <= 26, f"resonate autoPick={pick}, expected the 3-cell group (24..26), not the biggest one"
+    page.evaluate("window.__test.rigReso([6,6,6])"); time.sleep(0.2)
+    pick6 = page.evaluate("window.__test.autoPick()")
+    assert 0 <= pick6 <= 5, f"resonate autoPick={pick6} for quota 6, expected the 6-cell group (0..5)"
+    # 調律(3つ目)は「切り取る数」以上の最小の塊を選ぶ
+    page.evaluate("window.__test.rigReso([3,3,3])")
+    page.evaluate("window.__test.setTuneN(3)")
+    page.evaluate("window.__test.setAct('heal')"); time.sleep(0.3)
+    pickT = page.evaluate("window.__test.autoPick()")
+    assert 24 <= pickT <= 26, f"tune autoPick={pickT}, expected the smallest group that fits the cut (24..26)"
+    page.evaluate("window.__test.setTuneN(1)")
+    page.evaluate("window.__test.rigReso(null)")
+    print("8 resonate autoPick matches the quota, not the max group OK:", {"t3": pick, "t6": pick6})
+
     browser.close()
 print("ALL AUTO OK")

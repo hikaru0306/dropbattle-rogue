@@ -44,12 +44,12 @@ with sync_playwright() as pw:
     page.click("text=この仲間と冒険に出る"); time.sleep(0.6)
 
     # ―― 1) 初期所持: 専用持ちは 剣盾回復2ずつ+専用3（ガレスは剣4/盾4/回復1+専用3）――
-    expect = {2:"warcry", 3:"store", 4:"wildstar", 5:"ore"}
+    expect = {2:"warcry", 3:"store", 4:"wildstar", 5:"ore", 7:"chord"}
     for i, k in expect.items():
         page.evaluate(f"window.__test.setChar({i})")
         page.evaluate("window.__test.restart()"); time.sleep(0.3)
         o = st(page)["owned"]
-        if i == 2:  # ガレス: 3つ目が回復でないため剣盾多め
+        if i in (2, 7):  # ガレス・カノン: 3つ目が回復でないため剣盾多め
             chk(f"char{i} owns {k}x3 + 4/4/1", o[k] == 3 and o["atk"] == 4 and o["def"] == 4 and o["heal"] == 1, str(o))
         else:
             chk(f"char{i} owns {k}x3 + 2/2/2", o[k] == 3 and o["atk"] == 2 and o["def"] == 2 and o["heal"] == 2, str(o))

@@ -97,7 +97,7 @@ with sync_playwright() as pw:
 
     # ―― キャラ選択: 7タイル・賭博師が7体目 ――
     tiles = page.query_selector_all("div.flex.justify-center.gap-2 > button")
-    chk("7 tiles on select", len(tiles) == 7, f"tiles={len(tiles)}")
+    chk("8 tiles on select", len(tiles) == 8, f"tiles={len(tiles)}")
     tiles[6].click(); time.sleep(0.4)
     body = page.evaluate("document.body.innerText")
     chk("gambler name shown", "賭博師ジン" in body, body[:120])

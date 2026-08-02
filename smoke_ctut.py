@@ -30,9 +30,9 @@ def drag_skill_to_front(p):
     time.sleep(0.4)
 
 def click_skill_btn(p):
-    # 3つ目ボタン（色変え/強化/蓄積/鍛冶タイトルを持つボタン）をDOMクリック
+    # 3つ目ボタン（色変え/強化/蓄積/鍛冶/共鳴タイトルを持つボタン）をDOMクリック
     p.evaluate("""(() => {
-      const b = [...document.querySelectorAll('button')].find(x => /色変え|強化→|蓄積→|補充|生成|強化＋/.test(x.textContent));
+      const b = [...document.querySelectorAll('button')].find(x => /色変え|強化→|蓄積→|補充|生成|強化＋|調律/.test(x.textContent));
       if (b) b.click();
     })()""")
     time.sleep(0.3)
@@ -132,7 +132,15 @@ with sync_playwright() as p:
     chk("smith flag", page.evaluate("localStorage.getItem('db_ctut_smith')") == "1")
     page.click("text=たたかいを続ける"); time.sleep(0.3)
 
-    # ―― 4) セレネ（info） ――
+    # ―― 4) カノン（お題）: 説明カードのみ ――
+    start_battle_as(page, 7)
+    page.evaluate("window.__test.startCtut('resonate')"); time.sleep(0.3)
+    chk("resonate info card", ct(page)["step"] == "info" and "調律師カノン" in page.evaluate("document.body.innerText"), str(ct(page)))
+    chk("info card explains the ladder", "×2" in page.evaluate("document.body.innerText"))
+    page.click("text=やってみる！"); time.sleep(0.3)
+    chk("resonate closed + flag", ct(page) is None and page.evaluate("localStorage.getItem('db_ctut_resonate')") == "1")
+
+    # ―― 5) セレネ（info） ――
     start_battle_as(page, 4)
     page.evaluate("window.__test.startCtut('healx')"); time.sleep(0.3)
     chk("healx info card", ct(page)["step"] == "info" and "月の司祭セレネ" in page.evaluate("document.body.innerText"))

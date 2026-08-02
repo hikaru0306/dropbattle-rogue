@@ -12,8 +12,8 @@ from playwright.sync_api import sync_playwright
 EXE = r"C:\Users\2000h\AppData\Local\ms-playwright\chromium_headless_shell-1223\chrome-headless-shell-win64\chrome-headless-shell.exe"
 URL = "file:///C:/Users/2000h/Downloads/dropbattle-rogue/index.html?test=1&fast=1&full=1"
 SIZE = 6
-CHAR_SKILL = ["heal", "recolor", "buff", "store", "healx", "smith"]
-CHAR_NAME = ["アルド", "イリス", "ガレス", "ノア", "ルクス", "ブロム"]
+CHAR_SKILL = ["heal", "recolor", "buff", "store", "healx", "smith", "gamble", "resonate"]
+CHAR_NAME = ["アルド", "イリス", "ガレス", "ノア", "セレネ", "ブロム", "ジン", "カノン"]
 
 def groups(board):
     seen = set()
@@ -73,6 +73,10 @@ def pick_reward(page):
         try: page.click("css=[class*=pop-in] button >> nth=0", timeout=2000)
         except Exception: pass
     time.sleep(0.4)
+
+def order_for_resonate(hp_ratio):
+    """カノン: HPに余裕があれば攻撃優先、削られていれば回復/防御を先に取る"""
+    return ["atk", "def", "heal"] if hp_ratio > 0.5 else ["heal", "def", "atk"]
 
 def run_one(page, ci):
     skill = CHAR_SKILL[ci]
@@ -163,6 +167,15 @@ def run_one(page, ci):
                     page.evaluate(f"window.__test.commit({gs[0]['idx']})")
                     time.sleep(0.3); continue  # 次ループで特殊込みグループを攻撃
                 page.evaluate("window.__test.setSmithMode('stock')")
+            # --- お題: その手番のお題の数に最も近いグループを、今のアクションで消す ---
+            if skill == "resonate":
+                quota = page.evaluate("window.__test.charInfo()")["resoQuota"] or []
+                tgt = quota[len(used)] if len(used) < len(quota) else 0
+                cand = min(gs, key=lambda g: (abs(g["size"] - tgt), -g["size"]))
+                act = [a for a in order_for_resonate(hp_ratio) if a in remaining][0]
+                page.evaluate(f"window.__test.setAct('{act}')")
+                page.evaluate(f"window.__test.commit({cand['idx']})")
+                time.sleep(0.35); continue
             # --- 色変え: 3つ目は「隣接グループを最大色に塗って拡張」を最初に使う ---
             if skill == "recolor" and "heal" not in used:
                 plan = recolor_plan(s["board"])

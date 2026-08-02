@@ -59,7 +59,7 @@ const app = initializeApp({
 });
 const auth = A.getAuth(app);
 const db = F.getFirestore(app);
-const CHAR_NAMES = ["アルド", "イリス", "ガレス", "ノア", "セレネ", "ブロム", "ジン"];
+const CHAR_NAMES = ["アルド", "イリス", "ガレス", "ノア", "セレネ", "ブロム", "ジン", "カノン"];
 const $ = id => document.getElementById(id);
 const msg = t => $("msg").textContent = t || "";
 let rows = [];
@@ -107,7 +107,7 @@ function render(){
     const pc = p.perChar || {};
     const co = p.clearedOmote || [], cu = p.clearedUra || [];
     const name = d.linked ? `<span class="linked">🔗 ${esc(r.id.slice(0,10))}…</span>` : `<span class="anon">匿名 ${esc(r.id.slice(0,8))}…</span>`;
-    h += `<tr><td title="${esc(r.id)}">${name}</td><td>${Number.isFinite(p.unlocked) ? p.unlocked : "?"} /7</td>`
+    h += `<tr><td title="${esc(r.id)}">${name}</td><td>${Number.isFinite(p.unlocked) ? p.unlocked : "?"} /${CHAR_NAMES.length}</td>`
       + CHAR_NAMES.map((_,i)=>`<td>${charCell(pc,i,co,cu)}</td>`).join("")
       + `<td class="deep">${deepest(pc)}</td><td>${fmt(d.updatedAt)}</td></tr>`;
   }
