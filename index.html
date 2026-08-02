@@ -216,9 +216,14 @@ const ATK_PER = 10, DEF_PER = 10, HEAL_PER = 1;
 // 調律師の「共鳴」: 3つ目の「調律」で消した数がそのターンの“お題”になる。
 //   攻撃と防御で消した数の合計がお題ちょうどならターン成立＝攻撃・防御・回復すべてに倍率。
 //   倍率は成功したターンが続くほど ×2 → ×3 → ×4 と伸び、1度でも外すと最初（×2）に戻る。
-const RESO_MUL_START = 2;              // 最初に成立したターンの倍率
-const RESO_MUL_CAP = 4;                // 倍率の上限（大和音の譜で +1）
-const resoMulFor = (streak, up) => Math.min(RESO_MUL_START + streak, RESO_MUL_CAP + (up ? 1 : 0));
+const RESO_MUL_START = 1.5;            // 最初に成立したターンの倍率
+const RESO_MUL_STEP = 0.5;             // 成立が続くたびに増える量
+const RESO_MUL_CAP = 4;                // 倍率の上限（大和音の譜で底上げ）
+const RESO_MUL_UP = 0.5;               // 大和音の譜のぶん（開始値と上限の両方に乗る）
+const resoMulFor = (streak, up) => Math.min(
+  RESO_MUL_START + (up ? RESO_MUL_UP : 0) + RESO_MUL_STEP * streak,
+  RESO_MUL_CAP + (up ? RESO_MUL_UP : 0));
+const fmtMul = v => (v % 1 ? v.toFixed(1) : String(v));
 // 賭博師の「賭け」: 消した数が賭け金（HP）と見返りの両方を決める。
 //   払うHP = GAMBLE_COST[モード] × 消した数（天使の羽根で最終額を半減・切り上げ）
 //   剛運/鉄運は成功すると「消した数」がそのままその倍率になる（5個消し＝×5）
@@ -2066,10 +2071,10 @@ function DropBattle() {
         turnRef.current.heal = Math.round(fromHeal * mul);
         turnRef.current.resoMul = mul;
         syncTurn();
-        addLog([`🎵 共鳴！ 攻撃＋防御で${sum}個＝お題${tgt}個 → このターンの効果すべて ×${mul}`]);
-        playFx([{ text: `共鳴 ×${mul}！`, color:"#8fb2ff" }]);
-        SFX.pick();
-        resoStep = { act:"heal", wait: FAST ? 40 : 700 };
+        addLog([`🎵 調律！ 攻撃＋防御で${sum}個＝お題${tgt}個 → このターンの効果すべて ×${fmtMul(mul)}`]);
+        // 演出はターン解決のキュー（seq）に積む。ここで playFx を直接呼ぶと、
+        // resolveTurn の末尾で seq 全体を playFx し直すときに消えてしまう
+        resoStep = { text: `調律！ ×${fmtMul(mul)}`, color:"#8fb2ff", wait: FAST ? 60 : 900, run: () => SFX.pick() };
       } else if (tgt != null || rc.atk || rc.def) {
         const lost = resoRef.current;
         resoRef.current = 0; setResoView(0);
@@ -5612,28 +5617,32 @@ function DropBattle() {
         // 絶対配置なので行が増えず、スマホの画面高を圧迫しない
         const quotaBadge = (() => {
           if (CHARS[curChar].skill !== "resonate") return null;
-          const tgt = tv.resoTarget;                             // null = まだ調律していない
           const rc = tv.resoCnt || {};
           const isTune = key === "heal";
-          const done = ["atk", "def"].reduce((a, k) => a + (rc[k] ? rc[k].n : 0), 0);
-          const used_ = isTune ? tgt != null : !!rc[key];
+          const mine = isTune ? rc.tune : rc[key];               // このアクションで消した数
           const isSelNow = action === key && !used.has(key) && !locked;
-          // 攻撃/防御は「お題まであと何個」を出す。調律はお題を決める側
-          const need = tgt != null ? tgt - done : null;
-          const label = isTune ? (tgt != null ? String(tgt) : "?")
-            : (tgt == null ? "?" : used_ ? String(rc[key].n) : String(Math.max(0, need)));
-          const near = !isTune && isSelNow && info && tgt != null
-            ? Math.abs(info.count - need) <= (((info.sp.chord || 0) - (info.spu.chord || 0)) + (info.spu.chord || 0) * 2)
-            : false;
-          const col = used_ ? "#ffd75e" : near ? "#ffd75e" : isSelNow ? "#8fb2ff" : "#9b93a6";
+          // 消す前は「?」。消したらその場で数字になる（どこから消しても即わかるように）
+          const label = mine ? String(mine.n) : (isSelNow && info ? String(info.count) : "?");
+          const live = !mine && isSelNow && info;                // ドラッグ中の予告
+          const col = mine ? (isTune ? "#8fb2ff" : "#ffd75e") : live ? "#ffd75e" : isSelNow ? "#8fb2ff" : "#9b93a6";
           return h("span", { key:"q", className:"absolute flex items-center font-bold", style:{ left:3, top:2, gap:1, padding:"0 3px", borderRadius:7,
-            fontSize:10, lineHeight:1.5, color:col, fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap", pointerEvents:"none", zIndex:2,
-            background: near ? "rgba(255,215,94,.2)" : isSelNow ? "rgba(77,123,240,.18)" : "transparent",
-            border:`1px solid ${used_ ? "#ffd75e" : near ? "#ffd75e" : isSelNow ? "rgba(77,123,240,.65)" : "#3c3450"}`,
-            textShadow: (near || used_) ? "0 0 6px rgba(255,215,94,.8)" : "none",
-            transition:"color .15s ease, border-color .15s ease, background .15s ease" } },
-            label, h("span", { style:{ fontSize:8, opacity:0.9 } },
-              isTune ? "個" : used_ ? "消" : tgt == null ? "" : "残"));
+            fontSize:11, lineHeight:1.5, color:col, fontVariantNumeric:"tabular-nums", whiteSpace:"nowrap", pointerEvents:"none", zIndex:2,
+            background: live ? "rgba(255,215,94,.2)" : isSelNow ? "rgba(77,123,240,.18)" : "transparent",
+            border:`1px solid ${mine ? (isTune ? "rgba(77,123,240,.65)" : "#ffd75e") : live ? "#ffd75e" : isSelNow ? "rgba(77,123,240,.65)" : "#3c3450"}`,
+            textShadow: (live || mine) ? "0 0 6px rgba(255,215,94,.75)" : "none",
+            transition:"color .15s ease, border-color .15s ease, background .15s ease" } }, label);
+        })();
+        // このターン共鳴が成立したときにかかる倍率と、もう失敗が確定しているかどうか
+        const resoInfo = (() => {
+          if (CHARS[curChar].skill !== "resonate") return null;
+          const tgt = tv.resoTarget, rc = tv.resoCnt || {};
+          const sum = ["atk", "def"].reduce((t, k) => t + (rc[k] ? rc[k].n : 0), 0);
+          const tol = ["atk", "def", "tune"].reduce((t, k) => t + (rc[k] ? rc[k].tol : 0), 0)
+            + (hasR("tuningfork") ? 1 : 0) + (hasR("echobell") ? 1 : 0);
+          const bothDone = !!rc.atk && !!rc.def;
+          // 合計が超えた／攻防を消し終えたのに届いていない ＝ このターンはもう成立しない
+          const dead = tgt != null && (sum > tgt + tol || (bothDone && Math.abs(sum - tgt) > tol));
+          return { tgt, sum, dead, mul: resoMul(resoView) };
         })();
         const curSkill = CHARS[curChar].skill;
         const dragSt = actDragStyle(key, oi);
@@ -5729,15 +5738,21 @@ function DropBattle() {
                   effTxt);
           } else if (curSkill === "resonate") {
             // 調律: タップで選んだ数(1〜4)ぶんだけ切り取る。ここで消した数がそのターンのお題になる
-            title = tv.resoTarget != null ? "調律 " + tv.resoTarget + "個" : "調律";
+            title = "調律";
             iconEl = h("img", { src:"assets/mk_chord.png", alt:"", draggable:false, width:18, height:18, style:{ width:18, height:18, maxWidth:18, maxHeight:18, marginTop:5, objectFit:"contain", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.4))" } });
-            // ドラッグ中は「この塊を消すとお題がいくつになるか」を出す
+            // 「攻撃 ＋ 防御 ＝ お題」の式で見せる。まだ決まっていないところは ? のまま
+            const rc2 = tv.resoCnt || {};
             const selN = isSel && info ? info.count : 0;
-            valEl = isUsed
-              ? h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color:"#ffd75e", whiteSpace:"nowrap" } }, "お題 " + tv.resoTarget + "個")
-              : selN > 0
-              ? h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color:"#ffd75e", whiteSpace:"nowrap", textShadow:"0 0 8px rgba(255,215,94,.9)" } }, "お題 " + selN + "個")
-              : h("span", { style:{ fontSize:"0.92rem", fontWeight:900, color:"#c9bfe0", whiteSpace:"nowrap" } }, "お題を決める");
+            const tgtShown = tv.resoTarget != null ? tv.resoTarget : (selN > 0 ? selN : null);
+            // key は位置固定にする（値をkeyにすると "?" 同士が重複して差し替えが壊れる）
+            const cell = (k, v, lit) => h("span", { key:k, style:{ color: lit ? "#ffd75e" : "#c9bfe0",
+              textShadow: lit ? "0 0 8px rgba(255,215,94,.9)" : "none" } }, v == null ? "?" : String(v));
+            valEl = h("span", { style:{ fontSize:"0.95rem", fontWeight:900, whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", gap:1 } },
+              cell("a", rc2.atk ? rc2.atk.n : null, !!rc2.atk),
+              h("span", { key:"p", style:{ opacity:0.7, margin:"0 1px" } }, "+"),
+              cell("d", rc2.def ? rc2.def.n : null, !!rc2.def),
+              h("span", { key:"e", style:{ opacity:0.7, margin:"0 1px" } }, "="),
+              cell("t", tgtShown, tgtShown != null));
           } else {
             title = "蓄積";
             iconEl = h("img", { src:"assets/mk_store.png", alt:"", draggable:false, width:18, height:18, style:{ width:18, height:18, maxWidth:18, maxHeight:18, marginTop:5, objectFit:"contain", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.4))" } });
@@ -5834,6 +5849,12 @@ function DropBattle() {
           const base = dispTv[key];
           valEl = base > 0 ? (storeAdd != null ? mkTotal(base + crossBonus, "#ffcf5d") : mkBreakdown(base + crossBonus, base, crossBonus, "#ffcf5d")) : `+${crossBonus}`;
         } else valEl = String(dispTv[key]);
+        // カノン: このターン共鳴が成立したらかかる倍率を攻撃/防御に添えておく。
+        // もう成立しないことが確定したら消す（＝残りは素の値で戦うと分かる）
+        if (resoInfo && !resoInfo.dead && key !== "heal") {
+          valEl = h("span", { style:{ display:"inline-flex", alignItems:"baseline", gap:2, whiteSpace:"nowrap" } }, valEl,
+            h("span", { style:{ color:"#8fb2ff", fontSize:11, fontWeight:900 } }, "(×" + fmtMul(resoInfo.mul) + ")"));
+        }
         // 蓄積の「+N」は合計値と同じ1行に並べる（inline-flex/nowrap で段差にしない）
         if (storeAdd != null) {
           valEl = h("span", { style:{ display:"inline-flex", alignItems:"baseline", gap:3, whiteSpace:"nowrap" } }, valEl,

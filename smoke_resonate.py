@@ -3,7 +3,7 @@
 
 コア: 3つ目の「調律」でタップした塊をまるごと消すと、その数がそのターンの「お題」になる。
 攻撃と防御で消した数の“合計”がお題ちょうどならターン成立＝攻撃・防御・回復すべてに倍率。
-倍率は成功したターンが続くほど ×2 → ×3 → ×4（上限4）と伸び、外すと ×2 からやり直し。
+倍率は成功したターンが続くほど ×1.5 → ×2 → ×2.5（上限4）と伸び、外すと ×1.5 からやり直し。
 調律そのものは攻撃・防御・回復を出さない。
 専用ドロップ響石=ズレの許容+1(＋化+2)／レリック 音叉(許容+1)・余韻の鈴(1個ズレを救済)・
 大和音の譜(倍率の上限+1)。
@@ -118,29 +118,29 @@ with sync_playwright() as pw:
     page.evaluate(f"window.__test.commit({idxs[0]})")
     time.sleep(0.25)
     after = st(page)["tv"]
-    chk("atk x2 on the first success", after["atk"] == raw_atk * 2, f"{after['atk']} vs {raw_atk}")
-    chk("def x2 on the first success", after["def"] == 2 * per["def"] * 2, f"{after['def']} vs {2*per['def']*2}")
-    chk("heal x2 on the first success", after["heal"] == (raw_heal + 10) * 2, f"{after['heal']} vs {(raw_heal+10)*2}")
+    chk("atk x1.5 on the first success", after["atk"] == round(raw_atk * 1.5), f"{after['atk']} vs {round(raw_atk*1.5)}")
+    chk("def x1.5 on the first success", after["def"] == round(2 * per["def"] * 1.5), f"{after['def']} vs {round(2*per['def']*1.5)}")
+    chk("heal x1.5 on the first success", after["heal"] == round((raw_heal + 10) * 1.5), f"{after['heal']} vs {round((raw_heal+10)*1.5)}")
     chk("streak becomes 1", ci(page)["reso"] == 1, str(ci(page)["reso"]))
     notes.append(f"お題5を 攻撃3+防御2 で成立: 攻撃 {raw_atk}→{after['atk']} / 防御 →{after['def']} / 回復 →{after['heal']}（×2）")
     time.sleep(1.6)
     dealt = hp0 - st(page)["enemies"][0]["hp"]
-    chk("damage dealt matches the doubled atk", dealt == after["atk"], f"dealt={dealt} atk={after['atk']}")
+    chk("damage dealt matches the boosted atk", dealt == after["atk"], f"dealt={dealt} atk={after['atk']}")
 
-    # ―― 5) 連続で成立すると ×2 → ×3 → ×4 と伸びて頭打ち ――
+    # ―― 5) 連続で成立すると ×1.5 → ×2 → ×2.5 … と伸びる ――
     fresh_battle(page)
     streaks = []
     for _ in range(4):
         full_turn(page, 5, 3, 2)
         streaks.append(ci(page)["reso"])
     chk("streak climbs 1,2,3,4 over consecutive turns", streaks == [1, 2, 3, 4], str(streaks))
-    chk("multiplier caps at 4", page.evaluate("window.__test.resoMulNow()") == 4,
+    chk("multiplier after 4 wins is 3.5", page.evaluate("window.__test.resoMulNow()") == 3.5,
         str(page.evaluate("window.__test.resoMulNow()")))
 
-    # ―― 6) 1つでも外すと ×2 からやり直し ――
+    # ―― 6) 外すと ×1.5 からやり直し ――
     full_turn(page, 5, 4, 3)                  # 攻撃だけ外す
     chk("a miss resets the streak", ci(page)["reso"] == 0, str(ci(page)["reso"]))
-    chk("next success is x2 again", page.evaluate("window.__test.resoMulNow()") == 2,
+    chk("next success is x1.5 again", page.evaluate("window.__test.resoMulNow()") == 1.5,
         str(page.evaluate("window.__test.resoMulNow()")))
     full_turn(page, 5, 3, 2)
     chk("and it climbs again from there", ci(page)["reso"] == 1, str(ci(page)["reso"]))
@@ -187,12 +187,12 @@ with sync_playwright() as pw:
         str([k for k in ("tuningfork", "echobell", "grandchord") if k in pool0]))
     page.evaluate("window.__test.setChar(7)"); time.sleep(0.2)
 
-    # ―― 12) 大和音の譜: 倍率の上限が×5になる ――
+    # ―― 12) 大和音の譜: 倍率が+0.5される ――
     fresh_battle(page)
     page.evaluate("window.__test.giveRelic('grandchord')"); time.sleep(0.2)
     for _ in range(4):
         full_turn(page, 5, 3, 2)
-    chk("grandchord: cap becomes 5", page.evaluate("window.__test.resoMulNow()") == 5,
+    chk("grandchord: +0.5 on the ladder", page.evaluate("window.__test.resoMulNow()") == 4,
         str(page.evaluate("window.__test.resoMulNow()")))
 
     # ―― 13) 余韻の鈴: 1つ外していても成立したことにする ――
