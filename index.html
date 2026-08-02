@@ -222,6 +222,9 @@ const ATK_PER = 10, DEF_PER = 10, HEAL_PER = 1;
 const RESO_POOL   = [2, 3, 4, 5, 6, 7];
 const RESO_POOL_F = [3, 4, 5, 6];
 const RESO_SUM_MAX = 16;               // 3つとも大きいと1ターンで成立しないので合計に上限を置く
+// お題の上限は「今ある一番大きい塊 + RESO_STRETCH」まで。消せば上から落ちてきて塊は育つので、
+// 今ちょうどの大きさが無くても“上手く消せば作れる”ぶんの余裕を持たせる
+const RESO_STRETCH = 2;
 const TUNE_MAX = 4;                    // 調律で切り取れる数の上限（ボタンのタップで 1→2→3→4 と循環）
 // お題を合わせるたびに 0.5 ずつ上がる倍率。1.5 → 2 → 2.5 → 3 → 3.5 → 4 と伸び、
 // バトル中はターンをまたいで積み上がり続ける（バトルが変わるとリセット）。大和音の譜で +0.5 底上げ
@@ -1943,18 +1946,56 @@ function DropBattle() {
   const [tuneN, setTuneN_] = useState(1);                  // 調律で切り取る数（ボタンのタップで1〜4を循環・冒険をまたいで保持）
   const tuneNRef = useRef(1);
   const setTuneN = v => { tuneNRef.current = v; setTuneN_(v); };
+  const boardRef = useRef(board);                          // ※お題抽選が盤面を見るので freshTurn より前に置く
   const resoRigRef = useRef(null);                          // テスト用: お題3つを固定する
+  // いまの盤面で「実際に作れる消去数」の集合。
+  //  ・攻撃/防御 … expandClear 込みの実消去数（爆弾や核レリックの巻き込みも実際に消える数）
+  //  ・調律     … 塊から好きな数を切り取れるので 1〜TUNE_MAX（最大の塊の大きさまで）が作れる
+  // 1ターン1回の効果（爆破/十字/核）は新しいターンで復活するので、全部使える前提で数える
+  const reachableCounts = () => {
+    const b = boardRef.current;
+    if (!b || !b.length) return null;
+    const seen = new Set(), out = new Set();
+    let maxPlain = 0;
+    for (let i = 0; i < b.length; i++) {
+      const cell = b[i];
+      if (!cell || cell.type === JUNK || seen.has(cell.id)) continue;
+      const grp = findGroup(b, i);
+      grp.forEach(id => seen.add(id));
+      if (grp.size > maxPlain) maxPlain = grp.size;
+      const { ids } = expandClear(b, i, true, true, true);
+      const n = groupInfo(b, ids).count;
+      if (n > 0) out.add(n);
+    }
+    for (let n = 1; n <= Math.min(TUNE_MAX, maxPlain); n++) out.add(n);
+    return out;
+  };
   const rollQuota = () => {
     if (resoRigRef.current) return resoRigRef.current.slice();
     const pool = hasR("tuningfork") ? RESO_POOL_F : RESO_POOL;
-    // プールから重複なしで3つ引く（同じ数が並ぶと変化が乏しく見えるので必ず全部違う数にする）
-    const bag = pool.slice();
+    // いま盤面で作れる数を優先して引く（完全ランダムだと最初から不可能なお題が出てしまう）。
+    // 足りないぶんだけ通常のプールから補う＝お邪魔などで作れる数が少ないターンは自然と難しくなる
+    const reach = reachableCounts();
+    const mx = reach && reach.size ? Math.max(...reach) : 0;
+    // 「今ちょうど作れる数」ぴったりだけに絞ると毎ターン同じ数ばかりになるので、
+    // 上限だけ盤面に合わせる（最大の塊 + 2 まで）。消して落ちてくれば塊は育つ＝上手く消せば届く範囲
+    const cap = mx ? Math.min(7, mx + RESO_STRETCH) : 7;
+    const allowed = pool.filter(v => v <= cap);
     const q = [];
-    while (q.length < 3 && bag.length) q.push(bag.splice(Math.floor(Math.random() * bag.length), 1)[0]);
-    while (q.length < 3) q.push(3); // 保険（プールが3種未満のとき）
-    // 合計が大きすぎる組み合わせ（5+6+7など）は1ターンで成立しないので、一番大きい数を引き直す
+    const drawFrom = (bag, want) => {
+      const lim = Math.min(3, q.length + (want == null ? 3 : want));
+      while (q.length < lim && bag.length) q.push(bag.splice(Math.floor(Math.random() * bag.length), 1)[0]);
+    };
+    // 1つ目だけ「今すぐ作れる数」から引く（そのターンに必ず1つは取れる形にする）。
+    // 残り2つは上限内から自由に引く＝毎ターン同じ数ばかりにならない
+    drawFrom(reach ? allowed.filter(v => reach.has(v)) : [], 1);
+    const surely = q.length;
+    drawFrom(allowed.filter(v => !q.includes(v)));
+    drawFrom(pool.filter(v => !q.includes(v)));    // 保険（allowed が3種に満たないとき）
+    while (q.length < 3) q.push(3);
+    // 盤面から取れていないぶんが混ざるターンだけ、合計が大きすぎる組み合わせを避ける
     let guard = 0;
-    while (q.reduce((t, v) => t + v, 0) > RESO_SUM_MAX && guard++ < 40) {
+    while (surely < 1 && q.reduce((t, v) => t + v, 0) > RESO_SUM_MAX && guard++ < 40) {
       const i = q.indexOf(Math.max(...q));
       const cand = pool.filter(v => !q.includes(v) || v === q[i]);
       q[i] = cand[Math.floor(Math.random() * cand.length)];
@@ -1964,11 +2005,10 @@ function DropBattle() {
     return q;
   };
   const resoMul = n => resoMulAt(n, hasR("grandchord")); // n=これまでに合わせた回数 → そのときの倍率
-  const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false, aoe:false, aoeUp:false, coreUsed: {}, resoQuota: rollQuota(), resoHit: [null, null, null] });
+  const freshTurn = () => ({ atk: hasR("warring") ? 10 : 0, def: hasR("guardring") ? 10 : 0, heal:0, pierce:false, atkBoost:false, defBoost:false, stun:false, aoe:false, aoeUp:false, coreUsed: {}, resoQuota: CUR_SKILL === "resonate" ? rollQuota() : [0, 0, 0], resoHit: [null, null, null] });
   const turnRef = useRef(freshTurn());
   const syncTurn = () => setTv({ ...turnRef.current });
 
-  const boardRef = useRef(board);
   const actionRef = useRef(action);
   const usedRef = useRef(used);
   const lockedRef = useRef(locked);
@@ -4445,6 +4485,7 @@ function DropBattle() {
       // 賭博師テスト用: コインの出目固定 / 4択のモード選択 / 天使悪魔選択 / オーバーレイ状態
       rigCoin: face => { coinRigRef.current = face; }, // "angel"/"demon"/null
       setTuneN: n => setTuneN(n),
+      resoReach: () => { const r = reachableCounts(); return r ? [...r].sort((x, y) => x - y) : null; },
       rigReso: q => { resoRigRef.current = q; if (q) { turnRef.current.resoQuota = q.slice(); syncTurn(); } }, // お題3つを固定（nullで解除）
       setGambleMode: m => setGambleMode(m),
       gambleChoose: f => gambleChoose(f),
