@@ -218,7 +218,7 @@ const ATK_PER = 10, DEF_PER = 10, HEAL_PER = 1;
 //   倍率は成功したターンが続くほど ×2 → ×3 → ×4 と伸び、1度でも外すと最初（×2）に戻る。
 const RESO_MUL_START = 1.5;            // 最初に成立したターンの倍率
 const RESO_MUL_STEP = 0.5;             // 成立が続くたびに増える量
-const RESO_MUL_CAP = 4;                // 倍率の上限（大和音の譜で底上げ）
+const RESO_MUL_CAP = 99;               // 倍率の上限（いったん実質無制限。大和音の譜で底上げ）
 const RESO_MUL_UP = 0.5;               // 大和音の譜のぶん（開始値と上限の両方に乗る）
 const resoMulFor = (streak, up) => Math.min(
   RESO_MUL_START + (up ? RESO_MUL_UP : 0) + RESO_MUL_STEP * streak,
