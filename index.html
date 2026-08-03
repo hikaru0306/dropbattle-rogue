@@ -5763,7 +5763,10 @@ function DropBattle() {
                   effTxt);
           } else if (curSkill === "resonate") {
             // 調律: タップで選んだ数(1〜4)ぶんだけ切り取る。ここで消した数がそのターンのお題になる
-            title = "調律";
+            // 連続成立数はタイトルの右に「(Nコンボ)」で添える
+            title = resoView > 0
+              ? h("span", null, "調律", h("span", { key:"cb", style:{ color:"#ffd75e", marginLeft:3 } }, "(" + resoView + "コンボ)"))
+              : "調律";
             iconEl = h("img", { src:"assets/mk_chord.png", alt:"", draggable:false, width:18, height:18, style:{ width:18, height:18, maxWidth:18, maxHeight:18, marginTop:5, objectFit:"contain", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.4))" } });
             // 「攻撃 ＋ 防御 ＝ お題」の式で見せる。まだ決まっていないところは ? のまま
             const rc2 = tv.resoCnt || {};
@@ -5776,7 +5779,7 @@ function DropBattle() {
             valEl = h("span", { style:{ whiteSpace:"nowrap", display:"inline-flex", alignItems:"baseline", gap:2 } },
               h("span", { key:"t", style:{ fontSize:"1.15rem", fontWeight:900, color: tgtShown != null ? "#ffd75e" : "#c9bfe0",
                 textShadow: tgtShown != null ? "0 0 8px rgba(255,215,94,.9)" : "none" } }, tgtShown == null ? "?" : String(tgtShown)),
-              h("span", { key:"br", style:{ fontSize:"0.62rem", fontWeight:900, opacity:0.9, display:"inline-flex", alignItems:"center", gap:1 } },
+              h("span", { key:"br", style:{ fontSize:11, fontWeight:900, opacity:0.9, display:"inline-flex", alignItems:"center", gap:1 } },
                 h("span", { key:"e", style:{ opacity:0.7 } }, "="),
                 cell("a", rc2.atk ? rc2.atk.n : null, !!rc2.atk),
                 h("span", { key:"p", style:{ opacity:0.7 } }, "+"),
