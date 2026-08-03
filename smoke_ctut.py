@@ -136,7 +136,9 @@ with sync_playwright() as p:
     start_battle_as(page, 7)
     page.evaluate("window.__test.startCtut('resonate')"); time.sleep(0.3)
     chk("resonate info card", ct(page)["step"] == "info" and "調律師カノン" in page.evaluate("document.body.innerText"), str(ct(page)))
-    chk("info card explains the ladder", "×2" in page.evaluate("document.body.innerText"))
+    # 文言そのものはtexts.jsで自由に書き換えられるので、キーワードだけ見る（数値表記に依存しない）
+    _b = page.evaluate("document.body.innerText")
+    chk("info card explains 調律/お題/倍率", all(k in _b for k in ("調律", "お題", "倍率")), _b[:120])
     page.click("text=やってみる！"); time.sleep(0.3)
     chk("resonate closed + flag", ct(page) is None and page.evaluate("localStorage.getItem('db_ctut_resonate')") == "1")
 
