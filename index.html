@@ -1986,6 +1986,14 @@ function DropBattle() {
   const [hurtSeq, setHurtSeq] = useState(0);            // 賭博師: 賭け失敗の赤い被弾フラッシュ
   const [wildFx, setWildFx] = useState(new Set());      // 賭博師: 虹変換バースト中のセル番号
   const [gambleDmg, setGambleDmg] = useState(null);     // 賭博師: ウィンドウが閉じた後に画面中央へ出す大ダメージ {cost,key}
+  const [resoPop, setResoPop] = useState(null);         // 調律師: ターン解決時に画面中央へ出す結果 {ok,mul,combo,key}
+  const resoPopTimer = useRef(null);
+  // 出しっぱなしにするとアニメ終了後も透明な要素が残り続けるので、表示時間ぶんで自分から消す
+  const showResoPop = v => {
+    if (resoPopTimer.current) clearTimeout(resoPopTimer.current);
+    setResoPop({ ...v, key: UID++ });
+    resoPopTimer.current = setTimeout(() => setResoPop(null), 1200);
+  };
   const [gambleVoid, setGambleVoid] = useState(null);   // 賭博師: お邪魔のみに賭けたとき「無効」を出す {key}
   const [pops, setPops] = useState({}); // ダメージポップ {key:{text,color,seq}}
   const popSeq = useRef(0);
@@ -2064,7 +2072,8 @@ function DropBattle() {
       }
       if (ok) {
         const mul = resoMul(resoRef.current);
-        resoRef.current += 1; setResoView(resoRef.current);
+        // 倍率が上がるのはターン開始時。ここでは「勝った」ことだけ覚えておく
+        turnRef.current.resoWin = true;
         const fromAtk = turnRef.current.atk, fromDef = turnRef.current.def, fromHeal = turnRef.current.heal;
         turnRef.current.atk = Math.round(fromAtk * mul);
         turnRef.current.def = Math.round(fromDef * mul);
@@ -2072,14 +2081,18 @@ function DropBattle() {
         turnRef.current.resoMul = mul;
         syncTurn();
         addLog([`🎵 調律！ 攻撃＋防御で${sum}個＝お題${tgt}個 → このターンの効果すべて ×${fmtMul(mul)}`]);
-        // 演出はターン解決のキュー（seq）に積む。ここで playFx を直接呼ぶと、
-        // resolveTurn の末尾で seq 全体を playFx し直すときに消えてしまう
-        resoStep = { text: `調律！ ×${fmtMul(mul)}`, color:"#8fb2ff", wait: FAST ? 60 : 900, run: () => SFX.pick() };
+        // 結果は画面中央の大きなポップで見せる（ジンの失敗表示と同じ位置・書式）。
+        // seq には「間」だけ積む
+        const combo = resoRef.current + 1;
+        resoStep = { act:"heal", wait: FAST ? 60 : 900,
+          run: () => { showResoPop({ ok:true, mul, combo }); SFX.pick(); } };
       } else if (tgt != null || rc.atk || rc.def) {
         const lost = resoRef.current;
         resoRef.current = 0; setResoView(0);
-        addLog([tgt == null ? "… 調律を使わなかったので共鳴しなかった"
+        addLog([tgt == null ? "… 調律を使わなかったので調律は成立しなかった"
           : `… 攻撃＋防御で${sum}個（お題は${tgt}個）でそろわなかった${lost > 0 ? "（倍率は最初から）" : ""}`]);
+        // お題を決めていたのに外したときだけ「調律失敗」を出す（調律を使わなかったターンは黙っておく）
+        if (tgt != null) resoStep = { act:"heal", wait: FAST ? 40 : 620, run: () => showResoPop({ ok:false }) };
       }
     }
     let { atk, def, heal } = turnRef.current;
@@ -2421,6 +2434,8 @@ function DropBattle() {
           return;
         }
       }
+      // 調律が成立していたターンは、ここ（次のターンの開始）で倍率が1段上がる
+      if (turnRef.current.resoWin) { resoRef.current += 1; setResoView(resoRef.current); }
       turnRef.current = freshTurn();
       setBuffAnim(null); setStoreAnim(null); // 強化の×倍率・蓄積の+N・共鳴の×倍率は攻撃/防御が0に戻るここまで残す
       setPops({}); // 前ターンのダメージ表示を掃除（撃破された敵の分が残り続けていた）
@@ -2861,7 +2876,7 @@ function DropBattle() {
     commitBoard(bd0);
     syncBag(); // 盤面生成で袋から引いた分を表示に反映
     setPops({}); // 前バトルのダメージポップを掃除
-    setBuffAnim(null); setStoreAnim(null); // 強化/蓄積/共鳴演出の残りも掃除
+    setBuffAnim(null); setStoreAnim(null); setResoPop(null); // 強化/蓄積/調律演出の残りも掃除
     setArmed(null);
     setAction(actOrderRef.current[0]); actionRef.current = actOrderRef.current[0];
     setUsed(new Set()); usedRef.current = new Set();
@@ -2873,7 +2888,7 @@ function DropBattle() {
     setGambleAsk(null); gamblePendRef.current = null; // 賭けのコイントスもバトルごとに掃除
     // フラッシュ/シェイクの連番をリセット。残したままだとシーンDOMの再マウントで
     // CSSアニメが頭から再生され、バトル開始時に赤フラッシュ等が一瞬出てしまう
-    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null); setGambleVoid(null);
+    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null); setGambleVoid(null); setResoPop(null);
     setPoison(0); // 毒はバトルごとにリセット
     soloShownRef.current = false;
     turnRef.current = freshTurn(); syncTurn();
@@ -4085,9 +4100,9 @@ function DropBattle() {
     syncBag(); setPops({});
     setPreview(null); setClearing(new Set()); setArmed(null);
     setRestMsg(null); setAnims({}); setGuide(null);
-    setBuffAnim(null); setStoreAnim(null); setDcapTut(null);
+    setBuffAnim(null); setStoreAnim(null); setResoPop(null); setDcapTut(null);
     // 連番を残すとシーン再マウントでCSSアニメが頭から再生される（v99の教訓）
-    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null); setGambleVoid(null);
+    setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null); setGambleVoid(null); setResoPop(null);
     soloShownRef.current = false;
     setLocked(false); lockedRef.current = false;
     setFx([]);
@@ -5091,6 +5106,16 @@ function DropBattle() {
         // 白縁取り（8方向シャドウ）＋下に黒の落ち影で、どの背景でも読めるように
         textShadow:"-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, -2px 0 0 #fff, 2px 0 0 #fff, 0 -2px 0 #fff, 0 2px 0 #fff, 0 4px 10px rgba(0,0,0,.75)" } }, "HP-" + gambleDmg.cost)));
   }
+  // 調律師: ターン解決の結果を画面中央へ大きく（賭けの失敗表示と同じ位置・書式）
+  if (resoPop) {
+    const col = resoPop.ok ? "#4d7bf0" : "#8a8296";
+    overlays.push(h("div", { key:"rpop" + resoPop.key, className:"fixed inset-0 pointer-events-none flex flex-col items-center justify-center", style:{ zIndex:84 } },
+      h("div", { className:"gdmg-pop", style:{ fontSize: resoPop.ok ? "2.6rem" : "2.2rem", fontWeight:900, color:col, textAlign:"center",
+        textShadow:"-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, -2px 0 0 #fff, 2px 0 0 #fff, 0 -2px 0 #fff, 0 2px 0 #fff, 0 4px 10px rgba(0,0,0,.75)" } },
+        resoPop.ok ? "調律！ ×" + fmtMul(resoPop.mul) : "調律失敗"),
+      resoPop.ok && resoPop.combo >= 2 && h("div", { className:"gdmg-pop", style:{ fontSize:"1.3rem", fontWeight:900, color:"#ffd75e", marginTop:2,
+        textShadow:"-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, 0 3px 8px rgba(0,0,0,.75)" } }, resoPop.combo + "コンボ")));
+  }
   if (gambleVoid) {
     // お邪魔のみに賭けたとき: 画面中央へ「無効」（コスト0・コイントスなし）
     overlays.push(h("div", { key:"gvoid" + gambleVoid.key, className:"fixed inset-0 pointer-events-none flex items-center justify-center", style:{ zIndex:84 } },
@@ -5747,12 +5772,15 @@ function DropBattle() {
             // key は位置固定にする（値をkeyにすると "?" 同士が重複して差し替えが壊れる）
             const cell = (k, v, lit) => h("span", { key:k, style:{ color: lit ? "#ffd75e" : "#c9bfe0",
               textShadow: lit ? "0 0 8px rgba(255,215,94,.9)" : "none" } }, v == null ? "?" : String(v));
-            valEl = h("span", { style:{ fontSize:"0.95rem", fontWeight:900, whiteSpace:"nowrap", display:"inline-flex", alignItems:"center", gap:1 } },
-              cell("a", rc2.atk ? rc2.atk.n : null, !!rc2.atk),
-              h("span", { key:"p", style:{ opacity:0.7, margin:"0 1px" } }, "+"),
-              cell("d", rc2.def ? rc2.def.n : null, !!rc2.def),
-              h("span", { key:"e", style:{ opacity:0.7, margin:"0 1px" } }, "="),
-              cell("t", tgtShown, tgtShown != null));
+            // お題（＝自分が消す数）を大きく、内訳「＝3＋2」は小さく添える
+            valEl = h("span", { style:{ whiteSpace:"nowrap", display:"inline-flex", alignItems:"baseline", gap:2 } },
+              h("span", { key:"t", style:{ fontSize:"1.15rem", fontWeight:900, color: tgtShown != null ? "#ffd75e" : "#c9bfe0",
+                textShadow: tgtShown != null ? "0 0 8px rgba(255,215,94,.9)" : "none" } }, tgtShown == null ? "?" : String(tgtShown)),
+              h("span", { key:"br", style:{ fontSize:"0.62rem", fontWeight:900, opacity:0.9, display:"inline-flex", alignItems:"center", gap:1 } },
+                h("span", { key:"e", style:{ opacity:0.7 } }, "="),
+                cell("a", rc2.atk ? rc2.atk.n : null, !!rc2.atk),
+                h("span", { key:"p", style:{ opacity:0.7 } }, "+"),
+                cell("d", rc2.def ? rc2.def.n : null, !!rc2.def)));
           } else {
             title = "蓄積";
             iconEl = h("img", { src:"assets/mk_store.png", alt:"", draggable:false, width:18, height:18, style:{ width:18, height:18, maxWidth:18, maxHeight:18, marginTop:5, objectFit:"contain", filter:"drop-shadow(0 1px 1px rgba(0,0,0,.4))" } });

@@ -121,11 +121,12 @@ with sync_playwright() as pw:
     chk("atk x1.5 on the first success", after["atk"] == round(raw_atk * 1.5), f"{after['atk']} vs {round(raw_atk*1.5)}")
     chk("def x1.5 on the first success", after["def"] == round(2 * per["def"] * 1.5), f"{after['def']} vs {round(2*per['def']*1.5)}")
     chk("heal x1.5 on the first success", after["heal"] == round((raw_heal + 10) * 1.5), f"{after['heal']} vs {round((raw_heal+10)*1.5)}")
-    chk("streak becomes 1", ci(page)["reso"] == 1, str(ci(page)["reso"]))
     notes.append(f"お題5を 攻撃3+防御2 で成立: 攻撃 {raw_atk}→{after['atk']} / 防御 →{after['def']} / 回復 →{after['heal']}（×2）")
     time.sleep(1.6)
     dealt = hp0 - st(page)["enemies"][0]["hp"]
     chk("damage dealt matches the boosted atk", dealt == after["atk"], f"dealt={dealt} atk={after['atk']}")
+    # 倍率が上がるのはターン境界（次ターンの開始）なので、ターンが終わってから連勝数を見る
+    chk("streak becomes 1 at the turn boundary", ci(page)["reso"] == 1, str(ci(page)["reso"]))
 
     # ―― 5) 連続で成立すると ×1.5 → ×2 → ×2.5 … と伸びる ――
     fresh_battle(page)
