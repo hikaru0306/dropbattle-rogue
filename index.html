@@ -1987,6 +1987,8 @@ function DropBattle() {
   const [wildFx, setWildFx] = useState(new Set());      // 賭博師: 虹変換バースト中のセル番号
   const [gambleDmg, setGambleDmg] = useState(null);     // 賭博師: ウィンドウが閉じた後に画面中央へ出す大ダメージ {cost,key}
   const [resoPop, setResoPop] = useState(null);         // 調律師: ターン解決時に画面中央へ出す結果 {ok,mul,combo,key}
+  // 調律師の倍率計算の段階演出: stage1=かける前の値のまま / stage2=「元の値 ×倍率」 / stage3=最終値
+  const [resoAnim, setResoAnim] = useState(null);
   const resoPopTimer = useRef(null);
   // 出しっぱなしにするとアニメ終了後も透明な要素が残り続けるので、表示時間ぶんで自分から消す
   const showResoPop = v => {
@@ -2057,7 +2059,7 @@ function DropBattle() {
     // カノンの共鳴: 調律で決めたお題に、攻撃も防御も同じ数ちょうどで届いていたらターン成立。
     // 成立するとそのターンの攻撃・防御・回復すべてに倍率がかかり、続けるほど ×2→×3→×4 と伸びる。
     // 1度でも外すと最初（×2）からやり直し
-    let resoStep = null;
+    let resoStep = null, resoCalcStep = null;
     if (charSkillRef.current === "resonate") {
       const rc = turnRef.current.resoCnt || {};
       const tgt = turnRef.current.resoTarget;
@@ -2080,12 +2082,20 @@ function DropBattle() {
         turnRef.current.heal = Math.round(fromHeal * mul);
         turnRef.current.resoMul = mul;
         syncTurn();
+        // 値はもう掛け終わっているが、表示は stage1（かける前）で止めておき、
+        // 中央のポップが消えてから stage2→stage3 で計算を見せる
+        setResoAnim({ fromAtk, fromDef, fromHeal, mul, stage: 1 });
         addLog([`🎵 調律！ 攻撃＋防御で${sum}個＝お題${tgt}個 → このターンの効果すべて ×${fmtMul(mul)}`]);
-        // 結果は画面中央の大きなポップで見せる（ジンの失敗表示と同じ位置・書式）。
-        // seq には「間」だけ積む
         const combo = resoRef.current + 1;
-        resoStep = { act:"heal", wait: FAST ? 60 : 900,
+        // ① 中央のポップ（かぶらないようにポップが消えるまで待つ）
+        resoStep = { act:"heal", wait: FAST ? 60 : 1150,
           run: () => { showResoPop({ ok:true, mul, combo }); SFX.pick(); } };
+        // ② ボタンの上で倍率計算 → そのまま攻撃の演出へ
+        resoCalcStep = { act:"heal", wait: FAST ? 60 : 900, run: () => {
+          setResoAnim(a => (a ? { ...a, stage: 2 } : a));
+          SFX.mode();
+          setTimeout(() => setResoAnim(a => (a ? { ...a, stage: 3 } : a)), FAST ? 40 : 560);
+        } };
       } else if (tgt != null || rc.atk || rc.def) {
         const lost = resoRef.current;
         resoRef.current = 0; setResoView(0);
@@ -2102,6 +2112,7 @@ function DropBattle() {
     if (buffStep) seq.push(buffStep);
     if (storeStep) seq.push(storeStep);
     if (resoStep) seq.push(resoStep);
+    if (resoCalcStep) seq.push(resoCalcStep);
     const ens = enemiesRef.current.map(e => ({ ...e }));
     const tn = turnNumRef.current;
 
@@ -2437,7 +2448,7 @@ function DropBattle() {
       // 調律が成立していたターンは、ここ（次のターンの開始）で倍率が1段上がる
       if (turnRef.current.resoWin) { resoRef.current += 1; setResoView(resoRef.current); }
       turnRef.current = freshTurn();
-      setBuffAnim(null); setStoreAnim(null); // 強化の×倍率・蓄積の+N・共鳴の×倍率は攻撃/防御が0に戻るここまで残す
+      setBuffAnim(null); setStoreAnim(null); setResoAnim(null); // 強化の×倍率・蓄積の+N・調律の×倍率は攻撃/防御が0に戻るここまで残す
       setPops({}); // 前ターンのダメージ表示を掃除（撃破された敵の分が残り続けていた）
       if (hasR("ironwill") && shield > 0) turnRef.current.def += Math.floor(shield / 2);
       if (overheal > 0) { turnRef.current.def += overheal; addLog([`📿 祈祷書: あふれた回復${overheal}が防御に`]); }
@@ -2876,7 +2887,7 @@ function DropBattle() {
     commitBoard(bd0);
     syncBag(); // 盤面生成で袋から引いた分を表示に反映
     setPops({}); // 前バトルのダメージポップを掃除
-    setBuffAnim(null); setStoreAnim(null); setResoPop(null); // 強化/蓄積/調律演出の残りも掃除
+    setBuffAnim(null); setStoreAnim(null); setResoPop(null); setResoAnim(null); // 強化/蓄積/調律演出の残りも掃除
     setArmed(null);
     setAction(actOrderRef.current[0]); actionRef.current = actOrderRef.current[0];
     setUsed(new Set()); usedRef.current = new Set();
@@ -4100,7 +4111,7 @@ function DropBattle() {
     syncBag(); setPops({});
     setPreview(null); setClearing(new Set()); setArmed(null);
     setRestMsg(null); setAnims({}); setGuide(null);
-    setBuffAnim(null); setStoreAnim(null); setResoPop(null); setDcapTut(null);
+    setBuffAnim(null); setStoreAnim(null); setResoPop(null); setResoAnim(null); setDcapTut(null);
     // 連番を残すとシーン再マウントでCSSアニメが頭から再生される（v99の教訓）
     setShakeSeq(0); setFlashSeq(0); setHurtSeq(0); setGambleDmg(null); setGambleVoid(null); setResoPop(null);
     soloShownRef.current = false;
@@ -5848,6 +5859,8 @@ function DropBattle() {
         let valEl;
         const bAn = buffAnim && buffAnim.st === key ? buffAnim : null;
         const sAn = storeAnim && (key === "atk" || key === "def") ? storeAnim : null;
+        // 調律の倍率計算（攻撃・防御に出す。回復はカノンではボタンが無いので上のバーで見せる）
+        const rAn = resoAnim && (key === "atk" || key === "def") ? resoAnim : null;
         // ノアの蓄積は予約中（解決前）も攻撃・防御へ「+N」を出しっぱなしにする。段階演出中は出さない
         const storeAdd = (!bAn && !sAn && (key === "atk" || key === "def") && tv.storePend) ? tv.storePend.add : null;
         if (bAn) {
@@ -5857,6 +5870,14 @@ function DropBattle() {
                 h("span", { style:{ color:"#ffd75e", fontSize:"0.82rem", marginLeft:3, fontWeight:900 } }, "×" + bAn.mult.toFixed(1)))
             : h("span", null, h("span", { style:{ color:"#ffd75e" } }, String(bAn.to)),
                 h("span", { style:{ color:"#ffd75e", fontSize:"0.82rem", marginLeft:3, fontWeight:900, opacity:0.85 } }, "×" + bAn.mult.toFixed(1)));
+        } else if (rAn) {
+          // stage1=かける前のまま（中央のポップを読ませる時間）/ stage2=「元の値 ×倍率」/ stage3=最終値
+          const from = key === "atk" ? rAn.fromAtk : rAn.fromDef;
+          const to = Math.round(from * rAn.mul);
+          valEl = rAn.stage === 1 ? String(from)
+            : rAn.stage === 2 ? h("span", null, String(from),
+                h("span", { style:{ color:"#8fb2ff", fontSize:"0.82rem", marginLeft:3, fontWeight:900 } }, "×" + fmtMul(rAn.mul)))
+            : h("span", { style:{ color:"#ffd75e" } }, String(to));
         } else if (sAn) {
           // ノア蓄積の段階表示（攻防同時）: 「元の値 +蓄積」 → 最終値（金色）
           const from = key === "atk" ? sAn.fromAtk : sAn.fromDef;
@@ -5882,7 +5903,8 @@ function DropBattle() {
         } else valEl = String(dispTv[key]);
         // カノン: このターン共鳴が成立したらかかる倍率を攻撃/防御に添えておく。
         // もう成立しないことが確定したら消す（＝残りは素の値で戦うと分かる）
-        if (resoInfo && !resoInfo.dead && key !== "heal") {
+        // 倍率計算の演出中は、予告の (×N) を出さない（計算表示と二重になるため）
+        if (resoInfo && !resoInfo.dead && !resoAnim && key !== "heal") {
           valEl = h("span", { style:{ display:"inline-flex", alignItems:"baseline", gap:2, whiteSpace:"nowrap" } }, valEl,
             h("span", { style:{ color:"#8fb2ff", fontSize:11, fontWeight:900 } }, "(×" + fmtMul(resoInfo.mul) + ")"));
         }
@@ -5923,7 +5945,7 @@ function DropBattle() {
           h("span", { style:{ fontSize:11, height:15, lineHeight:"15px", whiteSpace:"nowrap", color: isUsed ? (lit ? "#e7e0ef" : "#777") : "#e7e0ef" } }, a.label,
             // 表示倍率はキャラ補正込みの実効値（ルクスの全効果2倍もここに反映。レリック加算はperOf内）
             h("span", { style:{ fontSize:8, opacity:0.5, marginLeft:2 } }, "×", perOf(key) * (CUR_SKILL === "healx" ? 2 : 1))),
-          h("span", { id:"actval-" + key, key:"v" + key + "_" + tv[key] + (bAn ? "_b" + bAn.stage : "") + (sAn ? "_s" + sAn.stage : ""), className: tv[key] > 0 ? "val-pulse" : "",
+          h("span", { id:"actval-" + key, key:"v" + key + "_" + tv[key] + (bAn ? "_b" + bAn.stage : "") + (sAn ? "_s" + sAn.stage : "") + (rAn ? "_r" + rAn.stage : ""), className: tv[key] > 0 ? "val-pulse" : "",
             style:{ fontSize:"1.05rem", height:20, lineHeight:"20px", fontWeight:700, fontVariantNumeric:"tabular-nums", display:"flex", alignItems:"center", justifyContent:"center",
             color: lit ? "#ffffff" : isSel && selEff && tv[key] === 0 ? (info && info.mult > 1 ? "#ffe88a" : "#fff") : crossBonus > 0 && tv[key] === 0 ? "#ffcf5d" : isUsed ? a.color : tv[key] > 0 ? "#e0d8f0" : "#9b93a6",
             textShadow: isSel && selEff && tv[key] === 0 && info && info.mult > 1 ? "0 0 8px #ffd54a" : "none" } }, valEl));
