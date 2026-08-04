@@ -1570,7 +1570,9 @@ function DropBattle() {
   const charTilesRef = useRef(null);                       // キャラ選択のタイル行（横スクロール）
   const selTileRef = useRef(null);                         // その中の選択中タイル
   const [selView, setSelView] = useState(0);               // キャラ選択画面で眺めているキャラ
-  const [selMode, setSelMode] = useState("omote");         // キャラ選択画面のモード（表/裏）
+  // キャラ選択画面のモード（表/裏）。キャラごとに覚える＝別キャラで選んだ裏が
+  // 引きずられて「触っていないのに選択が切り替わる」のを防ぐ（未選択のキャラは表）
+  const [selModeMap, setSelModeMap] = useState({});
   const [resumeAsk, setResumeAsk] = useState(null);        // 中断データの再開確認 {save, mode}
   const [charState, setCharState] = useState(() => loadCharState());
   const charStateRef = useRef(charState); charStateRef.current = charState;
@@ -4414,9 +4416,19 @@ function DropBattle() {
   useEffect(() => {
     if (status !== "select") return;
     const row = charTilesRef.current, tile = selTileRef.current;
-    if (!row || !tile || row.scrollWidth <= row.clientWidth) return;
-    const left = tile.offsetLeft - (row.clientWidth - tile.offsetWidth) / 2;
-    row.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+    if (!row || !tile) return;
+    const max = row.scrollWidth - row.clientWidth;
+    if (max <= 0) return;
+    // offsetLeft は「位置指定された直近の祖先」からの距離。この行には position が無いので
+    // PCなど画面が広い環境ではページ左端からの距離（数百px）になり、常に右端まで飛んでいた。
+    // 実座標の差＋現在のスクロール量から、行の内容内での位置を求める
+    const rowR = row.getBoundingClientRect(), tileR = tile.getBoundingClientRect();
+    const cur = row.scrollLeft;
+    const rel = tileR.left - rowR.left + cur;
+    // すでに見えているなら動かさない（手でスクロールした位置を勝手に変えない）
+    if (rel >= cur - 1 && rel + tileR.width <= cur + row.clientWidth + 1) return;
+    const left = rel - (row.clientWidth - tileR.width) / 2;
+    row.scrollTo({ left: Math.max(0, Math.min(max, left)), behavior: "smooth" });
   }, [status, selView, charState]);
 
   useEffect(() => {
@@ -4643,6 +4655,7 @@ function DropBattle() {
     const ch = CHARS[selView];
     const selOpen = unlocked.includes(selView);
     const uraOpen = selOpen && charState.c.includes(selView);            // このキャラで裏に挑めるか
+    const selMode = selModeMap[selView] === "ura" ? "ura" : "omote";     // このキャラで選んでいるモード
     const effMode = uraOpen && selMode === "ura" ? "ura" : "omote";      // 実際に開始するモード
     const URA_C = "#b06af0";                                             // 裏のテーマ色
     return h("div", { style:{ fontFamily:FONT, minHeight:"calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))", background:'#0d131a url("assets/bg_texture.jpg") repeat', backgroundSize:"512px", color:"#ece7f2", WebkitUserSelect:"none", userSelect:"none", padding:"clamp(12px,2.5vh,24px) 16px clamp(16px,3.5vh,30px)", display:"flex", flexDirection:"column" } },
@@ -4728,7 +4741,7 @@ function DropBattle() {
           ["ura", "裏の冒険", "全5章・高難度", URA_C]
         ].map(([m, label, sub, col]) => {
           const on = effMode === m;
-          return h("button", { key:m, onClick: () => { if (selMode !== m) { setSelMode(m); SFX.tap(); } },
+          return h("button", { key:m, onClick: () => { if (selMode !== m) { setSelModeMap(s => ({ ...s, [selView]: m })); SFX.tap(); } },
             className:"flex-1 rounded-xl py-1.5 font-bold",
             style:{ background: on ? `${col}2e` : "rgba(255,255,255,.05)", border:`2px solid ${on ? col : "#3c3450"}`, color: on ? col : "#8a8296", fontFamily:"inherit", transition:"border-color .15s ease, color .15s ease" } },
             h("span", { className:"text-sm block" }, label),
