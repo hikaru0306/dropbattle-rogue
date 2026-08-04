@@ -226,6 +226,24 @@ with sync_playwright() as pw:
     chk("resume restores the streak", ci(page)["reso"] == streak0, f"{ci(page)['reso']} vs {streak0}")
     chk("resume restores the target", ci(page)["resoTarget"] == tgt0, f"{ci(page)['resoTarget']} vs {tgt0}")
 
+    # ―― 16) 許される誤差（±N）が調律ボタンに出る ――
+    fresh_battle(page)
+    def tune_btn_text(pg):
+        return pg.evaluate("""(() => { const b = [...document.querySelectorAll('button')].find(x => /調律/.test(x.textContent));
+          return b ? b.textContent : ""; })()""")
+    chk("no ± shown when the sum must match exactly", "±" not in tune_btn_text(page), tune_btn_text(page))
+    page.evaluate("window.__test.giveRelic('tuningfork')"); time.sleep(0.3)
+    chk("tuningfork shows ±1", "±1" in tune_btn_text(page), tune_btn_text(page))
+    page.evaluate("window.__test.giveRelic('echobell')"); time.sleep(0.3)
+    chk("tuningfork + echobell shows ±2", "±2" in tune_btn_text(page), tune_btn_text(page))
+    # 響石を消すと、そのぶん誤差が増える（消したあとも出たまま）
+    idxs = run_of(3, 0)
+    make_group(page, idxs); time.sleep(0.1)
+    page.evaluate(f"window.__test.setCellSpecial({idxs[1]}, 'chord', false, false, false)"); time.sleep(0.12)
+    page.evaluate("window.__test.setAct('heal')")
+    page.evaluate(f"window.__test.commit({idxs[0]})"); time.sleep(0.5)
+    chk("clearing a 響石 raises it to ±3", "±3" in tune_btn_text(page), tune_btn_text(page))
+
     chk("no page errors", not errors, str(errors[:3]))
     b.close()
 
