@@ -81,7 +81,8 @@ async function main() {
     const deep = bestU ? ("裏" + (bestU[0] + 1) + "章" + bestU[1] + "F") : best ? ((best[0] + 1) + "章" + best[1] + "F") : "—";
     let totalClears = 0, totalUra = 0;
     for (const k in stats) { totalClears += stats[k].clears || 0; totalUra += stats[k].uraClears || 0; }
-    const summary = "解放" + chars.u.length + "/7｜表:" + (chars.c.map(nm).join(",") || "—") +
+    const total = names.length || 8;                                        // キャラ追加時に自動追従
+    const summary = "解放" + chars.u.length + "/" + total + "｜表:" + (chars.c.map(nm).join(",") || "—") +
       "｜裏:" + (chars.cu.map(nm).join(",") || "—") + "｜最深:" + deep;
     return { summary: summary.slice(0, 400), progress: {
       unlocked: chars.u.length, clearedOmote: chars.c, clearedUra: chars.cu,
