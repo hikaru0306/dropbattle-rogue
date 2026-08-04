@@ -291,7 +291,7 @@ window.TEXTS = {
   // ===== リワード広告 =====
   ads: {
     reviveBtn: "広告を見て復活",
-    reviveNote: "HP40%で仕切り直し（1回の冒険で1度だけ）",
+    reviveNote: "HP20%で仕切り直し（1回の冒険で1度だけ）",
     shopName: "行商人のおすそわけ",
     shopDesc: "広告を1本見るとコインをおまけしてくれる",
     shopBtn: "広告を見る",

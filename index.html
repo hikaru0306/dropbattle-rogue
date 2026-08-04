@@ -4008,14 +4008,14 @@ function DropBattle() {
   }, [status]);
 
   // ===== リワード広告の効果 =====
-  // 敗北画面から広告視聴で復活（1冒険1回・HP40%・ターンは仕切り直し）
+  // 敗北画面から広告視聴で復活（1冒険1回・HP20%・ターンは仕切り直し）
   const adRevive = () => adWatch("revive", ok => {
     if (!ok) { flagAdFail(); return; }
     if (adReviveUsedRef.current || statusRef.current !== "lose") return;
     setAdReviveBoth(true);
     if (fxTimer.current) { clearTimeout(fxTimer.current); fxTimer.current = null; } // 死亡時に残った演出キューを停止
     setFx([]);
-    setPHP(Math.round(pMaxRef.current * 0.4));
+    setPHP(Math.round(pMaxRef.current * 0.2));
     // 敗北はターン解決の途中(return)で起きるので、ここでターン境界の掃除をやり直す
     turnRef.current = freshTurn(); syncTurn();
     setUsed(new Set()); usedRef.current = new Set();
@@ -4025,7 +4025,7 @@ function DropBattle() {
     setStatus("battle"); statusRef.current = "battle";
     setLocked(false); lockedRef.current = false;
     setAnim("hero", "heal"); SFX.heal(); flash("heal");
-    addLog(["🎬 広告を見て復活！HP40%で仕切り直し"]);
+    addLog(["🎬 広告を見て復活！HP20%で仕切り直し"]);
   });
   // 行商人で広告視聴 → コイン150（行商人1人につき1回）
   const AD_SHOP_COINS = 150;
