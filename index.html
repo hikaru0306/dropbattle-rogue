@@ -346,7 +346,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.14"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.15"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -2696,7 +2696,7 @@ function DropBattle() {
   const openShop = () => {
     shopNumRef.current += 1;
     const first = shopNumRef.current === 1; // 最初の行商人だけ半額セール
-    const offers = shuffle(Object.keys(CONSUM)).slice(0, hasR("dice") ? 6 : 4);
+    const offers = shuffle(Object.keys(CONSUM)).slice(0, hasR("dice") ? 6 : 3);
     const relic = pickRelics(1)[0] || null;
     const disc = {};
     if (!first) { // 半額セール中は個別割引を出さない（値引きの二重掛けを避ける）
