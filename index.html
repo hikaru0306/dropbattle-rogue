@@ -57,7 +57,9 @@ html,body{margin:0;padding:0;background:#131019;overscroll-behavior:none;overflo
    ページ全体が微スクロールしてズレていた。未対応ブラウザ向けに 100vh を先に書いて上書きする */
 body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 #root{min-height:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
-button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;padding:0;margin:0}
+/* appearance:none はiOS Safariがネイティブボタン扱いで長押し時に白い押下ハイライトを
+   描くのを止める（tap-highlight-colorでは消えない系統） */
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;padding:0;margin:0;-webkit-appearance:none;appearance:none}
 /* タップ/長押しの押下反応。brightnessはインラインstyleのfilter(紙枠の影・誘導グロー)には負けるため、
    そういうボタンでも必ず反応が出るようtransformの沈み込みを併用する（盤面ドロップは常にインラインの
    transformを持つので沈まず、既存のプレビュー演出だけが出る） */
@@ -126,9 +128,13 @@ button:active{filter:brightness(1.12);transform:translateY(1px) scale(.97)}
 @keyframes autoBlink{0%,100%{opacity:1;box-shadow:0 0 0 2px rgba(124,255,176,.55),0 0 16px rgba(124,255,176,.4)}50%{opacity:.55;box-shadow:0 0 0 2px rgba(124,255,176,.18),0 0 4px rgba(124,255,176,.12)}}
 /* ボロ紙ボタン(border-image)はインラインfilterが:activeのbrightnessを打ち消すため専用の押下スタイルを持つ */
 .paper-btn{transition:transform .08s ease}
-.paper-btn:active{transform:scale(.96) translateY(2px);filter:drop-shadow(0 2px 1px rgba(0,0,0,.45)) brightness(1.08) !important}
-/* ComfyUI生成の石×蔦フレーム（assets/ui_frame.png）をパネルの額縁として重ねる */
-.orn{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:32;border:13px solid transparent;border-image:url("assets/ui_frame.png") 195 round}
+/* .pressing はタイトルボタン専用: iOSでtouchstartをpreventDefaultすると:activeが付かないため、
+   JS側で付け外しする押下クラス（見た目は:activeと同一） */
+.paper-btn:active,.paper-btn.pressing{transform:scale(.96) translateY(2px);filter:drop-shadow(0 2px 1px rgba(0,0,0,.45)) brightness(1.08) !important}
+/* ComfyUI生成の石×蔦フレーム（assets/ui_frame.png）をパネルの額縁として重ねる。
+   fill はiOS Safari対策: fill無しのborder-imageだけがiOSで描画されない事例があったため、
+   描画できている紙/ウィンドウ枠と同じfill付きに揃える（素材の中央は完全透明なので見た目は不変） */
+.orn{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:32;border:13px solid transparent;border-image:url("assets/ui_frame.png") 195 fill round}
 /* 場所別ウィンドウフレーム（fill付きborder-image・中央は内装色30,24,42で塗り込み済みの素材） */
 .win-stone{border:20px solid transparent;border-image:url("assets/ui_win_stone.png") 38 fill round;filter:drop-shadow(0 6px 12px rgba(0,0,0,.55))}
 .win-wood{border:20px solid transparent;border-image:url("assets/ui_win_wood.png") 53 fill round;filter:drop-shadow(0 6px 12px rgba(0,0,0,.55))}
@@ -328,7 +334,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.8"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.9"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -1701,6 +1707,28 @@ function DropBattle() {
       setTimeout(toSelect, Math.max(0, 400 - (Date.now() - t0)));
     });
   };
+  // タイトルボタンのiOS長押し対策。CSS（touch-callout/user-select/tap-highlight）だけでは
+  // iOS15以降のSafariが長押しで白い角丸ハイライトを出すことがあるため、touchstartの
+  // デフォルト動作ごと止める。ReactのイベントはtouchstartがpassiveでpreventDefaultできず、
+  // 止めると:activeもclickも発火しなくなるので、素のリスナー＋押下クラス＋touchendで自前決定する
+  const goSelectRef = useRef(null);
+  goSelectRef.current = () => { if (!loadGate) goSelect(); };
+  const titleBtnWire = useCallback(el => {
+    if (!el || el.__pressWired) return;
+    el.__pressWired = true;
+    el.addEventListener("touchstart", ev => { ev.preventDefault(); el.classList.add("pressing"); }, { passive: false });
+    el.addEventListener("touchend", ev => {
+      ev.preventDefault(); // click合成も止める（マウス/キーボードはonClick経路のまま。二重発火しない）
+      el.classList.remove("pressing");
+      const t = ev.changedTouches && ev.changedTouches[0];
+      if (t) { // 押したまま外へずらして離したらキャンセル（ボタンの標準挙動に合わせる）
+        const r = el.getBoundingClientRect();
+        if (t.clientX < r.left || t.clientX > r.right || t.clientY < r.top || t.clientY > r.bottom) return;
+      }
+      if (goSelectRef.current) goSelectRef.current();
+    }, { passive: false });
+    el.addEventListener("touchcancel", () => el.classList.remove("pressing"), { passive: true });
+  }, []);
   // ===== 章の導入演出（兼ロードゲート） =====
   // 章が変わったら「第N章 ○○」を出し、その章の敵が揃うまで（最長5秒）引き延ばす。
   // 揃っていれば最短表示のぶんだけ出て素通り＝ロード画面に見せずポップインを防ぐ
@@ -4650,6 +4678,7 @@ function DropBattle() {
         h("p", { style:{ position:"relative", zIndex:1, fontSize:"clamp(0.72rem,2.5vw,0.95rem)", color:"#e8d8a8", letterSpacing:"0.42em", fontWeight:800, textShadow:"0 1px 3px #000", margin:"-4px 0 10px", paddingLeft:"0.42em" } }, "DROP DUNGEON")),
       h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
         h("button", {
+          ref: titleBtnWire, // iOSの長押しハイライト対策（touchstartをpreventDefaultし、決定はtouchendで自前処理）
           onClick: () => { if (!loadGate) goSelect(); },
           className:"paper-btn",
           style:{ color:"#3a2a16", border:"16px solid transparent", borderImageSource:'url("assets/ui_paper.png")', borderImageSlice:"180 fill", borderImageRepeat:"round", padding:"clamp(4px,1.2vw,8px) clamp(36px,9vw,54px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", filter:"drop-shadow(0 5px 3px rgba(0,0,0,.5))", fontFamily:"inherit" } }, "冒険に出る"),
@@ -5512,10 +5541,13 @@ function DropBattle() {
   // キャラスキルチュートリアル: ボタン誘導中は盤面全体を暗く、対象指定中は対象グループだけ光らせる
   const ctutBoardLock = ctut && ctut.step !== "paint" && ctut.step !== "clear" && ctut.step !== "done" && ctut.step !== "finwait";
   const ctutIds = ctut && (ctut.step === "paint" || ctut.step === "clear") && ctut.seed != null ? findGroup(board, ctut.seed) : null;
-  const boardEl = h("div", { className:"relative rounded-2xl board-wrap", style:{ padding:12, background:"rgba(19,14,28,.8)", marginBottom:4 } },
+  // padding は額縁(.orn=13px)の内側に、消去プレビューのリング(3px)＋scale(1.06)のはみ出し(計約5px)が
+  // 隠れず収まる余白を取る: 13 + 5 < 20。12だと端のセルのリングが額縁の下に潜って見えなかった
+  const boardEl = h("div", { className:"relative rounded-2xl board-wrap", style:{ padding:20, background:"rgba(19,14,28,.8)", marginBottom:4 } },
         h("div", { className:"orn" }),
-        // 落下アニメ(dropIn)のドロップが枠の上にはみ出て見えないよう上端でクリップ（左右下は消滅時のscale演出用に余裕を残す）
-        h("div", { className:"grid grid-cols-6 gap-1.5", style:{ touchAction:"none", clipPath:"inset(-2px -14px -14px -14px)" }, onContextMenu: e => e.preventDefault() },
+        // 落下アニメ(dropIn)のドロップが枠の上にはみ出て見えないよう上端でクリップ（左右下は消滅時のscale演出用に余裕を残す）。
+        // 上端-6pxはプレビューのリング＋scaleぶんを見せつつ、額縁(内縁=padding20-13=7px)には届かない値
+        h("div", { className:"grid grid-cols-6 gap-1.5", style:{ touchAction:"none", clipPath:"inset(-6px -14px -14px -14px)" }, onContextMenu: e => e.preventDefault() },
           board.map((cell,i) => {
             const d = DROPS[cell.type];
             const isPrev = preview && preview.over && preview.ids.has(cell.id);
