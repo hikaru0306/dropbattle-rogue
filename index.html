@@ -352,7 +352,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.16"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.17"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -4103,8 +4103,13 @@ function DropBattle() {
     if (fxTimer.current) { clearTimeout(fxTimer.current); fxTimer.current = null; } // 死亡時に残った演出キューを停止
     setFx([]);
     setPHP(Math.round(pMaxRef.current * 0.2));
-    // 敗北はターン解決の途中(return)で起きるので、ここでターン境界の掃除をやり直す
+    // 敗北はターン解決の途中(return)で起きるので、ここで通常のターン終了と同じ掃除をやり直す。
+    // ターンをまたいで続く値（調律のラダー・ノアの蓄積・鍛冶素材など）はそのまま残る
+    if (turnRef.current.resoWin) { resoRef.current += 1; setResoView(resoRef.current); } // 成立していた調律はラダーに反映
     turnRef.current = freshTurn(); syncTurn();
+    // 死亡ターンの×倍率/+Nを固定表示する演出を掃除。残すと攻撃/防御チップが
+    // 演出の数字を出し続け、新しく消しても数字が更新されないように見える
+    setBuffAnim(null); setStoreAnim(null); setResoAnim(null);
     setUsed(new Set()); usedRef.current = new Set();
     setAction(actOrderRef.current[0]); actionRef.current = actOrderRef.current[0];
     setPops({});
