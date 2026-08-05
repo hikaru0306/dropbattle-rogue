@@ -1,5 +1,5 @@
 // =============================================================
-// ドロプシア テキスト定義ファイル
+// ドロップダンジョン テキスト定義ファイル
 // ここの文字を書き換えるとゲーム内の表示が変わります（index.htmlの再編集は不要）。
 // 注意:
 //  - 「"」や「\」を文中に使うときは \" \\ のようにエスケープしてください
@@ -301,7 +301,7 @@ window.TEXTS = {
 
   // ===== クラウド・フッター関連 =====
   cloud: {
-    copyright: "© 2026 HIKARU — DROPSIA",
+    copyright: "© 2026 HIKARU — DROP DUNGEON",
     contactUrl: "https://docs.google.com/forms/d/e/1FAIpQLSce4fN3AjL_VK_pd42aplABN8G9vgwxbGBQCowmNl5fXHJPJA/viewform"
   },
 

@@ -1,5 +1,5 @@
 // =============================================================
-// ドロプシア クラウド同期 (Firebase Auth + Firestore lite)
+// ドロップダンジョン クラウド同期 (Firebase Auth + Firestore lite)
 //  - 匿名ログイン自動 → Googleアカウント連携で端末間引き継ぎ
 //  - localStorage の db_* をそのまま users/{uid} にミラー保存
 //  - このファイルが読めない / 設定未投入なら window.Cloud は生成されず、
