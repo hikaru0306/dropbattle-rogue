@@ -57,17 +57,24 @@ html,body{margin:0;padding:0;background:#131019;overscroll-behavior:none;overflo
    ページ全体が微スクロールしてズレていた。未対応ブラウザ向けに 100vh を先に書いて上書きする */
 body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 #root{min-height:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
-button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;padding:0;margin:0}
+/* appearance:none はiOS Safariがネイティブボタン扱いで長押し時に白い押下ハイライトを
+   描くのを止める（tap-highlight-colorでは消えない系統） */
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;padding:0;margin:0;-webkit-appearance:none;appearance:none}
 /* タップ/長押しの押下反応。brightnessはインラインstyleのfilter(紙枠の影・誘導グロー)には負けるため、
    そういうボタンでも必ず反応が出るようtransformの沈み込みを併用する（盤面ドロップは常にインラインの
    transformを持つので沈まず、既存のプレビュー演出だけが出る） */
-button:active{filter:brightness(1.12);transform:translateY(1px) scale(.97)}
+/* .pressing はdata-press付きボタン用: touchstartをpreventDefaultすると:activeが付かないため
+   委譲リスナーがクラスで付け外しする（見た目は:activeと同一）。
+   沈み込みは整数pxのtranslateYのみ。scaleは使わない: border-image(紙/額縁)のボタンを
+   小数倍率で縮小すると9スライスの継ぎ目に1pxの隙間が生じ、背景が細い四角の線として
+   透けて見える（長押し中ずっと:activeが続くので線が出続ける）。整数移動なら起きない */
+button:active,button.pressing{filter:brightness(1.12);transform:translateY(1px)}
 /* マップのノードカード。filterをインラインではなくクラスで持たせることで、:activeの
    影/グロー＋brightness合成が（!important無しで）インラインに潰されず効くようにする */
 .map-card{filter:drop-shadow(0 4px 2px rgba(40,25,10,.45))}
-.map-card:active{filter:drop-shadow(0 2px 1px rgba(40,25,10,.45)) brightness(1.15)}
+.map-card:active,.map-card.pressing{filter:drop-shadow(0 2px 1px rgba(40,25,10,.45)) brightness(1.15)}
 .map-card-glow{filter:drop-shadow(0 0 3px #ffe08a) drop-shadow(0 0 10px rgba(255,207,93,.95))}
-.map-card-glow:active{filter:drop-shadow(0 0 3px #ffe08a) drop-shadow(0 0 10px rgba(255,207,93,.95)) brightness(1.12)}
+.map-card-glow:active,.map-card-glow.pressing{filter:drop-shadow(0 0 3px #ffe08a) drop-shadow(0 0 10px rgba(255,207,93,.95)) brightness(1.12)}
 /* 攻撃予告チュートリアルで敵を光らせる誘導グロー（敵ボタン用） */
 .tgt-glow{filter:drop-shadow(0 0 12px rgba(255,190,90,.95)) drop-shadow(0 0 5px rgba(255,120,60,.85))}
 .relative{position:relative}.absolute{position:absolute}.fixed{position:fixed}
@@ -126,9 +133,14 @@ button:active{filter:brightness(1.12);transform:translateY(1px) scale(.97)}
 @keyframes autoBlink{0%,100%{opacity:1;box-shadow:0 0 0 2px rgba(124,255,176,.55),0 0 16px rgba(124,255,176,.4)}50%{opacity:.55;box-shadow:0 0 0 2px rgba(124,255,176,.18),0 0 4px rgba(124,255,176,.12)}}
 /* ボロ紙ボタン(border-image)はインラインfilterが:activeのbrightnessを打ち消すため専用の押下スタイルを持つ */
 .paper-btn{transition:transform .08s ease}
-.paper-btn:active{transform:scale(.96) translateY(2px);filter:drop-shadow(0 2px 1px rgba(0,0,0,.45)) brightness(1.08) !important}
-/* ComfyUI生成の石×蔦フレーム（assets/ui_frame.png）をパネルの額縁として重ねる */
-.orn{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:32;border:13px solid transparent;border-image:url("assets/ui_frame.png") 195 round}
+/* .pressing はタイトルボタン専用: iOSでtouchstartをpreventDefaultすると:activeが付かないため、
+   JS側で付け外しする押下クラス（見た目は:activeと同一） */
+/* scale(.96)は廃止: border-imageのスライス継ぎ目に線が出るため（button:activeのコメント参照） */
+.paper-btn:active,.paper-btn.pressing{transform:translateY(2px);filter:drop-shadow(0 2px 1px rgba(0,0,0,.45)) brightness(1.08) !important}
+/* ComfyUI生成の石×蔦フレーム（assets/ui_frame.png）をパネルの額縁として重ねる。
+   fill はiOS Safari対策: fill無しのborder-imageだけがiOSで描画されない事例があったため、
+   描画できている紙/ウィンドウ枠と同じfill付きに揃える（素材の中央は完全透明なので見た目は不変） */
+.orn{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:32;border:13px solid transparent;border-image:url("assets/ui_frame.png") 195 fill round}
 /* 場所別ウィンドウフレーム（fill付きborder-image・中央は内装色30,24,42で塗り込み済みの素材） */
 .win-stone{border:20px solid transparent;border-image:url("assets/ui_win_stone.png") 38 fill round;filter:drop-shadow(0 6px 12px rgba(0,0,0,.55))}
 .win-wood{border:20px solid transparent;border-image:url("assets/ui_win_wood.png") 53 fill round;filter:drop-shadow(0 6px 12px rgba(0,0,0,.55))}
@@ -328,7 +340,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.9"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.12"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -1393,6 +1405,37 @@ const bgmKick = () => {
   }
 };
 window.addEventListener("pointerdown", bgmKick, { passive: true });
+
+// ===== iOSの長押しハイライト対策（イベント委譲） =====
+// data-press属性を持つボタンは、touchstartのデフォルト動作を止めて長押しの白い角丸
+// ハイライト/選択UIを完全に抑止する（CSSのtouch-callout等はiOS15以降効かないことがある）。
+// デフォルトを止めると:activeもclick合成も発火しないため、押下見た目は .pressing クラス、
+// 決定はtouchendからの el.click()（Reactの onClick に届く）で自前処理する。
+// スクロールも封じる副作用があるので、スクロール領域内のボタンには付けないこと。
+const pressBtn = e => (e.target && e.target.closest) ? e.target.closest("[data-press]") : null;
+document.addEventListener("touchstart", e => {
+  const b = pressBtn(e);
+  if (!b || b.disabled) return;
+  e.preventDefault();
+  b.classList.add("pressing");
+}, { passive: false });
+document.addEventListener("touchend", e => {
+  const b = pressBtn(e);
+  if (!b) return;
+  e.preventDefault();
+  b.classList.remove("pressing");
+  if (b.disabled) return;
+  const t = e.changedTouches && e.changedTouches[0];
+  if (t) { // 押したまま外へずらして離したらキャンセル（ボタンの標準挙動に合わせる）
+    const r = b.getBoundingClientRect();
+    if (t.clientX < r.left || t.clientX > r.right || t.clientY < r.top || t.clientY > r.bottom) return;
+  }
+  b.click();
+}, { passive: false });
+document.addEventListener("touchcancel", e => {
+  const b = pressBtn(e);
+  if (b) b.classList.remove("pressing");
+}, { passive: true });
 
 // ===== 画像プリロード =====
 // <img>は「初めて描画される瞬間」に取得が走るため、敵スプライトや予告アイコンが一拍遅れて出る。
@@ -4654,6 +4697,7 @@ function DropBattle() {
         h("p", { style:{ position:"relative", zIndex:1, fontSize:"clamp(0.72rem,2.5vw,0.95rem)", color:"#e8d8a8", letterSpacing:"0.42em", fontWeight:800, textShadow:"0 1px 3px #000", margin:"-4px 0 10px", paddingLeft:"0.42em" } }, "DROP DUNGEON")),
       h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
         h("button", {
+          "data-press": 1, // iOSの長押しハイライト対策（委譲リスナーがtouchstartを止めてtouchendでclickする）
           onClick: () => { if (!loadGate) goSelect(); },
           className:"paper-btn",
           style:{ color:"#3a2a16", border:"16px solid transparent", borderImageSource:'url("assets/ui_paper.png")', borderImageSlice:"180 fill", borderImageRepeat:"round", padding:"clamp(4px,1.2vw,8px) clamp(36px,9vw,54px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", filter:"drop-shadow(0 5px 3px rgba(0,0,0,.5))", fontFamily:"inherit" } }, "冒険に出る"),
@@ -5542,10 +5586,13 @@ function DropBattle() {
   // キャラスキルチュートリアル: ボタン誘導中は盤面全体を暗く、対象指定中は対象グループだけ光らせる
   const ctutBoardLock = ctut && ctut.step !== "paint" && ctut.step !== "clear" && ctut.step !== "done" && ctut.step !== "finwait";
   const ctutIds = ctut && (ctut.step === "paint" || ctut.step === "clear") && ctut.seed != null ? findGroup(board, ctut.seed) : null;
-  const boardEl = h("div", { className:"relative rounded-2xl board-wrap", style:{ padding:12, background:"rgba(19,14,28,.8)", marginBottom:4 } },
+  // padding は額縁(.orn=13px)の内側に、消去プレビューのリング(3px)＋scale(1.06)のはみ出し(計約5px)が
+  // 隠れず収まる余白を取る: 13 + 5 < 20。12だと端のセルのリングが額縁の下に潜って見えなかった
+  const boardEl = h("div", { className:"relative rounded-2xl board-wrap", style:{ padding:20, background:"rgba(19,14,28,.8)", marginBottom:4 } },
         h("div", { className:"orn" }),
-        // 落下アニメ(dropIn)のドロップが枠の上にはみ出て見えないよう上端でクリップ（左右下は消滅時のscale演出用に余裕を残す）
-        h("div", { className:"grid grid-cols-6 gap-1.5", style:{ touchAction:"none", clipPath:"inset(-2px -14px -14px -14px)" }, onContextMenu: e => e.preventDefault() },
+        // 落下アニメ(dropIn)のドロップが枠の上にはみ出て見えないよう上端でクリップ（左右下は消滅時のscale演出用に余裕を残す）。
+        // 上端-6pxはプレビューのリング＋scaleぶんを見せつつ、額縁(内縁=padding20-13=7px)には届かない値
+        h("div", { className:"grid grid-cols-6 gap-1.5", style:{ touchAction:"none", clipPath:"inset(-6px -14px -14px -14px)" }, onContextMenu: e => e.preventDefault() },
           board.map((cell,i) => {
             const d = DROPS[cell.type];
             const isPrev = preview && preview.over && preview.ids.has(cell.id);
@@ -5649,7 +5696,7 @@ function DropBattle() {
               const meta = NODE_META[n.type];
               const isBoss = n.type === "boss";
               const imgSz = isBoss ? 78 : 64;
-              return h("button", { key:n.id, "data-mapcard":n.id, onClick: () => enterNode(n),
+              return h("button", { key:n.id, "data-mapcard":n.id, "data-press":1, onClick: () => enterNode(n),
                 // filterはインラインでなくクラスで持つ（インラインだと:activeの押下反応が潰れる）
                 className:"relative flex flex-col items-center justify-center pop-in " + (routeTut ? "map-card-glow" : "map-card"),
                 style:{
