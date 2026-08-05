@@ -120,7 +120,10 @@ button:active,button.pressing{filter:brightness(1.12);transform:translateY(1px)}
 @keyframes nodePulse{0%,100%{box-shadow:0 0 0 2px rgba(216,168,72,.85);transform:translate(-50%,-50%) scale(1)}50%{box-shadow:0 0 0 3px rgba(216,168,72,1);transform:translate(-50%,-50%) scale(1.07)}}
 @keyframes targetBob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,5px)}}
 @keyframes mistDrift{0%{transform:translateX(-12%)}50%{transform:translateX(12%)}100%{transform:translateX(-12%)}}
-@keyframes popIn{0%{transform:scale(.85);opacity:0}100%{transform:scale(1);opacity:1}}
+/* scale(.85)→1 は廃止: border-image(紙窓/額縁)の要素を小数倍率で描くと9スライスの
+   継ぎ目に1pxの線が出るため（.pop-inはウィンドウ枠やマップカードに使われている）。
+   縦の小移動＋フェードで「ポン」と出る感触だけ残す */
+@keyframes popIn{0%{transform:translateY(10px);opacity:0}100%{transform:translateY(0);opacity:1}}
 /* left:50%+translateX(-50%)センタリング要素用。popInだとアニメ中keyframeのtransformが
    インラインのtranslateX(-50%)を上書きして右へ68pxズレたまま拡大縮小→終了時に中央へスナップして見える */
 @keyframes popInC{0%{transform:translateX(-50%) scale(.85);opacity:0}100%{transform:translateX(-50%) scale(1);opacity:1}}
@@ -139,8 +142,11 @@ button:active,button.pressing{filter:brightness(1.12);transform:translateY(1px)}
 .paper-btn:active,.paper-btn.pressing{transform:translateY(2px);filter:drop-shadow(0 2px 1px rgba(0,0,0,.45)) brightness(1.08) !important}
 /* ComfyUI生成の石×蔦フレーム（assets/ui_frame.png）をパネルの額縁として重ねる。
    fill はiOS Safari対策: fill無しのborder-imageだけがiOSで描画されない事例があったため、
-   描画できている紙/ウィンドウ枠と同じfill付きに揃える（素材の中央は完全透明なので見た目は不変） */
-.orn{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:32;border:13px solid transparent;border-image:url("assets/ui_frame.png") 195 fill round}
+   描画できている紙/ウィンドウ枠と同じfill付きに揃える（素材の中央は完全透明なので見た目は不変）。
+   translateZ(0)は自前レイヤーへの昇格: iOS Safariはアニメーション中の兄弟(ドロップの
+   点滅マークや落下/消去)がGPU合成されると、レイヤーを持たない重ね描き要素を描かなくなる
+   ことがあり、バトル中は枠が常に消え、宝箱パズルではタップの瞬間だけ消えていた */
+.orn{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:32;border:13px solid transparent;border-image:url("assets/ui_frame.png") 195 fill round;transform:translateZ(0)}
 /* 場所別ウィンドウフレーム（fill付きborder-image・中央は内装色30,24,42で塗り込み済みの素材） */
 .win-stone{border:20px solid transparent;border-image:url("assets/ui_win_stone.png") 38 fill round;filter:drop-shadow(0 6px 12px rgba(0,0,0,.55))}
 .win-wood{border:20px solid transparent;border-image:url("assets/ui_win_wood.png") 53 fill round;filter:drop-shadow(0 6px 12px rgba(0,0,0,.55))}
