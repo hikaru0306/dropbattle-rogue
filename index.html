@@ -115,6 +115,11 @@ button:active{filter:brightness(1.12)}
 .paper-btn:active{transform:scale(.96) translateY(2px);filter:drop-shadow(0 2px 1px rgba(0,0,0,.45)) brightness(1.08) !important}
 /* ComfyUI生成の石×蔦フレーム（assets/ui_frame.png）をパネルの額縁として重ねる */
 .orn{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:32;border:13px solid transparent;border-image:url("assets/ui_frame.png") 195 round}
+/* 場所別ウィンドウフレーム（fill付きborder-image・中央は内装色30,24,42で塗り込み済みの素材） */
+.win-stone{border:20px solid transparent;border-image:url("assets/ui_win_stone.png") 38 fill round;filter:drop-shadow(0 6px 12px rgba(0,0,0,.55))}
+.win-wood{border:20px solid transparent;border-image:url("assets/ui_win_wood.png") 53 fill round;filter:drop-shadow(0 6px 12px rgba(0,0,0,.55))}
+.win-gold{border:18px solid transparent;border-image:url("assets/ui_win_gold.png") 40 fill round;filter:drop-shadow(0 6px 12px rgba(0,0,0,.55))}
+.win-camp{border:22px solid transparent;border-image:url("assets/ui_win_camp.png") 48 fill round;filter:drop-shadow(0 6px 12px rgba(0,0,0,.55))}
 .sp-idle-a{animation:breathA 2.6s ease-in-out infinite;transform-origin:50% 100%}
 .sp-idle-b{animation:breathB 3.4s ease-in-out infinite;transform-origin:50% 100%}
 .sp-idle-f{animation:floatY 3.2s ease-in-out infinite}
@@ -4827,7 +4832,7 @@ function DropBattle() {
           !selOpen ? "🔒 未解放" : effMode === "ura" ? "裏の世界へ挑む ▶" : "この仲間と冒険に出る ▶")),
       // ―― 中断データの再開確認 ――
       resumeAsk && h("div", { className:"fade-in", style:{ position:"fixed", inset:0, zIndex:60, background:"rgba(8,4,14,.85)", display:"flex", alignItems:"center", justifyContent:"center", padding:"0 24px" } },
-        h("div", { className:"pop-in rounded-2xl p-4 w-full text-center", style:{ maxWidth:320, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
+        h("div", { className:"pop-in rounded-2xl p-4 w-full text-center win-stone", style:{ maxWidth:330 } },
           h("p", { className:"font-bold mb-1", style:{ color:"#ffcf5d", fontSize:"1.02rem" } }, "📜 中断中のデータがあります"),
           h("div", { className:"rounded-xl px-3 py-2 mb-2 text-[12px]", style:{ background:"rgba(255,255,255,.05)", border:"1px solid #443c58", lineHeight:1.9 } },
             h("span", { className:"font-bold", style:{ color: resumeAsk.save.mode === "ura" ? "#cf9af8" : "#f0e4c8" } },
@@ -4875,7 +4880,7 @@ function DropBattle() {
         onChange: () => {},
         style:{ width:"100%", accentColor:"#e8c06a", height:24, opacity: on ? 1 : 0.4, pointerEvents:"none", display:"block" } })));
   if (soundOpen) overlays.push(h("div", { key:"sound", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setSoundOpen(false) },
-    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+    h("div", { className:"w-full rounded-2xl p-4 pop-in win-stone", style:{ maxWidth:352 }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-3" },
         h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, Ic("assets/icon_speaker.png", 18), "サウンド設定"),
         h("button", { onClick: () => setSoundOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
@@ -4884,7 +4889,7 @@ function DropBattle() {
       h("p", { className:"text-[9px] mt-1", style:{ opacity:0.5 } }, "アイコンでON/OFF・スライダーで音量。設定は端末に保存されます。"))));
   // 操作設定（オートモードのON/OFF）
   if (ctrlOpen) overlays.push(h("div", { key:"ctrl", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setCtrlOpen(false) },
-    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+    h("div", { className:"w-full rounded-2xl p-4 pop-in win-stone", style:{ maxWidth:352 }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-3" },
         h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, "🎮 操作設定"),
         h("button", { onClick: () => setCtrlOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
@@ -4914,7 +4919,7 @@ function DropBattle() {
     h("p", { className:"pop-in", style:{ margin:0, fontSize:"0.78rem", letterSpacing:"0.34em", color:"#c9bfe0", fontWeight:800 } }, actIntro.head),
     h("h2", { className:"pop-in", style:{ margin:"6px 0 0", fontSize:"clamp(1.5rem,7vw,2rem)", fontWeight:900, color:"#e8c06a", textShadow:"0 2px 0 rgba(0,0,0,.55)" } }, actIntro.name)));
   if (menuOpen) overlays.push(h("div", { key:"menu", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setMenuOpen(false) },
-    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+    h("div", { className:"w-full rounded-2xl p-4 pop-in win-stone", style:{ maxWidth:352 }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-3" },
         h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, "☰ メニュー"),
         h("button", { onClick: () => setMenuOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
@@ -4939,7 +4944,7 @@ function DropBattle() {
     "タップでオートモード解除"));
   // オートモードの解除確認
   if (autoAsk) overlays.push(h("div", { key:"autoask", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.72)", zIndex:70 }, onClick: () => setAutoAsk(false) },
-    h("div", { className:"w-full rounded-2xl p-4 pop-in text-center", style:{ maxWidth:300, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+    h("div", { className:"w-full rounded-2xl p-4 pop-in text-center win-stone", style:{ maxWidth:312 }, onClick: e => e.stopPropagation() },
       h("p", { className:"font-bold mb-3", style:{ color:"#f0e4c8", fontSize:"0.95rem", margin:"4px 0 14px" } }, "オートモードを解除しますか？"),
       h("div", { className:"flex gap-2" },
         h("button", { onClick: () => { SFX.tap(); setAutoMode(false); setAutoAsk(false); }, className:"flex-1 rounded-xl py-2.5 font-bold",
@@ -4947,7 +4952,7 @@ function DropBattle() {
         h("button", { onClick: () => { SFX.tap(); setAutoAsk(false); }, className:"flex-1 rounded-xl py-2.5 font-bold",
           style:{ background:"rgba(255,255,255,.08)", color:"#c9bfe0", border:"1px solid #443c58", fontFamily:"inherit" } }, "いいえ")))));
   if (relicOpen) overlays.push(h("div", { key:"relics", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setRelicOpen(false) },
-    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, maxHeight:"78vh", overflowY:"auto", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+    h("div", { className:"w-full rounded-2xl p-3 pop-in win-gold", style:{ maxWidth:376, maxHeight:"78vh", overflowY:"auto" }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-2" },
         h("span", { className:"font-bold", style:{ color:"#e8c06a", fontSize:"1.05rem" } }, "🏺 所持レリック（", relicsView.length, "）"),
         h("button", { onClick: () => setRelicOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
@@ -4959,7 +4964,7 @@ function DropBattle() {
             h("span", { className:"block text-[11px]", style:{ opacity:0.85, lineHeight:1.5 } }, RELICS[k].desc))))))));
   // 所持アイテム（消費アイテム）の確認と処分
   if (consumOpen) overlays.push(h("div", { key:"consum", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => { setConsumOpen(false); setDropArm(-1); } },
-    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, maxHeight:"82vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+    h("div", { className:"w-full rounded-2xl p-3 pop-in win-wood", style:{ maxWidth:376, maxHeight:"82vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain" }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-2" },
         h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, Ic("assets/cs_potion.png", 18), "所持アイテム（", items.length, "/", itemCap(), "）"),
         h("button", { onClick: () => { setConsumOpen(false); setDropArm(-1); }, className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
@@ -4979,7 +4984,7 @@ function DropBattle() {
                 armed ? "本当に捨てる？" : "捨てる"));
           })))));
   if (bagOpen) overlays.push(h("div", { key:"bag", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:60 }, onClick: () => setBagOpen(false) },
-    h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:360, maxHeight:"82vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" }, onClick: e => e.stopPropagation() },
+    h("div", { className:"w-full rounded-2xl p-3 pop-in win-wood", style:{ maxWidth:376, maxHeight:"82vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain" }, onClick: e => e.stopPropagation() },
       h("div", { className:"flex justify-between items-center mb-1" },
         h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#ffcf5d", fontSize:"1.05rem" } }, Ic("assets/icon_bag.png", 18), "所持アイテム"),
         h("button", { onClick: () => setBagOpen(false), className:"text-xs px-3 py-1 rounded-lg", style:{ background:"rgba(255,255,255,.12)" } }, "閉じる")),
@@ -5188,9 +5193,8 @@ function DropBattle() {
     }
     overlays.push(h("div", { key:"gamble", className:"fixed inset-0 flex items-center justify-center fade-in", onClick: spinning ? gambleReveal : undefined, style:{ background:"rgba(6,3,12,.82)", zIndex:85, cursor: spinning ? "pointer" : "default" } },
       // 賭けオーバーレイの枠は最初から最後まで金色（死の警告は中の文字で見せる）
-      h("div", { className:"rounded-2xl pop-in", style:{ maxWidth:360, width:"92%", padding:"26px 22px 28px", background:"rgba(28,20,34,.98)",
-        border:"2px solid #ffd75e", textAlign:"center",
-        boxShadow:"0 10px 34px rgba(0,0,0,.6), 0 0 22px rgba(255,215,94,.45)" } }, inner)));
+      h("div", { className:"rounded-2xl pop-in win-gold", style:{ maxWidth:372, width:"92%", padding:"14px 10px 16px", textAlign:"center",
+        filter:"drop-shadow(0 10px 24px rgba(0,0,0,.6)) drop-shadow(0 0 16px rgba(255,215,94,.4))" } }, inner)));
   }
   // 賭け失敗: ウィンドウが閉じた後、目線のあった画面中央へ大きく「HP-◯」
   if (gambleDmg) {
@@ -5226,7 +5230,7 @@ function DropBattle() {
   if (campfire) {
     const ownedTotalCamp = ITEM_KEYS.reduce((t, k) => t + ownedView[k], 0);
     overlays.push(h("div", { key:"camp", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.87)", zIndex:58 } },
-      h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:370, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
+      h("div", { className:"w-full rounded-2xl p-3 pop-in win-camp", style:{ maxWidth:386 } },
         h("h2", { className:"text-center font-bold mb-1 flex items-center justify-center gap-1.5", style:{ fontSize:"1.15rem", color:"#7cffb0", textShadow:"0 2px 0 rgba(0,0,0,.6)" } }, Ic("assets/node_rest.png", 20), "焚き火"),
         campfire === "menu" ? h("div", null,
           h("p", { className:"text-center text-[11px] mb-3", style:{ opacity:0.75 } }, "どれか1つを選ぼう"),
@@ -5304,7 +5308,7 @@ function DropBattle() {
     };
     overlays.push(h("div", { key:"shop", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:58 } },
       // サイコロ(6品)+レリック枠+セールバナーが揃うと低背端末(568px級)で画面からあふれるためスクロール可に
-      h("div", { className:"w-full rounded-2xl p-4 pop-in", style:{ maxWidth:370, maxHeight:"88vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
+      h("div", { className:"w-full rounded-2xl p-3 pop-in win-wood", style:{ maxWidth:386, maxHeight:"88vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain" } },
         h("div", { className:"flex justify-between items-center mb-1" },
           h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#e8c06a", fontSize:"1.05rem" } }, Ic("assets/merchant.png", 20), "行商人"),
           h("span", { className:"text-sm font-bold flex items-center gap-1", style:{ color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, Ic("assets/icon_coin.png", 14), coins)),
@@ -5371,7 +5375,7 @@ function DropBattle() {
     const rStep = rewards.step || (rewards.relic ? "relic" : "drop");
     overlays.push(h("div", { key:"reward", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:50 } },
       // 磁石レリック(候補4つ)+＋化説明行が揃うと低背端末(568px級)で画面からあふれるためスクロール可に
-      h("div", { className:"w-full pop-in rounded-2xl", style:{ maxWidth:380, maxHeight:"88vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", padding:"16px 14px" } },
+      h("div", { className:"w-full pop-in rounded-2xl win-gold", style:{ maxWidth:392, maxHeight:"88vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", padding:"12px 8px 24px" } },
         h("h2", { className:"text-center font-bold mb-1 flex items-center justify-center gap-2", style:{ fontSize:"1.25rem", color:"#e0b45c", textShadow:"0 2px 0 rgba(0,0,0,.6)" } }, Ic(rIcon, 22), rTitle),
         rewards.coins > 0 && h("p", { key:"coin", className:"text-center text-xs mb-1", style:{ color:"#e8c06a", fontWeight:800 } }, Ic("assets/icon_coin.png", 13), " コイン +", rewards.coins),
         // ステップ1: レリック獲得の告知（強敵のみ）→「特殊ドロップを選ぶ」で次へ
@@ -5412,7 +5416,7 @@ function DropBattle() {
     const d = puzzle.done;
     const hit = d.kind === "relic";
     overlays.push(h("div", { key:"pzdone", className:"fixed inset-0 flex items-center justify-center px-6 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:56 } },
-      h("div", { className:"text-center pop-in rounded-2xl p-4 w-full", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
+      h("div", { className:"text-center pop-in rounded-2xl p-4 w-full win-gold", style:{ maxWidth:352 } },
         h("div", { className:"font-bold", style:{ fontSize:"1.3rem", color: hit ? "#ffd95c" : "#c9bfe0", textShadow:"0 2px 0 rgba(0,0,0,.55)" } },
           hit ? "ぴったり！" : "はずれ…"),
         h("p", { className:"my-1 text-sm", style:{ opacity:0.85 } }, "合計 ", h("b", { style:{ color:"#7cffb0" } }, d.cleared), " 個（目標 ", puzzle.targets.join("・"), " 個）"),
@@ -5436,7 +5440,7 @@ function DropBattle() {
 
   if (actClear) {
     overlays.push(h("div", { key:"actclear", className:"fixed inset-0 flex items-center justify-center px-6 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:56 } },
-      h("div", { className:"text-center pop-in rounded-2xl p-5 w-full", style:{ maxWidth:360, background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c" } },
+      h("div", { className:"text-center pop-in rounded-2xl p-3 w-full win-gold", style:{ maxWidth:376 } },
         h("div", { className:"font-bold", style:{ fontSize:"1.6rem", color:"#f2e6c8", textShadow:"0 3px 0 rgba(0,0,0,.55)" } }, mode === "ura" ? "裏・" : "", "第", act + 1, "章 クリア！"),
         h("p", { className:"my-2 text-sm", style:{ opacity:0.85 } }, "「", actNameOf(mode, act), "」を制覇した！"),
         h("div", { className:"rounded-xl py-2 px-3 mb-2 text-xs", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.4)", color:"#e8d8a8", lineHeight:1.9 } },
@@ -5456,7 +5460,7 @@ function DropBattle() {
   if (status === "clear" || status === "lose") {
     const isClear = status === "clear";
     overlays.push(h("div", { key:"end", className:"fixed inset-0 flex items-center justify-center px-6 fade-in", style:{ background:"rgba(8,4,14,.9)", zIndex:55 } },
-      h("div", { className:"text-center pop-in rounded-2xl w-full", style:{ maxWidth:340, background:"rgba(30,24,42,.98)", border: isClear ? "2px solid #e8c06a" : "2px solid #8a6f3c", padding:"18px 16px", boxShadow:"0 8px 28px rgba(0,0,0,.6)" } },
+      h("div", { className:"text-center pop-in rounded-2xl w-full " + (isClear ? "win-gold" : "win-stone"), style:{ maxWidth:356, padding:"12px 10px" } },
         h("div", { style:{ marginBottom:4, display:"flex", justifyContent:"center" } },
           h(SpriteBox, { kind: isClear ? "hero" : (mode === "ura" ? "demonx" : "demon"), size:84, idle:"b" })),
         h("div", { className:"font-bold flex items-center justify-center gap-2", style:{ fontSize:"1.5rem", color: isClear ? (mode === "ura" ? "#cf9af8" : "#ffd95c") : "#d8cfe8", textShadow:"0 3px 0 rgba(0,0,0,.55)" } },
@@ -5574,7 +5578,7 @@ function DropBattle() {
               h("span", { className:"block", style:{ fontSize:"0.98rem", textShadow:"0 1px 2px #000" } }, "タップでルートを選んで進もう！"),
               h("span", { className:"block text-[11px] mt-0.5", style:{ color:"#8ce8b0" } }, "▼ 光っているカードをタップ"))
           : h("div", { className:"text-center text-xs mb-1 rounded-lg py-1 font-bold", style:{ background:"rgba(216,168,72,.12)", border:"1px solid rgba(216,168,72,.4)", color:"#e8c06a", letterSpacing:"0.1em" } }, curNodeId == null ? "▼ 出発しよう！" : "▼ 次に進む場所を選ぼう"),
-        h("div", { className:"relative w-full mb-1 px-2 pt-3 pb-2", style:{ flex:1, display:"flex", flexDirection:"column", border:"30px solid transparent", borderImageSource:'url("assets/ui_board.png")', borderImageSlice:"175 fill", borderImageRepeat:"round", filter:"drop-shadow(0 3px 0 rgba(10,8,16,.4))" } },
+        h("div", { className:"relative w-full mb-1 px-2 pt-3 pb-2", style:{ flex:1, display:"flex", flexDirection:"column", border:"30px solid transparent", borderImageSource:'url("assets/ui_board.png")', borderImageSlice:"53 fill", borderImageRepeat:"round", filter:"drop-shadow(0 3px 0 rgba(10,8,16,.4))" } },
           // 章ごとの色味は宝の地図紙への薄い乗算ティントで維持
           h("div", { className:"absolute inset-0 pointer-events-none", style:{ background: (mode === "ura" ? URA_MAP_GRAD : MAP_GRAD)[act] || MAP_GRAD[0], opacity:.42, mixBlendMode:"multiply" } }),
           // 進行ドット: 左=出発 → 右=ボス。ミニキャラは「今から挑む層」に表示（突破済みの場所ではない）
