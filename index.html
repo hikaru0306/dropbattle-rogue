@@ -346,7 +346,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.12"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.13"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -5403,8 +5403,8 @@ function DropBattle() {
                 c ? (c.img ? Ic(c.img, 27) : h("span", { style:{ fontSize:"1.2rem" } }, c.icon)) : "");
             }),
             h("span", { className:"text-[9px] flex-1 text-right", style: armedK
-              ? { lineHeight:1.6, color:"#f0a8a0", fontWeight:800 }
-              : { lineHeight:1.6, opacity:0.55 } },
+              ? { lineHeight:1.6, color:"#f0a8a0", fontWeight:800, paddingRight:10 }
+              : { lineHeight:1.6, opacity:0.55, paddingRight:10 } },
               armedK
                 ? ["もう一度タップで", h("br", { key:"b" }), "「", CONSUM[armedK].name, "」を捨てる"]
                 : ["所持 " + items.length + "/" + itemCap(), h("br", { key:"b" }), "タップで捨てられる"]));
