@@ -110,6 +110,9 @@ button:active{filter:brightness(1.12)}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes intentBlink{0%,100%{opacity:1}50%{opacity:.55}}
 @keyframes autoBlink{0%,100%{opacity:1;box-shadow:0 0 0 2px rgba(124,255,176,.55),0 0 16px rgba(124,255,176,.4)}50%{opacity:.55;box-shadow:0 0 0 2px rgba(124,255,176,.18),0 0 4px rgba(124,255,176,.12)}}
+/* ボロ紙ボタン(border-image)はインラインfilterが:activeのbrightnessを打ち消すため専用の押下スタイルを持つ */
+.paper-btn{transition:transform .08s ease}
+.paper-btn:active{transform:scale(.96) translateY(2px);filter:drop-shadow(0 2px 1px rgba(0,0,0,.45)) brightness(1.08) !important}
 /* ComfyUI生成の石×蔦フレーム（assets/ui_frame.png）をパネルの額縁として重ねる */
 .orn{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:32;border:13px solid transparent;border-image:url("assets/ui_frame.png") 195 round}
 .sp-idle-a{animation:breathA 2.6s ease-in-out infinite;transform-origin:50% 100%}
@@ -4624,6 +4627,7 @@ function DropBattle() {
       h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
         h("button", {
           onClick: () => { if (!loadGate) goSelect(); },
+          className:"paper-btn",
           style:{ color:"#3a2a16", border:"16px solid transparent", borderImageSource:'url("assets/ui_paper.png")', borderImageSlice:"180 fill", borderImageRepeat:"round", padding:"clamp(4px,1.2vw,8px) clamp(36px,9vw,54px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", filter:"drop-shadow(0 5px 3px rgba(0,0,0,.5))", fontFamily:"inherit" } }, "冒険に出る"),
         // フッター: 各種リンク＋©表記（同期状態はアカウントモーダル内でのみ表示）
         h("div", { style:{ marginTop:14, display:"flex", flexDirection:"column", alignItems:"center", gap:6 } },
@@ -5367,40 +5371,40 @@ function DropBattle() {
     const rStep = rewards.step || (rewards.relic ? "relic" : "drop");
     overlays.push(h("div", { key:"reward", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.88)", zIndex:50 } },
       // 磁石レリック(候補4つ)+＋化説明行が揃うと低背端末(568px級)で画面からあふれるためスクロール可に
-      h("div", { className:"w-full pop-in", style:{ maxWidth:380, maxHeight:"88vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", border:"18px solid transparent", borderImageSource:'url("assets/ui_paper.png")', borderImageSlice:"180 fill", borderImageRepeat:"round", color:"#3a2a16", filter:"drop-shadow(0 5px 4px rgba(0,0,0,.5))", padding:"6px 4px" } },
-        h("h2", { className:"text-center font-bold mb-1 flex items-center justify-center gap-2", style:{ fontSize:"1.25rem", color:"#6e4e1a" } }, Ic(rIcon, 22), rTitle),
-        rewards.coins > 0 && h("p", { key:"coin", className:"text-center text-xs mb-1", style:{ color:"#8a6a10", fontWeight:800 } }, Ic("assets/icon_coin.png", 13), " コイン +", rewards.coins),
+      h("div", { className:"w-full pop-in rounded-2xl", style:{ maxWidth:380, maxHeight:"88vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain", background:"rgba(30,24,42,.98)", border:"2px solid #8a6f3c", padding:"16px 14px" } },
+        h("h2", { className:"text-center font-bold mb-1 flex items-center justify-center gap-2", style:{ fontSize:"1.25rem", color:"#e0b45c", textShadow:"0 2px 0 rgba(0,0,0,.6)" } }, Ic(rIcon, 22), rTitle),
+        rewards.coins > 0 && h("p", { key:"coin", className:"text-center text-xs mb-1", style:{ color:"#e8c06a", fontWeight:800 } }, Ic("assets/icon_coin.png", 13), " コイン +", rewards.coins),
         // ステップ1: レリック獲得の告知（強敵のみ）→「特殊ドロップを選ぶ」で次へ
         ...(rStep === "relic" ? [
           h("p", { key:"rdesc", className:"text-center text-xs mb-2", style:{ opacity:0.8 } }, "強敵を倒した証にレリックを獲得！"),
-          rewards.relic && h("div", { key:"rpanel", className:"flex items-center gap-2 rounded-xl px-3 py-2 mb-3", style:{ background:"rgba(110,78,26,.1)", border:"1px solid rgba(110,78,26,.45)" } },
+          rewards.relic && h("div", { key:"rpanel", className:"flex items-center gap-2 rounded-xl px-3 py-2 mb-3", style:{ background:"rgba(232,192,106,.1)", border:"1px solid rgba(216,168,72,.5)" } },
             Ic(RELICS[rewards.relic].img, 30),
             h("span", null,
-              h("span", { className:"font-bold text-sm", style:{ color:"#8a6a10" } }, "レリック獲得: ", RELICS[rewards.relic].name),
+              h("span", { className:"font-bold text-sm", style:{ color:"#e8c06a" } }, "レリック獲得: ", RELICS[rewards.relic].name),
               h("span", { className:"block text-[10px]", style:{ opacity:0.8 } }, RELICS[rewards.relic].desc))),
-          h("button", { key:"toDrop", onClick: () => { SFX.tap(); setRewards(r => ({ ...r, step:"drop" })); }, className:"w-full rounded-xl py-2.5 font-bold", style:{ background:"rgba(110,78,26,.14)", border:"2px solid #8a6f3c", color:"#6e4e1a" } }, "特殊ドロップを選ぶ ▶")
+          h("button", { key:"toDrop", onClick: () => { SFX.tap(); setRewards(r => ({ ...r, step:"drop" })); }, className:"w-full rounded-xl py-2.5 font-bold", style:{ background:"rgba(232,192,106,.16)", border:"2px solid #8a6f3c", color:"#f0d89a" } }, "特殊ドロップを選ぶ ▶")
         ] : [
           // ステップ2: 特殊ドロップ選択
           h("p", { key:"ddesc", className:"text-center text-xs mb-1", style:{ opacity:0.8 } },
             rewards.kind === "boss" ? "強化済みの特殊ドロップを1つ選ぼう（不要ならスキップ可）"
               : rewards.kind === "treasure" ? "好きなアイテムを1つ持っていこう（不要ならスキップ可）" : "戦利品を1つ選ぼう（不要ならスキップ可）"),
-          rAnyUp && h("p", { key:"upbadge", className:"text-center text-[11px] font-bold mb-1", style:{ color:"#a87818" } },
+          rAnyUp && h("p", { key:"upbadge", className:"text-center text-[11px] font-bold mb-1", style:{ color:"#ffd95c" } },
             rUps.every(Boolean) ? "強化済み（＋化）で手に入る！" : "「＋」付きは強化済み（＋化）で手に入る！"),
-          rewards.healed > 0 && h("p", { key:"heal", className:"text-center text-xs mb-1", style:{ color:"#1f7a45" } }, "群れを一掃した勢いで HP +", rewards.healed),
+          rewards.healed > 0 && h("p", { key:"heal", className:"text-center text-xs mb-1", style:{ color:"#7cffb0" } }, "群れを一掃した勢いで HP +", rewards.healed),
           h("div", { key:"picks", className:"grid grid-cols-1 gap-2 mt-2" }, rewards.picks.map((k, ki) => {
             const it = ITEMS[k];
             const rUp = !!rUps[ki];
-            return h("button", { key:k, onClick: () => chooseReward(k, rUp), className:"px-3 py-3 flex items-center gap-3 text-left", style:{ borderRadius:"16px 6px 16px 6px", background: rUp ? "rgba(168,120,24,.14)" : "rgba(60,40,15,.07)", border:`2px solid ${rUp ? "#a87818" : it.ring}`, boxShadow: rUp ? "0 0 10px rgba(168,120,24,.4), inset 0 -3px 0 rgba(60,40,15,.12)" : "0 2px 3px rgba(60,40,15,.3), inset 0 -3px 0 rgba(60,40,15,.12), inset 0 1px 0 rgba(255,250,235,.5)", color:"#3a2a16" } },
-              h("span", { className:"flex items-center justify-center", style:{ width:46, height:46, flexShrink:0, borderRadius:"14px 5px 14px 5px", background:"rgba(60,40,15,.10)", border:"1px solid rgba(90,70,40,.35)" } },
-                h("img", { src:it.img, alt:it.name, draggable:false, style:{ width:32, height:32, objectFit:"contain", filter:"drop-shadow(0 1px 2px rgba(90,60,20,.4))" } })),
+            return h("button", { key:k, onClick: () => chooseReward(k, rUp), className:"px-3 py-3 flex items-center gap-3 text-left", style:{ borderRadius:"16px 6px 16px 6px", background: rUp ? "rgba(232,192,106,.12)" : "rgba(255,255,255,.06)", border:`2px solid ${rUp ? "#e8c06a" : it.ring}`, boxShadow: rUp ? "0 0 10px rgba(232,192,106,.35)" : "0 2px 4px rgba(0,0,0,.4)" } },
+              h("span", { className:"flex items-center justify-center", style:{ width:46, height:46, flexShrink:0, borderRadius:"14px 5px 14px 5px", background:"rgba(255,255,255,.06)", border:"1px solid rgba(255,255,255,.14)" } },
+                h("img", { src:it.img, alt:it.name, draggable:false, style:{ width:32, height:32, objectFit:"contain", filter:"drop-shadow(0 1px 2px rgba(0,0,0,.5))" } })),
               h("span", null,
-                h("span", { className:"font-bold", style:{ color:"#3a2a16" } }, itemName(k), rUp && h("span", { style:{ color:"#a87818" } }, " ＋")),
+                h("span", { className:"font-bold", style:{ color:it.glowc } }, itemName(k), rUp && h("span", { style:{ color:"#ffd95c" } }, " ＋")),
                 // ＋化候補は強化後の説明だけを出す（通常説明との併記はしない）
-                h("span", { className:"block text-[11px]", style: rUp ? { color:"#8a6a10" } : { opacity:0.85 } }, rUp ? DESC_UP[k] : itemDesc(k)),
+                h("span", { className:"block text-[11px]", style: rUp ? { color:"#e8d8a8" } : { opacity:0.85 } }, rUp ? DESC_UP[k] : itemDesc(k)),
                 h("span", { className:"block text-[10px]", style:{ opacity:0.6 } }, "所持 ", ownedView[k], " → ", ownedView[k] + 1,
                   rUp ? ["（強化 ", ownedUpView[k], " → ", ownedUpView[k] + 1, "）"] : null)));
           })),
-          h("button", { key:"decline", onClick: declineReward, className:"w-full rounded-xl py-2 font-bold text-sm mt-2", style:{ background:"rgba(60,40,15,.07)", border:"2px solid rgba(90,70,40,.5)", color:"#5a4632" } },
+          h("button", { key:"decline", onClick: declineReward, className:"w-full rounded-xl py-2 font-bold text-sm mt-2", style:{ background:"rgba(255,255,255,.07)", border:"2px solid #443c58", color:"#c9bfe0" } },
             "受け取らない（袋をそのままにする）")
         ]))));
   }
