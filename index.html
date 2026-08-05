@@ -63,13 +63,15 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 /* タップ/長押しの押下反応。brightnessはインラインstyleのfilter(紙枠の影・誘導グロー)には負けるため、
    そういうボタンでも必ず反応が出るようtransformの沈み込みを併用する（盤面ドロップは常にインラインの
    transformを持つので沈まず、既存のプレビュー演出だけが出る） */
-button:active{filter:brightness(1.12);transform:translateY(1px) scale(.97)}
+/* .pressing はdata-press付きボタン用: touchstartをpreventDefaultすると:activeが付かないため
+   委譲リスナーがクラスで付け外しする（見た目は:activeと同一） */
+button:active,button.pressing{filter:brightness(1.12);transform:translateY(1px) scale(.97)}
 /* マップのノードカード。filterをインラインではなくクラスで持たせることで、:activeの
    影/グロー＋brightness合成が（!important無しで）インラインに潰されず効くようにする */
 .map-card{filter:drop-shadow(0 4px 2px rgba(40,25,10,.45))}
-.map-card:active{filter:drop-shadow(0 2px 1px rgba(40,25,10,.45)) brightness(1.15)}
+.map-card:active,.map-card.pressing{filter:drop-shadow(0 2px 1px rgba(40,25,10,.45)) brightness(1.15)}
 .map-card-glow{filter:drop-shadow(0 0 3px #ffe08a) drop-shadow(0 0 10px rgba(255,207,93,.95))}
-.map-card-glow:active{filter:drop-shadow(0 0 3px #ffe08a) drop-shadow(0 0 10px rgba(255,207,93,.95)) brightness(1.12)}
+.map-card-glow:active,.map-card-glow.pressing{filter:drop-shadow(0 0 3px #ffe08a) drop-shadow(0 0 10px rgba(255,207,93,.95)) brightness(1.12)}
 /* 攻撃予告チュートリアルで敵を光らせる誘導グロー（敵ボタン用） */
 .tgt-glow{filter:drop-shadow(0 0 12px rgba(255,190,90,.95)) drop-shadow(0 0 5px rgba(255,120,60,.85))}
 .relative{position:relative}.absolute{position:absolute}.fixed{position:fixed}
@@ -334,7 +336,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.9"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.10"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -1400,6 +1402,37 @@ const bgmKick = () => {
 };
 window.addEventListener("pointerdown", bgmKick, { passive: true });
 
+// ===== iOSの長押しハイライト対策（イベント委譲） =====
+// data-press属性を持つボタンは、touchstartのデフォルト動作を止めて長押しの白い角丸
+// ハイライト/選択UIを完全に抑止する（CSSのtouch-callout等はiOS15以降効かないことがある）。
+// デフォルトを止めると:activeもclick合成も発火しないため、押下見た目は .pressing クラス、
+// 決定はtouchendからの el.click()（Reactの onClick に届く）で自前処理する。
+// スクロールも封じる副作用があるので、スクロール領域内のボタンには付けないこと。
+const pressBtn = e => (e.target && e.target.closest) ? e.target.closest("[data-press]") : null;
+document.addEventListener("touchstart", e => {
+  const b = pressBtn(e);
+  if (!b || b.disabled) return;
+  e.preventDefault();
+  b.classList.add("pressing");
+}, { passive: false });
+document.addEventListener("touchend", e => {
+  const b = pressBtn(e);
+  if (!b) return;
+  e.preventDefault();
+  b.classList.remove("pressing");
+  if (b.disabled) return;
+  const t = e.changedTouches && e.changedTouches[0];
+  if (t) { // 押したまま外へずらして離したらキャンセル（ボタンの標準挙動に合わせる）
+    const r = b.getBoundingClientRect();
+    if (t.clientX < r.left || t.clientX > r.right || t.clientY < r.top || t.clientY > r.bottom) return;
+  }
+  b.click();
+}, { passive: false });
+document.addEventListener("touchcancel", e => {
+  const b = pressBtn(e);
+  if (b) b.classList.remove("pressing");
+}, { passive: true });
+
 // ===== 画像プリロード =====
 // <img>は「初めて描画される瞬間」に取得が走るため、敵スプライトや予告アイコンが一拍遅れて出る。
 // 先に Image() で取ってブラウザキャッシュを温めておく。同時4本の緩いキューで、
@@ -1707,28 +1740,6 @@ function DropBattle() {
       setTimeout(toSelect, Math.max(0, 400 - (Date.now() - t0)));
     });
   };
-  // タイトルボタンのiOS長押し対策。CSS（touch-callout/user-select/tap-highlight）だけでは
-  // iOS15以降のSafariが長押しで白い角丸ハイライトを出すことがあるため、touchstartの
-  // デフォルト動作ごと止める。ReactのイベントはtouchstartがpassiveでpreventDefaultできず、
-  // 止めると:activeもclickも発火しなくなるので、素のリスナー＋押下クラス＋touchendで自前決定する
-  const goSelectRef = useRef(null);
-  goSelectRef.current = () => { if (!loadGate) goSelect(); };
-  const titleBtnWire = useCallback(el => {
-    if (!el || el.__pressWired) return;
-    el.__pressWired = true;
-    el.addEventListener("touchstart", ev => { ev.preventDefault(); el.classList.add("pressing"); }, { passive: false });
-    el.addEventListener("touchend", ev => {
-      ev.preventDefault(); // click合成も止める（マウス/キーボードはonClick経路のまま。二重発火しない）
-      el.classList.remove("pressing");
-      const t = ev.changedTouches && ev.changedTouches[0];
-      if (t) { // 押したまま外へずらして離したらキャンセル（ボタンの標準挙動に合わせる）
-        const r = el.getBoundingClientRect();
-        if (t.clientX < r.left || t.clientX > r.right || t.clientY < r.top || t.clientY > r.bottom) return;
-      }
-      if (goSelectRef.current) goSelectRef.current();
-    }, { passive: false });
-    el.addEventListener("touchcancel", () => el.classList.remove("pressing"), { passive: true });
-  }, []);
   // ===== 章の導入演出（兼ロードゲート） =====
   // 章が変わったら「第N章 ○○」を出し、その章の敵が揃うまで（最長5秒）引き延ばす。
   // 揃っていれば最短表示のぶんだけ出て素通り＝ロード画面に見せずポップインを防ぐ
@@ -4678,7 +4689,7 @@ function DropBattle() {
         h("p", { style:{ position:"relative", zIndex:1, fontSize:"clamp(0.72rem,2.5vw,0.95rem)", color:"#e8d8a8", letterSpacing:"0.42em", fontWeight:800, textShadow:"0 1px 3px #000", margin:"-4px 0 10px", paddingLeft:"0.42em" } }, "DROP DUNGEON")),
       h("div", { style:{ position:"relative", zIndex:1, display:"flex", flexDirection:"column", alignItems:"center" } },
         h("button", {
-          ref: titleBtnWire, // iOSの長押しハイライト対策（touchstartをpreventDefaultし、決定はtouchendで自前処理）
+          "data-press": 1, // iOSの長押しハイライト対策（委譲リスナーがtouchstartを止めてtouchendでclickする）
           onClick: () => { if (!loadGate) goSelect(); },
           className:"paper-btn",
           style:{ color:"#3a2a16", border:"16px solid transparent", borderImageSource:'url("assets/ui_paper.png")', borderImageSlice:"180 fill", borderImageRepeat:"round", padding:"clamp(4px,1.2vw,8px) clamp(36px,9vw,54px)", fontSize:"clamp(1.02rem,3.1vw,1.18rem)", fontWeight:900, letterSpacing:"0.1em", filter:"drop-shadow(0 5px 3px rgba(0,0,0,.5))", fontFamily:"inherit" } }, "冒険に出る"),
@@ -5651,7 +5662,7 @@ function DropBattle() {
               const meta = NODE_META[n.type];
               const isBoss = n.type === "boss";
               const imgSz = isBoss ? 78 : 64;
-              return h("button", { key:n.id, "data-mapcard":n.id, onClick: () => enterNode(n),
+              return h("button", { key:n.id, "data-mapcard":n.id, "data-press":1, onClick: () => enterNode(n),
                 // filterはインラインでなくクラスで持つ（インラインだと:activeの押下反応が潰れる）
                 className:"relative flex flex-col items-center justify-center pop-in " + (routeTut ? "map-card-glow" : "map-card"),
                 style:{
