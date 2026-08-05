@@ -64,8 +64,11 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
    そういうボタンでも必ず反応が出るようtransformの沈み込みを併用する（盤面ドロップは常にインラインの
    transformを持つので沈まず、既存のプレビュー演出だけが出る） */
 /* .pressing はdata-press付きボタン用: touchstartをpreventDefaultすると:activeが付かないため
-   委譲リスナーがクラスで付け外しする（見た目は:activeと同一） */
-button:active,button.pressing{filter:brightness(1.12);transform:translateY(1px) scale(.97)}
+   委譲リスナーがクラスで付け外しする（見た目は:activeと同一）。
+   沈み込みは整数pxのtranslateYのみ。scaleは使わない: border-image(紙/額縁)のボタンを
+   小数倍率で縮小すると9スライスの継ぎ目に1pxの隙間が生じ、背景が細い四角の線として
+   透けて見える（長押し中ずっと:activeが続くので線が出続ける）。整数移動なら起きない */
+button:active,button.pressing{filter:brightness(1.12);transform:translateY(1px)}
 /* マップのノードカード。filterをインラインではなくクラスで持たせることで、:activeの
    影/グロー＋brightness合成が（!important無しで）インラインに潰されず効くようにする */
 .map-card{filter:drop-shadow(0 4px 2px rgba(40,25,10,.45))}
@@ -132,7 +135,8 @@ button:active,button.pressing{filter:brightness(1.12);transform:translateY(1px) 
 .paper-btn{transition:transform .08s ease}
 /* .pressing はタイトルボタン専用: iOSでtouchstartをpreventDefaultすると:activeが付かないため、
    JS側で付け外しする押下クラス（見た目は:activeと同一） */
-.paper-btn:active,.paper-btn.pressing{transform:scale(.96) translateY(2px);filter:drop-shadow(0 2px 1px rgba(0,0,0,.45)) brightness(1.08) !important}
+/* scale(.96)は廃止: border-imageのスライス継ぎ目に線が出るため（button:activeのコメント参照） */
+.paper-btn:active,.paper-btn.pressing{transform:translateY(2px);filter:drop-shadow(0 2px 1px rgba(0,0,0,.45)) brightness(1.08) !important}
 /* ComfyUI生成の石×蔦フレーム（assets/ui_frame.png）をパネルの額縁として重ねる。
    fill はiOS Safari対策: fill無しのborder-imageだけがiOSで描画されない事例があったため、
    描画できている紙/ウィンドウ枠と同じfill付きに揃える（素材の中央は完全透明なので見た目は不変） */
@@ -336,7 +340,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.10"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.11"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
