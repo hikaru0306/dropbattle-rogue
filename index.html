@@ -2673,9 +2673,12 @@ function DropBattle() {
   const buyItem = k => {
     const c = CONSUM[k];
     const cost = priceOf(c.price, shopRate(k));
+    const s = shopRef.current;
+    if (s && s.sold && s.sold[k]) { SFX.tap(); return; } // 同じ商品は1回まで（売り切れ）
     if (coinsRef.current < cost || itemsRef.current.length >= itemCap()) { SFX.tap(); return; }
     setCoinsBoth(coinsRef.current - cost);
     setItemsBoth([...itemsRef.current, k]);
+    setShop(sp => sp ? { ...sp, sold: { ...(sp.sold || {}), [k]: true } } : sp);
     addLog([`🛒 ${c.name}を購入（-${cost}）`]);
     showBuyMsg({ img: c.img, icon: c.icon, name: c.name });
     SFX.pick();
@@ -4143,7 +4146,8 @@ function DropBattle() {
         pend: pendingNodeRef.current ? pendingNodeRef.current.id : null,
         campfire: campfireRef.current || null,
         shop: shopRef.current ? { offers: shopRef.current.offers.slice(), relic: shopRef.current.relic || null,
-          sale: shopRef.current.sale || 1, disc: { ...(shopRef.current.disc || {}) }, adUsed: !!shopRef.current.adUsed } : null,
+          sale: shopRef.current.sale || 1, disc: { ...(shopRef.current.disc || {}) }, adUsed: !!shopRef.current.adUsed,
+          sold: { ...(shopRef.current.sold || {}) } } : null,
         rewards: rewardsRef.current ? { ...rewardsRef.current } : null,
         actClear: actClearRef.current ? { picks: actClearRef.current.picks.slice() } : null,
         puzzle: puzzleRef.current ? { ...puzzleRef.current } : null };
@@ -5393,18 +5397,21 @@ function DropBattle() {
         })(),
         h("div", { className:"flex flex-col gap-2 mb-3" }, shop.offers.map(k => {
           const c = CONSUM[k];
+          const sold = !!(shop.sold && shop.sold[k]); // 購入済みは売り切れ表示（同じ商品は1回まで）
           const rate = shopRate(k);
-          const can = coins >= priceOf(c.price, rate) && items.length < itemCap();
-          return h("div", { key:k, className:"flex items-center gap-3 rounded-xl px-3 py-2", style:{ background:"rgba(255,255,255,.05)", border:"2px solid #443c58" } },
-            h("span", { style:{ minWidth:30, textAlign:"center", display:"flex", alignItems:"center", justifyContent:"center" } }, c.img ? Ic(c.img, 26) : h("span", { style:{ fontSize:"1.4rem" } }, c.icon)),
+          const can = !sold && coins >= priceOf(c.price, rate) && items.length < itemCap();
+          return h("div", { key:k, className:"flex items-center gap-3 rounded-xl px-3 py-2", style:{ background:"rgba(255,255,255,.05)", border:"2px solid #443c58", opacity: sold ? 0.6 : 1 } },
+            h("span", { style:{ minWidth:30, textAlign:"center", display:"flex", alignItems:"center", justifyContent:"center", filter: sold ? "grayscale(1)" : "none" } }, c.img ? Ic(c.img, 26) : h("span", { style:{ fontSize:"1.4rem" } }, c.icon)),
             h("span", { className:"flex-1" },
-              h("span", { className:"font-bold text-sm", style:{ color:"#f0e4c8" } }, c.name, discBadge(rate)),
+              h("span", { className:"font-bold text-sm", style:{ color:"#f0e4c8" } }, c.name, !sold && discBadge(rate)),
               h("span", { className:"block text-[10px]", style:{ opacity:0.75 } }, c.desc)),
-            h("button", { onClick: () => buyItem(k), disabled: !can,
-              className:"rounded-lg px-3 py-1.5 text-xs font-bold",
-              style:{ background: can ? "#dcb765" : "rgba(255,255,255,.08)",
-                color: can ? "#2c2030" : "#776f88",
-                border: can ? "1px solid #6e4e1a" : "1px solid #443c58" } }, priceTag(c.price, rate)));
+            sold
+              ? h("span", { className:"rounded-lg px-3 py-1.5 text-xs font-bold", style:{ flexShrink:0, color:"#f0a8a0", background:"rgba(200,68,60,.12)", border:"1px solid #6e4040" } }, "売り切れ")
+              : h("button", { onClick: () => buyItem(k), disabled: !can,
+                className:"rounded-lg px-3 py-1.5 text-xs font-bold",
+                style:{ background: can ? "#dcb765" : "rgba(255,255,255,.08)",
+                  color: can ? "#2c2030" : "#776f88",
+                  border: can ? "1px solid #6e4e1a" : "1px solid #443c58" } }, priceTag(c.price, rate)));
         })),
         items.length >= itemCap() && h("p", { className:"text-[10px] mb-2 text-center", style:{ color:"#f0a8a0" } }, "持ち物がいっぱい（", itemCap(), "個まで）　上の所持欄をタップで捨てられる"),
         h("button", { onClick: closeShop, className:"block rounded-xl py-2.5 font-bold", style:{ width:"50%", margin:"0 auto", background:"rgba(255,255,255,.1)", border:"2px solid #443c58", color:"#d8cfe8" } }, "先へ進む ▶"))));
