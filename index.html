@@ -2669,7 +2669,7 @@ function DropBattle() {
     setShop(sp => sp ? { ...sp, relic: null } : sp);
     showBuyMsg({ img: RELICS[k].img, name: RELICS[k].name });
   };
-  const closeShop = () => { setShop(null); setBuyMsg(null); SFX.step(); finishNode(); };
+  const closeShop = () => { setShop(null); setBuyMsg(null); setDropArm(-1); SFX.step(); finishNode(); };
   const buyItem = k => {
     const c = CONSUM[k];
     const cost = priceOf(c.price, shopRate(k));
@@ -5331,7 +5331,30 @@ function DropBattle() {
         h("div", { className:"flex justify-between items-center mb-1" },
           h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#e8c06a", fontSize:"1.05rem" } }, Ic("assets/merchant.png", 20), "行商人"),
           h("span", { className:"text-sm font-bold flex items-center gap-1", style:{ color:"#e8c06a", fontVariantNumeric:"tabular-nums" } }, Ic("assets/icon_coin.png", 14), coins)),
-        h("p", { className:"text-[10px] mb-2", style:{ opacity:0.7 } }, "コインでアイテムと交換できる（所持 ", items.length, "/", itemCap(), "）"),
+        h("p", { className:"text-[10px] mb-1.5", style:{ opacity:0.7 } }, "コインでアイテムと交換できる"),
+        // 所持アイテム欄（空き枠も表示）: タップ→もう一度タップで捨てて枠を空けられる（満杯で買えないときの入れ替え用）
+        (() => {
+          const armedK = dropArm >= 0 ? items[dropArm] : null;
+          return h("div", { className:"flex items-center gap-2 mb-2 rounded-xl px-2.5 py-2", style:{ background:"rgba(255,255,255,.04)", border:"1px solid #443c58" } },
+            Array.from({ length: itemCap() }).map((_, i) => {
+              const k = items[i], c = k ? CONSUM[k] : null, armed = dropArm === i && !!k;
+              return h("button", { key:i, onClick: () => (armed ? dropItem(i) : armDrop(i)), disabled:!k,
+                title: c ? `${c.name}：${c.desc}` : "空きスロット",
+                className:"flex items-center justify-center",
+                style:{ width:44, height:44, flexShrink:0, borderRadius:"12px 4px 12px 4px",
+                  background: armed ? "rgba(224,112,90,.22)" : k ? "rgba(30,24,42,.92)" : "rgba(20,16,28,.7)",
+                  border:`2px solid ${armed ? "#e0705a" : k ? "#8a6f3c" : "#2c2740"}`,
+                  transform: armed ? "scale(1.08)" : "none", transition:"transform .15s ease, border-color .15s ease",
+                  opacity: k ? 1 : 0.45, cursor: k ? "pointer" : "default" } },
+                c ? (c.img ? Ic(c.img, 27) : h("span", { style:{ fontSize:"1.2rem" } }, c.icon)) : "");
+            }),
+            h("span", { className:"text-[9px] flex-1 text-right", style: armedK
+              ? { lineHeight:1.6, color:"#f0a8a0", fontWeight:800 }
+              : { lineHeight:1.6, opacity:0.55 } },
+              armedK
+                ? ["もう一度タップで", h("br", { key:"b" }), "「", CONSUM[armedK].name, "」を捨てる"]
+                : ["所持 " + items.length + "/" + itemCap(), h("br", { key:"b" }), "タップで捨てられる"]));
+        })(),
         shop.sale < 1 && h("div", { className:"rounded-lg px-3 py-1.5 mb-2 text-center text-xs font-bold",
           style:{ background:"linear-gradient(180deg,#c8443c,#8e2a24)", border:"2px solid #e8968e", color:"#fff2ec" } },
           "開店記念セール　全品 半額！"),
@@ -5383,7 +5406,7 @@ function DropBattle() {
                 color: can ? "#2c2030" : "#776f88",
                 border: can ? "1px solid #6e4e1a" : "1px solid #443c58" } }, priceTag(c.price, rate)));
         })),
-        items.length >= itemCap() && h("p", { className:"text-[10px] mb-2 text-center", style:{ color:"#f0a8a0" } }, "持ち物がいっぱい（", itemCap(), "個まで）"),
+        items.length >= itemCap() && h("p", { className:"text-[10px] mb-2 text-center", style:{ color:"#f0a8a0" } }, "持ち物がいっぱい（", itemCap(), "個まで）　上の所持欄をタップで捨てられる"),
         h("button", { onClick: closeShop, className:"block rounded-xl py-2.5 font-bold", style:{ width:"50%", margin:"0 auto", background:"rgba(255,255,255,.1)", border:"2px solid #443c58", color:"#d8cfe8" } }, "先へ進む ▶"))));
   }
   if (rewards) {
