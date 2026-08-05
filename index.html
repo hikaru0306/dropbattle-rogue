@@ -58,7 +58,18 @@ html,body{margin:0;padding:0;background:#131019;overscroll-behavior:none;overflo
 body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 #root{min-height:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;padding:0;margin:0}
-button:active{filter:brightness(1.12)}
+/* タップ/長押しの押下反応。brightnessはインラインstyleのfilter(紙枠の影・誘導グロー)には負けるため、
+   そういうボタンでも必ず反応が出るようtransformの沈み込みを併用する（盤面ドロップは常にインラインの
+   transformを持つので沈まず、既存のプレビュー演出だけが出る） */
+button:active{filter:brightness(1.12);transform:translateY(1px) scale(.97)}
+/* マップのノードカード。filterをインラインではなくクラスで持たせることで、:activeの
+   影/グロー＋brightness合成が（!important無しで）インラインに潰されず効くようにする */
+.map-card{filter:drop-shadow(0 4px 2px rgba(40,25,10,.45))}
+.map-card:active{filter:drop-shadow(0 2px 1px rgba(40,25,10,.45)) brightness(1.15)}
+.map-card-glow{filter:drop-shadow(0 0 3px #ffe08a) drop-shadow(0 0 10px rgba(255,207,93,.95))}
+.map-card-glow:active{filter:drop-shadow(0 0 3px #ffe08a) drop-shadow(0 0 10px rgba(255,207,93,.95)) brightness(1.12)}
+/* 攻撃予告チュートリアルで敵を光らせる誘導グロー（敵ボタン用） */
+.tgt-glow{filter:drop-shadow(0 0 12px rgba(255,190,90,.95)) drop-shadow(0 0 5px rgba(255,120,60,.85))}
 .relative{position:relative}.absolute{position:absolute}.fixed{position:fixed}
 .inset-0{top:0;right:0;bottom:0;left:0}
 .flex{display:flex}.grid{display:grid}.inline-block{display:inline-block}.block{display:block}
@@ -5609,7 +5620,8 @@ function DropBattle() {
               const isBoss = n.type === "boss";
               const imgSz = isBoss ? 78 : 64;
               return h("button", { key:n.id, "data-mapcard":n.id, onClick: () => enterNode(n),
-                className:"relative flex flex-col items-center justify-center pop-in",
+                // filterはインラインでなくクラスで持つ（インラインだと:activeの押下反応が潰れる）
+                className:"relative flex flex-col items-center justify-center pop-in " + (routeTut ? "map-card-glow" : "map-card"),
                 style:{
                   flex:"1 1 0", minWidth:0, maxWidth: cardNodes.length === 1 ? 220 : 172,
                   padding:"14px 4px 10px",
@@ -5617,9 +5629,6 @@ function DropBattle() {
                   border:"16px solid transparent",
                   borderImageSource:'url("assets/ui_paper.png")', borderImageSlice:"180 fill", borderImageRepeat:"round",
                   background:"none",
-                  filter: routeTut
-                    ? "drop-shadow(0 0 3px #ffe08a) drop-shadow(0 0 10px rgba(255,207,93,.95))"
-                    : "drop-shadow(0 4px 2px rgba(40,25,10,.45))",
                   cursor:"pointer"
                 } },
                 h("img", { src:meta.img, alt:meta.label, draggable:false, width:imgSz, height:imgSz,
@@ -5691,8 +5700,9 @@ function DropBattle() {
             const hasStat = (en.enr || 0) > 0 || !!(en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id));
             return h("button", { key:en.id,
               onClick: () => { if (en.alive && !locked && status === "battle") { setTargetId(en.id); targetRef.current = en.id; SFX.tap(); } },
-              className:"relative flex flex-col items-center", style:{ width:Math.max(sz + 4, 58), cursor: en.alive ? "pointer" : "default",
-                filter: gtut === "warn" && en.alive ? "drop-shadow(0 0 12px rgba(255,190,90,.95)) drop-shadow(0 0 5px rgba(255,120,60,.85))" : "none",
+              // 誘導グローはクラスで（インラインfilterだと:activeの押下brightnessが潰れる）
+              className:"relative flex flex-col items-center" + (gtut === "warn" && en.alive ? " tgt-glow" : ""),
+              style:{ width:Math.max(sz + 4, 58), cursor: en.alive ? "pointer" : "default",
                 transition:"filter .3s ease" } },
               h("span", { style:{ position:"relative", display:"block" } },
                 // 予告（攻撃など）はスプライトに重ねて表示。ボスは縦に高く、別の行として積むと低い画面高で見切れるため
