@@ -47,7 +47,10 @@ if ((location.protocol !== "file:" && location.search.indexOf("test=1") < 0 && l
 }
 </script>
 <style>
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+/* user-select:none はボタン等の長押しでテキスト選択の矩形が出るのを防ぐ（タップハイライトとは別物）。
+   入力欄だけは編集に必要なので選択を許可し直す */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+input,textarea{-webkit-user-select:text;user-select:text}
 html,body{margin:0;padding:0;background:#131019;overscroll-behavior:none;overflow-x:hidden;-webkit-text-size-adjust:100%}
 /* 100dvh は iOS Safari のツールバー表示分を差し引いた「実際に見えている高さ」に追従する。
    従来の 100vh（＝ツールバーを隠した最大高さ）だと表示領域より数px高くなり、その差だけ
@@ -55,7 +58,18 @@ html,body{margin:0;padding:0;background:#131019;overscroll-behavior:none;overflo
 body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 #root{min-height:calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;padding:0;margin:0}
-button:active{filter:brightness(1.12)}
+/* タップ/長押しの押下反応。brightnessはインラインstyleのfilter(紙枠の影・誘導グロー)には負けるため、
+   そういうボタンでも必ず反応が出るようtransformの沈み込みを併用する（盤面ドロップは常にインラインの
+   transformを持つので沈まず、既存のプレビュー演出だけが出る） */
+button:active{filter:brightness(1.12);transform:translateY(1px) scale(.97)}
+/* マップのノードカード。filterをインラインではなくクラスで持たせることで、:activeの
+   影/グロー＋brightness合成が（!important無しで）インラインに潰されず効くようにする */
+.map-card{filter:drop-shadow(0 4px 2px rgba(40,25,10,.45))}
+.map-card:active{filter:drop-shadow(0 2px 1px rgba(40,25,10,.45)) brightness(1.15)}
+.map-card-glow{filter:drop-shadow(0 0 3px #ffe08a) drop-shadow(0 0 10px rgba(255,207,93,.95))}
+.map-card-glow:active{filter:drop-shadow(0 0 3px #ffe08a) drop-shadow(0 0 10px rgba(255,207,93,.95)) brightness(1.12)}
+/* 攻撃予告チュートリアルで敵を光らせる誘導グロー（敵ボタン用） */
+.tgt-glow{filter:drop-shadow(0 0 12px rgba(255,190,90,.95)) drop-shadow(0 0 5px rgba(255,120,60,.85))}
 .relative{position:relative}.absolute{position:absolute}.fixed{position:fixed}
 .inset-0{top:0;right:0;bottom:0;left:0}
 .flex{display:flex}.grid{display:grid}.inline-block{display:inline-block}.block{display:block}
@@ -314,7 +328,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.7"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.8"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -1434,14 +1448,18 @@ const actImgs = (ura, act) => {
     ura ? (URA_BATTLE_BGS[act] || URA_BATTLE_BGS[0]).src : (BATTLE_BGS[act] || BATTLE_BGS[0]),
     MAP_BGS[act] || MAP_BGS[0]];
 };
-// 「冒険に出る」で待つぶん：小さいUIアイコン（レリック/マーク/消費/ノード等）＋キャラ画像
+// 「冒険に出る」で待つぶん：小さいUIアイコン（レリック/マーク/消費/ノード等）＋UI枠＋キャラ画像。
+// ui_ はCSS/inline-styleの border-image で使う窓・紙・盤の枠。border-image のURLは
+// 「その要素が初めて描画される瞬間」に取得が走るため、温めておかないとポーズ等の
+// ウィンドウ初回表示で枠がワンテンポ遅れて出てカクついて見える
 const bootImgs = () => {
-  const icons = document.documentElement.innerHTML.match(/assets\/(?:rl_|mk_|cs_|icon_|node_|st_|sk_|intent_)[\w-]+\.png/g) || [];
+  const icons = document.documentElement.innerHTML.match(/assets\/(?:rl_|mk_|cs_|icon_|node_|st_|sk_|intent_|ui_)[\w-]+\.png/g) || [];
   return [...new Set([...icons, ...CHARS.map(c => c.img)])];
 };
-// タイトルは即出したいので、その背景だけ最優先。残りは手が空き次第バックグラウンドで温める
+// タイトルは即出したいので、その背景と「冒険に出る」ボタンの紙枠だけ最優先。
+// 残りは手が空き次第バックグラウンドで温める
 // （タップまでに終わっていれば「冒険に出る」は待ち時間ゼロで進む）
-warmImgs(["assets/bg_title2.jpg", "assets/bg_texture.jpg"], true);
+warmImgs(["assets/bg_title2.jpg", "assets/bg_texture.jpg", "assets/ui_paper.png"], true);
 (window.requestIdleCallback || (f => setTimeout(f, 200)))(() => warmImgs(bootImgs()));
 
 // ===== キャラ画像スプライト（ComfyUI生成・透過PNG） =====
@@ -1482,16 +1500,17 @@ function Bar({ value, max, from, to, height }) {
 // オレンジの残像が少し遅れてじわっと減る（回復は本体が先に伸びて残像を隠すので残像は出ない）。
 // shield>0 の間はバーが青になり、盾バッジがバーの上辺に少し重なって出る（スレスパのブロック表現）。
 // broken=シールドがちょうど砕けた表示（赤い「0」バッジを震わせる。ヒーローの敵ターン用）
-function HpBar({ value, max, height, fontSize, flash, shield, broken }) {
+function HpBar({ value, max, height, fontSize, flash, shield, broken, showZero }) {
   const pct = Math.max(0, Math.min(100, value / max * 100));
   const sh = (shield || 0) > 0;
   return h("div", { style:{ position:"relative" } },
     h("div", { style:{ position:"relative", height, borderRadius:999, background: sh ? "#0b1424" : "#26090d", overflow:"hidden", border:"2px solid rgba(12,9,18,.9)" } },
       h("div", { style:{ position:"absolute", left:0, top:0, height:"100%", width:pct+"%", background:"#e8963c", transition:"width .45s ease .3s" } }),
       h("div", { style:{ position:"absolute", left:0, top:0, height:"100%", width:pct+"%", background: sh ? "linear-gradient(180deg,#4a7cb4 0%,#2b4d88 100%)" : "linear-gradient(180deg,#c9463f 0%,#96201f 100%)", transition:"width .12s ease" } }),
-      // 撃破時(0)は数値を出さない（敵のフェードアウト中に「0/130」が残って見えるため）
+      // 撃破時(0)は数値を出さない（敵のフェードアウト中に「0/130」が残って見えるため）。
+      // ヒーローは死亡時も「0/最大」を出したままにするので showZero で例外にする
       // translateY(0.75px) はフォントメトリクス由来の見た目上ズレの補正（数字グリフはディセンダを持たないため行ボックス中央より高く見える。padding方式はバー高さごとに丸めが変わり効かないバーが出るため実測でバー中心に合わせた）
-      value > 0 && h("span", { style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", transform:"translateY(0.75px)", fontWeight:700, fontSize, lineHeight:1, color: flash || "#fff", transition:"color .3s",
+      (value > 0 || showZero) && h("span", { style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", transform:"translateY(0.75px)", fontWeight:700, fontSize, lineHeight:1, color: flash || "#fff", transition:"color .3s",
         textShadow:"0 1px 1px rgba(0,0,0,.9), 0 0 2px rgba(0,0,0,.7)", fontVariantNumeric:"tabular-nums", letterSpacing:"0.02em" } }, value, "/", max)),
     // バッジはバーの上辺に3pxだけ乗せる（深く重ねると幅の狭い敵バーでHP数値の先頭が隠れる）
     (sh || broken) && h("span", { className:"flex items-center", style:{ position:"absolute", left:-3, top:-14, gap:2, padding:"1px 5px", borderRadius:8,
@@ -5601,7 +5620,8 @@ function DropBattle() {
               const isBoss = n.type === "boss";
               const imgSz = isBoss ? 78 : 64;
               return h("button", { key:n.id, "data-mapcard":n.id, onClick: () => enterNode(n),
-                className:"relative flex flex-col items-center justify-center pop-in",
+                // filterはインラインでなくクラスで持つ（インラインだと:activeの押下反応が潰れる）
+                className:"relative flex flex-col items-center justify-center pop-in " + (routeTut ? "map-card-glow" : "map-card"),
                 style:{
                   flex:"1 1 0", minWidth:0, maxWidth: cardNodes.length === 1 ? 220 : 172,
                   padding:"14px 4px 10px",
@@ -5609,9 +5629,6 @@ function DropBattle() {
                   border:"16px solid transparent",
                   borderImageSource:'url("assets/ui_paper.png")', borderImageSlice:"180 fill", borderImageRepeat:"round",
                   background:"none",
-                  filter: routeTut
-                    ? "drop-shadow(0 0 3px #ffe08a) drop-shadow(0 0 10px rgba(255,207,93,.95))"
-                    : "drop-shadow(0 4px 2px rgba(40,25,10,.45))",
                   cursor:"pointer"
                 } },
                 h("img", { src:meta.img, alt:meta.label, draggable:false, width:imgSz, height:imgSz,
@@ -5650,9 +5667,11 @@ function DropBattle() {
               fontSize:12, color:"#c8f5b8", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", zIndex:2 } },
               h("img", { src:"assets/st_poison.png", alt:"毒", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), poisonView)),
           h("div", { style:{ width:40, height:7, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-5, filter:"blur(2px)" } }),
-          h("div", { className:"w-full mt-1" }, h(HpBar, { value:pHP, max:pMax, height:16, fontSize:10,
+          h("div", { className:"w-full mt-1" }, h(HpBar, { value:pHP, max:pMax, height:16, fontSize:10, showZero:true,
             flash: hit === "player" ? "#ffb4a8" : hit === "heal" ? "#a8ffcc" : null,
-            shield: sv !== null ? sv : tv.def, broken: sv === 0 }))),
+            // 死亡時はシールドを一切出さない。敗北はターン解決の途中で return するため tv.def が
+            // 掃除されず、ターン終了の setSv(null) で表示が古い tv.def に戻って復活して見えていた
+            shield: pHP > 0 ? (sv !== null ? sv : tv.def) : 0, broken: pHP > 0 && sv === 0 }))),
         // 敵
         h("div", { className:"absolute flex items-end scene-actor", style:{ right:30, bottom:14, gap:4, zIndex: gtut === "warn" ? 3 : 1 } },
           enemies.map(en => {
@@ -5681,8 +5700,9 @@ function DropBattle() {
             const hasStat = (en.enr || 0) > 0 || !!(en.soloUp && en.alive && !enemies.some(a => a.alive && a.id !== en.id));
             return h("button", { key:en.id,
               onClick: () => { if (en.alive && !locked && status === "battle") { setTargetId(en.id); targetRef.current = en.id; SFX.tap(); } },
-              className:"relative flex flex-col items-center", style:{ width:Math.max(sz + 4, 58), cursor: en.alive ? "pointer" : "default",
-                filter: gtut === "warn" && en.alive ? "drop-shadow(0 0 12px rgba(255,190,90,.95)) drop-shadow(0 0 5px rgba(255,120,60,.85))" : "none",
+              // 誘導グローはクラスで（インラインfilterだと:activeの押下brightnessが潰れる）
+              className:"relative flex flex-col items-center" + (gtut === "warn" && en.alive ? " tgt-glow" : ""),
+              style:{ width:Math.max(sz + 4, 58), cursor: en.alive ? "pointer" : "default",
                 transition:"filter .3s ease" } },
               h("span", { style:{ position:"relative", display:"block" } },
                 // 予告（攻撃など）はスプライトに重ねて表示。ボスは縦に高く、別の行として積むと低い画面高で見切れるため
