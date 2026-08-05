@@ -47,7 +47,10 @@ if ((location.protocol !== "file:" && location.search.indexOf("test=1") < 0 && l
 }
 </script>
 <style>
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+/* user-select:none はボタン等の長押しでテキスト選択の矩形が出るのを防ぐ（タップハイライトとは別物）。
+   入力欄だけは編集に必要なので選択を許可し直す */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+input,textarea{-webkit-user-select:text;user-select:text}
 html,body{margin:0;padding:0;background:#131019;overscroll-behavior:none;overflow-x:hidden;-webkit-text-size-adjust:100%}
 /* 100dvh は iOS Safari のツールバー表示分を差し引いた「実際に見えている高さ」に追従する。
    従来の 100vh（＝ツールバーを隠した最大高さ）だと表示領域より数px高くなり、その差だけ
@@ -1434,14 +1437,18 @@ const actImgs = (ura, act) => {
     ura ? (URA_BATTLE_BGS[act] || URA_BATTLE_BGS[0]).src : (BATTLE_BGS[act] || BATTLE_BGS[0]),
     MAP_BGS[act] || MAP_BGS[0]];
 };
-// 「冒険に出る」で待つぶん：小さいUIアイコン（レリック/マーク/消費/ノード等）＋キャラ画像
+// 「冒険に出る」で待つぶん：小さいUIアイコン（レリック/マーク/消費/ノード等）＋UI枠＋キャラ画像。
+// ui_ はCSS/inline-styleの border-image で使う窓・紙・盤の枠。border-image のURLは
+// 「その要素が初めて描画される瞬間」に取得が走るため、温めておかないとポーズ等の
+// ウィンドウ初回表示で枠がワンテンポ遅れて出てカクついて見える
 const bootImgs = () => {
-  const icons = document.documentElement.innerHTML.match(/assets\/(?:rl_|mk_|cs_|icon_|node_|st_|sk_|intent_)[\w-]+\.png/g) || [];
+  const icons = document.documentElement.innerHTML.match(/assets\/(?:rl_|mk_|cs_|icon_|node_|st_|sk_|intent_|ui_)[\w-]+\.png/g) || [];
   return [...new Set([...icons, ...CHARS.map(c => c.img)])];
 };
-// タイトルは即出したいので、その背景だけ最優先。残りは手が空き次第バックグラウンドで温める
+// タイトルは即出したいので、その背景と「冒険に出る」ボタンの紙枠だけ最優先。
+// 残りは手が空き次第バックグラウンドで温める
 // （タップまでに終わっていれば「冒険に出る」は待ち時間ゼロで進む）
-warmImgs(["assets/bg_title2.jpg", "assets/bg_texture.jpg"], true);
+warmImgs(["assets/bg_title2.jpg", "assets/bg_texture.jpg", "assets/ui_paper.png"], true);
 (window.requestIdleCallback || (f => setTimeout(f, 200)))(() => warmImgs(bootImgs()));
 
 // ===== キャラ画像スプライト（ComfyUI生成・透過PNG） =====
