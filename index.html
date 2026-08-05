@@ -140,13 +140,19 @@ button:active,button.pressing{filter:brightness(1.12);transform:translateY(1px)}
    JS側で付け外しする押下クラス（見た目は:activeと同一） */
 /* scale(.96)は廃止: border-imageのスライス継ぎ目に線が出るため（button:activeのコメント参照） */
 .paper-btn:active,.paper-btn.pressing{transform:translateY(2px);filter:drop-shadow(0 2px 1px rgba(0,0,0,.45)) brightness(1.08) !important}
-/* ComfyUI生成の石×蔦フレーム（assets/ui_frame.png）をパネルの額縁として重ねる。
-   fill はiOS Safari対策: fill無しのborder-imageだけがiOSで描画されない事例があったため、
-   描画できている紙/ウィンドウ枠と同じfill付きに揃える（素材の中央は完全透明なので見た目は不変）。
-   translateZ(0)は自前レイヤーへの昇格: iOS Safariはアニメーション中の兄弟(ドロップの
-   点滅マークや落下/消去)がGPU合成されると、レイヤーを持たない重ね描き要素を描かなくなる
-   ことがあり、バトル中は枠が常に消え、宝箱パズルではタップの瞬間だけ消えていた */
-.orn{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:32;border:13px solid transparent;border-image:url("assets/ui_frame.png") 195 fill round;transform:translateZ(0)}
+/* ComfyUI生成の石×蔦フレーム（元素材assets/ui_frame.png）をパネルの額縁として重ねる。
+   border-imageは使わない: iOS実機でこの額縁だけが描画されない不具合が続いたため
+   （fill追加・translateZ(0)でも解消せず）、事前に8分割した小画像（assets/ui_frame_{tl,tr,bl,br,t,b,l,r}.png
+   ＝gen_docs等と同じ元画像をslice195で切り出し39px帯へ縮小したRetina3x素材）を
+   複数background-imageで貼る方式に変更。プレーンな背景描画なので全ブラウザで確実に出る。
+   レイヤー順は先頭が最前面: 角4枚を上に、辺は全長に敷いて端は角が上書きする。
+   translateZ(0)はアニメ中の兄弟(点滅マーク・落下/消去)のGPU合成に重ね描きが負けて
+   消えるiOS対策（バトル中は常に消え、宝箱パズルではタップの瞬間だけ消えていた） */
+.orn{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:32;transform:translateZ(0);
+  background-image:url("assets/ui_frame_tl.png"),url("assets/ui_frame_tr.png"),url("assets/ui_frame_bl.png"),url("assets/ui_frame_br.png"),url("assets/ui_frame_t.png"),url("assets/ui_frame_b.png"),url("assets/ui_frame_l.png"),url("assets/ui_frame_r.png");
+  background-repeat:no-repeat,no-repeat,no-repeat,no-repeat,repeat-x,repeat-x,repeat-y,repeat-y;
+  background-position:left top,right top,left bottom,right bottom,left top,left bottom,left top,right top;
+  background-size:13px 13px,13px 13px,13px 13px,13px 13px,30px 13px,30px 13px,13px 39px,13px 39px}
 /* 場所別ウィンドウフレーム（fill付きborder-image・中央は内装色30,24,42で塗り込み済みの素材） */
 .win-stone{border:20px solid transparent;border-image:url("assets/ui_win_stone.png") 38 fill round;filter:drop-shadow(0 6px 12px rgba(0,0,0,.55))}
 .win-wood{border:20px solid transparent;border-image:url("assets/ui_win_wood.png") 53 fill round;filter:drop-shadow(0 6px 12px rgba(0,0,0,.55))}
@@ -346,7 +352,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.15"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.16"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
