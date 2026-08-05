@@ -71,7 +71,7 @@ window.TEXTS = {
     salt:       { name:"清めの塩", desc:"敵のお邪魔変換数-1" },
     herb:       { name:"携帯薬草", desc:"ポーションの回復が120になる" },
     ram:        { name:"破城槌", desc:"敵シールドへのダメージ2倍" },
-    dice:       { name:"いかさまダイス", desc:"ショップの品揃えが6品になる" },
+    dice:       { name:"いかさまダイス", desc:"ショップの品揃えが4品になる" },
     adventmap:  { name:"冒険者の地図", desc:"焚き火に着くとコイン+30" },
     scale:      { name:"商人の天秤", desc:"コイン獲得が1.5倍になる" },
     blastcore:  { name:"爆心の石", desc:"1個だけで消すと周囲3×3も爆破（1ターンに1回）" },

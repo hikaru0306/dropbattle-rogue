@@ -346,7 +346,7 @@ const DROPS = {
   5: { c1:"#6fa8f3", c2:"#3f74d6", c3:"#1d3a78", glow:"#3f74d6" }
 };
 const JUNK = 4;
-const APP_VERSION = "0.0.15"; // タイトル画面に表示する現在バージョン
+const APP_VERSION = "0.0.16"; // タイトル画面に表示する現在バージョン
 
 const ITEMS = {
   star: { mark:"★", img:"assets/mk_star.png", color:"#fff7d6", ring:"rgba(255,221,90,.95)", glowc:"#ffd54a" },
@@ -2696,7 +2696,7 @@ function DropBattle() {
   const openShop = () => {
     shopNumRef.current += 1;
     const first = shopNumRef.current === 1; // 最初の行商人だけ半額セール
-    const offers = shuffle(Object.keys(CONSUM)).slice(0, hasR("dice") ? 6 : 3);
+    const offers = shuffle(Object.keys(CONSUM)).slice(0, hasR("dice") ? 4 : 3);
     const relic = pickRelics(1)[0] || null;
     const disc = {};
     if (!first) { // 半額セール中は個別割引を出さない（値引きの二重掛けを避ける）
@@ -5380,7 +5380,7 @@ function DropBattle() {
             style:{ background:"#c8443c", color:"#fff2ec" } }, "-" + off + "%");
     };
     overlays.push(h("div", { key:"shop", className:"fixed inset-0 flex items-center justify-center px-5 fade-in", style:{ background:"rgba(8,4,14,.85)", zIndex:58 } },
-      // サイコロ(6品)+レリック枠+セールバナーが揃うと低背端末(568px級)で画面からあふれるためスクロール可に
+      // サイコロ(4品)+レリック枠+セールバナーが揃うと低背端末(568px級)で画面からあふれるためスクロール可に
       h("div", { className:"w-full rounded-2xl p-3 pop-in win-wood", style:{ maxWidth:386, maxHeight:"88vh", overflowY:"auto", WebkitOverflowScrolling:"touch", overscrollBehavior:"contain" } },
         h("div", { className:"flex justify-between items-center mb-1" },
           h("span", { className:"font-bold flex items-center gap-1.5", style:{ color:"#e8c06a", fontSize:"1.05rem" } }, Ic("assets/merchant.png", 20), "行商人"),
