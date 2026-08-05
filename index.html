@@ -1482,16 +1482,17 @@ function Bar({ value, max, from, to, height }) {
 // オレンジの残像が少し遅れてじわっと減る（回復は本体が先に伸びて残像を隠すので残像は出ない）。
 // shield>0 の間はバーが青になり、盾バッジがバーの上辺に少し重なって出る（スレスパのブロック表現）。
 // broken=シールドがちょうど砕けた表示（赤い「0」バッジを震わせる。ヒーローの敵ターン用）
-function HpBar({ value, max, height, fontSize, flash, shield, broken }) {
+function HpBar({ value, max, height, fontSize, flash, shield, broken, showZero }) {
   const pct = Math.max(0, Math.min(100, value / max * 100));
   const sh = (shield || 0) > 0;
   return h("div", { style:{ position:"relative" } },
     h("div", { style:{ position:"relative", height, borderRadius:999, background: sh ? "#0b1424" : "#26090d", overflow:"hidden", border:"2px solid rgba(12,9,18,.9)" } },
       h("div", { style:{ position:"absolute", left:0, top:0, height:"100%", width:pct+"%", background:"#e8963c", transition:"width .45s ease .3s" } }),
       h("div", { style:{ position:"absolute", left:0, top:0, height:"100%", width:pct+"%", background: sh ? "linear-gradient(180deg,#4a7cb4 0%,#2b4d88 100%)" : "linear-gradient(180deg,#c9463f 0%,#96201f 100%)", transition:"width .12s ease" } }),
-      // 撃破時(0)は数値を出さない（敵のフェードアウト中に「0/130」が残って見えるため）
+      // 撃破時(0)は数値を出さない（敵のフェードアウト中に「0/130」が残って見えるため）。
+      // ヒーローは死亡時も「0/最大」を出したままにするので showZero で例外にする
       // translateY(0.75px) はフォントメトリクス由来の見た目上ズレの補正（数字グリフはディセンダを持たないため行ボックス中央より高く見える。padding方式はバー高さごとに丸めが変わり効かないバーが出るため実測でバー中心に合わせた）
-      value > 0 && h("span", { style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", transform:"translateY(0.75px)", fontWeight:700, fontSize, lineHeight:1, color: flash || "#fff", transition:"color .3s",
+      (value > 0 || showZero) && h("span", { style:{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", transform:"translateY(0.75px)", fontWeight:700, fontSize, lineHeight:1, color: flash || "#fff", transition:"color .3s",
         textShadow:"0 1px 1px rgba(0,0,0,.9), 0 0 2px rgba(0,0,0,.7)", fontVariantNumeric:"tabular-nums", letterSpacing:"0.02em" } }, value, "/", max)),
     // バッジはバーの上辺に3pxだけ乗せる（深く重ねると幅の狭い敵バーでHP数値の先頭が隠れる）
     (sh || broken) && h("span", { className:"flex items-center", style:{ position:"absolute", left:-3, top:-14, gap:2, padding:"1px 5px", borderRadius:8,
@@ -5650,9 +5651,11 @@ function DropBattle() {
               fontSize:12, color:"#c8f5b8", textShadow:"0 1px 2px #000", fontVariantNumeric:"tabular-nums", zIndex:2 } },
               h("img", { src:"assets/st_poison.png", alt:"毒", draggable:false, width:13, height:13, style:{ width:13, height:13, maxWidth:13, maxHeight:13, flexShrink:0, objectFit:"contain" } }), poisonView)),
           h("div", { style:{ width:40, height:7, borderRadius:"50%", background:"rgba(0,0,0,.5)", marginTop:-5, filter:"blur(2px)" } }),
-          h("div", { className:"w-full mt-1" }, h(HpBar, { value:pHP, max:pMax, height:16, fontSize:10,
+          h("div", { className:"w-full mt-1" }, h(HpBar, { value:pHP, max:pMax, height:16, fontSize:10, showZero:true,
             flash: hit === "player" ? "#ffb4a8" : hit === "heal" ? "#a8ffcc" : null,
-            shield: sv !== null ? sv : tv.def, broken: sv === 0 }))),
+            // 死亡時はシールドを一切出さない。敗北はターン解決の途中で return するため tv.def が
+            // 掃除されず、ターン終了の setSv(null) で表示が古い tv.def に戻って復活して見えていた
+            shield: pHP > 0 ? (sv !== null ? sv : tv.def) : 0, broken: pHP > 0 && sv === 0 }))),
         // 敵
         h("div", { className:"absolute flex items-end scene-actor", style:{ right:30, bottom:14, gap:4, zIndex: gtut === "warn" ? 3 : 1 } },
           enemies.map(en => {
