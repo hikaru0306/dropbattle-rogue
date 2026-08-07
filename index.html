@@ -5300,8 +5300,9 @@ function DropBattle() {
         resoPop.ok ? h("span", null, "調律！ ",
           h("span", { key:"x", style:{ display:"inline-block", transform:"translateY(.08em)" } }, "×"),
           zenNum(fmtMul(resoPop.mul))) : "調律失敗"),
+      // 縁取りは文字サイズに合わせて1px（2pxだと細い線から縁が分離して白い文字が二重にズレて見える）
       resoPop.ok && resoPop.combo >= 2 && h("div", { className:"gdmg-pop", style:{ fontSize:"1.3rem", fontWeight:900, color:"#ffd75e", marginTop:2,
-        textShadow:"-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, 0 3px 8px rgba(0,0,0,.75)" } }, zenNum(resoPop.combo) + "コンボ")));
+        textShadow:"-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff, -1px 0 0 #fff, 1px 0 0 #fff, 0 -1px 0 #fff, 0 1px 0 #fff, 0 3px 8px rgba(0,0,0,.75)" } }, zenNum(resoPop.combo) + "コンボ")));
   }
   if (gambleVoid) {
     // お邪魔のみに賭けたとき: 画面中央へ「無効」（コスト0・コイントスなし）
