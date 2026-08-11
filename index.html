@@ -3501,7 +3501,9 @@ function DropBattle() {
     const win = face === pick;
     SFX.coin();
     if (!win && retriesLeft > 0) {
-      setGambleAsk(a => a ? { ...a, phase: "retry", face, win: false } : a);
+      // hadRetry: 一度でも投げ直しが起きた流れでは、retries が減って0になっても
+      // ウィンドウ側で「もう一度！」行の場所取りを続けるためのフラグ（サイズ固定用）
+      setGambleAsk(a => a ? { ...a, phase: "retry", face, win: false, hadRetry: true } : a);
       setTimeout(() => {
         setGambleAsk(a => a ? { ...a, phase: "spin", face: null, retries: retriesLeft - 1 } : a);
         setTimeout(() => gambleReveal(), FAST ? 120 : 800); // 投げ直しも自動で止まる（タップで即確定も可）
@@ -5255,29 +5257,33 @@ function DropBattle() {
       gt.costLabel + " ",
       h("span", { style:{ fontSize:"1.3rem", fontWeight:900, color: willDie ? "#ff5a5a" : "#ffb27a", textShadow: willDie ? "0 0 12px rgba(255,60,60,.95)" : "0 0 8px rgba(255,150,80,.5)", marginLeft:6 } }, "HP " + g.cost),
       willDie && h("div", { style:{ color:"#ff5a5a", fontSize:"0.8rem", fontWeight:900, marginTop:6 } }, gt.deadWarn)));
-    if (g.phase === "pick") {
-      inner.push(h("div", { key:"pick", style:{ display:"flex", gap:16, justifyContent:"center", marginTop:4 } },
+    // フェーズ（選ぶ→回転→結果/投げ直し）で中身の高さが変わるたびにウィンドウが伸縮して見苦しいため、
+    // 全フェーズを同じグリッドセルへ常時重ねて描画し（表示中以外は visibility:hidden の場所取り）、
+    // 一連の流れで最大となる高さに最初から固定する。visibility:hidden はタップも透過するので誤操作なし
+    const canRetry = g.retries > 0 || g.hadRetry; // この流れで「もう一度！」行（チップの投げ直し）が出得るか
+    const resFace = g.face || "angel"; // 結果フェーズ以外は場所取り用の仮の面（非表示なので見えない）
+    inner.push(h("div", { key:"phases", style:{ display:"grid", marginTop:4 } },
+      // 選択フェーズ（天使/悪魔を選ぶ）
+      h("div", { key:"pick", style:{ gridArea:"1 / 1", visibility: g.phase === "pick" ? "visible" : "hidden", display:"flex", gap:16, justifyContent:"center", alignItems:"center" } },
         ["angel", "demon"].map(f => h("button", { key:f, onClick: () => gambleChoose(f),
           className:"rounded-xl", style:{ flex:1, maxWidth:136, padding:"16px 10px", cursor:"pointer",
             background: f === "angel" ? "rgba(120,150,220,.16)" : "rgba(200,70,60,.16)",
             border:`2px solid ${f === "angel" ? "#7f9bdc" : "#c0483f"}`, color:"#f4eef9", fontFamily:"inherit" } },
           h("div", { style:{ marginBottom:10 } }, Ic(f === "angel" ? "assets/coin_angel.png" : "assets/coin_demon.png", 64)),
-          h("div", { style:{ fontWeight:800, fontSize:"0.92rem" } }, f === "angel" ? gt.angel : gt.demon)))));
-    } else if (spinning) {
-      // 回転中は表(天使)/裏(悪魔)の2枚を交互に見せる。タップで出目を確定
-      inner.push(h("div", { key:"spin", style:{ minHeight:128, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"6px 0", cursor:"pointer" } },
+          h("div", { style:{ fontWeight:800, fontSize:"0.92rem" } }, f === "angel" ? gt.angel : gt.demon)))),
+      // 回転フェーズ: 表(天使)/裏(悪魔)の2枚を交互に見せる。タップで出目を確定（オーバーレイ全体のonClick）
+      h("div", { key:"spin", style:{ gridArea:"1 / 1", visibility: spinning ? "visible" : "hidden", minHeight:128, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"6px 0", cursor:"pointer" } },
         h("div", { className:"coin-flip3d", style:{ width:76, height:76, marginBottom:14 } },
           h("img", { src:"assets/coin_angel.png", alt:"", draggable:false }),
           h("img", { src:"assets/coin_demon.png", alt:"", draggable:false })),
-        h("div", { style:{ color:"#e7d8b8", fontSize:"0.82rem", fontWeight:700 } }, gt.spin)));
-    } else if (showFace) {
-      const face = g.face;
-      inner.push(h("div", { key:"res", style:{ minHeight:128, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"6px 0", position:"relative" } },
-        h("div", { key:"f" + face + g.phase, className:"coin-pop", style:{ width:80, height:80, marginBottom:12 } }, Ic(face === "angel" ? "assets/coin_angel.png" : "assets/coin_demon.png", 80)),
+        h("div", { style:{ color:"#e7d8b8", fontSize:"0.82rem", fontWeight:700 } }, gt.spin)),
+      // 結果/投げ直しフェーズ
+      h("div", { key:"res", style:{ gridArea:"1 / 1", visibility: showFace ? "visible" : "hidden", minHeight:128, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"6px 0", position:"relative" } },
+        h("div", { key:"f" + resFace + g.phase, className: showFace ? "coin-pop" : undefined, style:{ width:80, height:80, marginBottom:12 } }, Ic(resFace === "angel" ? "assets/coin_angel.png" : "assets/coin_demon.png", 80)),
         h("div", { style:{ fontWeight:900, fontSize:"1.1rem", color: g.win ? "#8ce8b0" : "#ff8a8a", textShadow:`0 0 10px ${g.win ? "rgba(120,230,150,.7)" : "rgba(255,90,90,.7)"}` } },
           g.phase === "retry" ? gt.lose : g.win ? gt.win : gt.lose),
-        g.phase === "retry" && h("div", { style:{ color:"#ffcf5d", fontSize:"0.8rem", fontWeight:800, marginTop:8 } }, gt.retry)));
-    }
+        // 「もう一度！」行: 投げ直しが起き得る流れでは最初から場所を確保しておく（出た瞬間に伸びない）
+        canRetry && h("div", { style:{ color:"#ffcf5d", fontSize:"0.8rem", fontWeight:800, marginTop:8, visibility: g.phase === "retry" ? "visible" : "hidden" } }, gt.retry))));
     overlays.push(h("div", { key:"gamble", className:"fixed inset-0 flex items-center justify-center fade-in", onClick: spinning ? gambleReveal : undefined, style:{ background:"rgba(6,3,12,.82)", zIndex:85, cursor: spinning ? "pointer" : "default" } },
       // 賭けオーバーレイの枠は最初から最後まで金色（死の警告は中の文字で見せる）
       h("div", { className:"rounded-2xl pop-in win-gold", style:{ maxWidth:372, width:"92%", padding:"14px 10px 16px", textAlign:"center",
