@@ -1,0 +1,9 @@
+[hero3_d1] seed=661101
+ -> hero3_d1
+[hero3_d2] -> hero3_d2
+[hero3_d3] seed=661303
+[hero3_d4] seed=661404
+ALL_DONE
+04
+ -> hero3_d4
+ALL_DONE

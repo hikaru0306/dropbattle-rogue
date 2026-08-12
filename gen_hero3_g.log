@@ -1,0 +1,13 @@
+[hero3_g1] seed=991501
+ -> hero3_g1
+[hero3_g2] seed=991602
+ -> hero3_g2
+[hero3_g3] seed=991703
+ -> hero3_g3
+[hero3_g4] seed=991804
+ -> hero3_g4
+[hero3_g5] seed=991905
+ -> hero3_g5
+[hero3_g6] seed=992006
+ -> hero3_g6
+ALL_DONE

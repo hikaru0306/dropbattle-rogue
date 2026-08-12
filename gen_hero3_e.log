@@ -1,0 +1,12 @@
+[hero3_e1] seed=771501
+ -> hero3_e1
+[hero3_e2] seed=771602
+ -> hero3_e2
+[hero3_e3] seed=771703
+ -> hero3_e3
+[hero3_e4] seed=771804
+[hero3_e5] seed=771905
+ -> hero3_e5
+[hero3_e6] seed=772006
+ -> hero3_e6
+ALL_DONE

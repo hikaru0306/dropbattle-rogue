@@ -1,0 +1,17 @@
+[hero3_h1] seed=121501
+ -> hero3_h1
+[hero3_h2] seed=121602
+ -> hero3_h2
+[hero3_h3] seed=121703
+ -> hero3_h3
+[hero3_h4] seed=121804
+ -> hero3_h4
+[hero3_h5] seed=121905
+ -> hero3_h5
+[hero3_h6] seed=122006
+ -> hero3_h6
+[hero3_h7] seed=122107
+ -> hero3_h7
+[hero3_h8] seed=122208
+ -> hero3_h8
+ALL_DONE

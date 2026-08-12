@@ -1,0 +1,17 @@
+[hero3_a1] seed=771101
+ -> hero3_a1
+[hero3_a2] seed=771202
+ -> hero3_a2
+[hero3_a3] seed=771303
+ -> hero3_a3
+[hero3_a4] seed=771404
+ -> hero3_a4
+[hero4_a1] seed=882101
+ -> hero4_a1
+[hero4_a2] seed=882202
+ -> hero4_a2
+[hero4_a3] seed=882303
+ -> hero4_a3
+[hero4_a4] seed=882404
+ -> hero4_a4
+ALL_DONE
